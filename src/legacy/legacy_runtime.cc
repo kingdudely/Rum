@@ -50,12 +50,7 @@
 #include "compat/bionic_prctl_runtime.h"
 #include "compat/bionic_pthread_create_runtime.h"
 #include "compat/bionic_socket_runtime.h"
-#include "compat/build_profile.h"
-#include "compat/elf_build_id.h"
 #include "compat/guest_abi.h"
-#include "compat/host_abi_experiment.h"
-#include "compat/host_abi_profile.h"
-#include "compat/host_allocator_bridge.h"
 #include "jnivm/jnivm.h"
 #include "legacy/legacy_runtime.h"
 #include "libc_shim/libc_shim.h"
@@ -90,12 +85,6 @@
 #define MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST \
   "config/roblox_compatibility.json"
 #endif
-
-std::atomic<bool> g_allow_legacy_binary_patches{false};
-std::atomic<bool> g_allow_host_abi_bridges{false};
-std::atomic<bool> g_allow_host_constructor_replay{false};
-std::atomic<const mocktail::compat::HostAbiProfile*>
-    g_active_host_abi_profile{nullptr};
 
 namespace {
 
@@ -176,7 +165,6 @@ constexpr sig_atomic_t kStage6RecoveryInline = 1;
 
 void PrintBacktraceNoSig(const char* prefix);
 void PrintContextBacktrace(ucontext_t* ucontext, const char* prefix);
-static uintptr_t NullVtableStub();
 
 using JniOnLoadFn = jint (*)(JavaVM*, void*);
 using NativeGameGlobalInitFn = void (*)(JNIEnv*, jclass);
@@ -388,49 +376,6 @@ bool IsEnabled(const char* name);
 bool IsDisabled(const char* name);
 
 
-bool IsLegacyBinaryCompatibilityToggle(const char* name) {
-  if (name == nullptr) {
-    return false;
-  }
-  static constexpr const char* kUnsafePrefixes[] = {
-      "MOCKTAIL_PATCH_",
-      "MOCKTAIL_RECOVER_",
-      "MOCKTAIL_STAGE6_",
-      "MOCKTAIL_TRACE_STAGE6_",
-      "MOCKTAIL_DUMP_STAGE6_",
-      "MOCKTAIL_INSTALL_STAGE6_",
-      "MOCKTAIL_CALL_STAGE6_",
-      "MOCKTAIL_SEED_STAGE6_",
-      "MOCKTAIL_RESET_STAGE6_",
-      "MOCKTAIL_LIBROBLOX_CTOR_",
-      "MOCKTAIL_SKIP_LIBROBLOX_CTOR_",
-      "MOCKTAIL_ALLOW_LIBROBLOX_CTOR_",
-      "MOCKTAIL_QUARANTINE_LIBROBLOX_",
-      "MOCKTAIL_EMUTLS_",
-  };
-  for (const char* prefix : kUnsafePrefixes) {
-    if (std::strncmp(name, prefix, std::strlen(prefix)) == 0) {
-      return true;
-    }
-  }
-  static constexpr const char* kUnsafeExactNames[] = {
-      "MOCKTAIL_HEADLESS_SIGSEGV_GUARDS",
-      "MOCKTAIL_DEFER_RBXM_SIGNATURE_CHECK_TO_POST_TTI",
-      "MOCKTAIL_KEEP_CONSTRUCTOR_EMUTLS_HELPERS_PATCHED",
-      "MOCKTAIL_MAX_LIBROBLOX_CTORS",
-      "MOCKTAIL_NO_RECOVER_START_APP",
-      "MOCKTAIL_RESTORE_KNOWN_EMUTLS_KEYS",
-      "MOCKTAIL_RUN_LIBROBLOX_CTORS",
-      "MOCKTAIL_SKIP_CONSTRUCTOR_PATCH_OFFSETS",
-  };
-  for (const char* unsafe_name : kUnsafeExactNames) {
-    if (std::strcmp(name, unsafe_name) == 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
 const char* CachedGetenv(const char* name) {
   if (name == nullptr) {
     return nullptr;
@@ -451,19 +396,11 @@ const char* CachedGetenv(const char* name) {
 }
 
 bool IsEnabled(const char* name) {
-  if (!g_allow_legacy_binary_patches.load(std::memory_order_acquire) &&
-      IsLegacyBinaryCompatibilityToggle(name)) {
-    return false;
-  }
   const char* value = CachedGetenv(name);
   return value != nullptr && value[0] != '\0' && std::strcmp(value, "0") != 0;
 }
 
 bool IsDisabled(const char* name) {
-  if (!g_allow_legacy_binary_patches.load(std::memory_order_acquire) &&
-      IsLegacyBinaryCompatibilityToggle(name)) {
-    return true;
-  }
   const char* value = CachedGetenv(name);
   return value != nullptr && std::strcmp(value, "0") == 0;
 }
@@ -561,11 +498,6 @@ bool TraceAllEnabled() {
 
 bool VerboseOutputEnabled() {
   return IsEnabled("MOCKTAIL_VERBOSE") || TraceAllEnabled();
-}
-
-bool LibRobloxConstructorTraceEnabled() {
-  return IsEnabled("MOCKTAIL_TRACE_LIBROBLOX_CONSTRUCTORS") ||
-         TraceAllEnabled();
 }
 
 void EnableFullTraceIfRequested() {
@@ -1489,119 +1421,11 @@ void PrintNativeBypass(const char* name, const char* flag) {
 }
 
 
-// Free counterpart for host-owned allocations. Pointers without the Mocktail
-// alloc header are ignored so native freelist walks do not touch uninit state
-// after constructors are skipped on the host.
-
-
-mocktail::compat::HostAbiExperimentResult g_host_abi_install_result;
-bool g_host_abi_install_attempted = false;
-
-bool HostAbiExperimentRequested() {
-  return g_allow_host_abi_bridges.load(std::memory_order_acquire) &&
-         !IsDisabled("MOCKTAIL_HOST_ABI_BRIDGES");
-}
-
-bool InstallActiveHostAbiExperiment(uintptr_t libroblox_base) {
-  if (g_host_abi_install_attempted) {
-    return static_cast<bool>(g_host_abi_install_result);
-  }
-  g_host_abi_install_attempted = true;
-  if (!HostAbiExperimentRequested()) {
-    std::cout << "  [compat] host ABI profile disabled by policy\n"
-              << std::flush;
-    return false;
-  }
-
-  const mocktail::compat::HostAbiProfile* profile =
-      g_active_host_abi_profile.load(std::memory_order_acquire);
-  if (libroblox_base == 0 || profile == nullptr) {
-    std::cerr << "  [compat] host ABI install has no active profile/base\n"
-              << std::flush;
-    return false;
-  }
-
-  const mocktail::compat::HostAbiBridgeTargets targets{
-      reinterpret_cast<void*>(&mocktail::compat::HostAllocate),
-      reinterpret_cast<void*>(&mocktail::compat::HostReallocate),
-      reinterpret_cast<void*>(&mocktail::compat::HostAlignedAllocate),
-      reinterpret_cast<void*>(&mocktail::compat::HostFree),
-      reinterpret_cast<void*>(&mocktail::compat::HostUsableSize),
-      reinterpret_cast<void*>(&mocktail::compat::HostAllocatorObjectAllocate),
-      reinterpret_cast<void*>(&NullVtableStub),
-  };
-  const char* allocator_bridge_override =
-      std::getenv("MOCKTAIL_HOST_ALLOCATOR_BRIDGES");
-  const mocktail::compat::HostAllocatorStrategy allocator_strategy =
-      profile->ResolveAllocatorStrategy(
-          allocator_bridge_override != nullptr,
-          IsEnabled("MOCKTAIL_HOST_ALLOCATOR_BRIDGES"));
-  const bool install_allocator_bridges =
-      allocator_strategy ==
-      mocktail::compat::HostAllocatorStrategy::kHostBridges;
-  const mocktail::compat::HostAbiExperimentOptions options{
-      install_allocator_bridges,
-      install_allocator_bridges &&
-          !IsDisabled("MOCKTAIL_HOST_ALLOCATOR_OBJECT"),
-      install_allocator_bridges && !IsDisabled("MOCKTAIL_HOST_EMPTY_STRING"),
-      install_allocator_bridges &&
-          !IsDisabled("MOCKTAIL_HOST_ALLOC_ARENA_INIT"),
-      install_allocator_bridges &&
-          !IsDisabled("MOCKTAIL_HOST_JNI_SINGLETON_SEED"),
-  };
-  g_host_abi_install_result = mocktail::compat::InstallHostAbiExperiment(
-      libroblox_base, *profile, targets, options);
-  return static_cast<bool>(g_host_abi_install_result);
-}
-
-bool InitializeActiveHostAbiThread() {
-  if (!HostAbiExperimentRequested()) {
-    return true;
-  }
-  const mocktail::compat::HostAbiProfile* profile =
-      g_active_host_abi_profile.load(std::memory_order_acquire);
-  if (profile == nullptr || g_libroblox_base == 0) {
-    return false;
-  }
-  return mocktail::compat::InitializeHostAbiThread(g_libroblox_base, *profile);
-}
-
-
-static uintptr_t NullVtableStub() { return 0; }
-
-
 void PrintBacktraceNoSig(const char* prefix) { (void)prefix; }
 
 void PrintContextBacktrace(ucontext_t* ucontext, const char* prefix) {
   (void)ucontext;
   (void)prefix;
-}
-
-bool EnvOffsetListContains(const char* name, uintptr_t offset) {
-  const char* skip_list = std::getenv(name);
-  if (skip_list == nullptr || *skip_list == '\0') {
-    return false;
-  }
-  const char* cursor = skip_list;
-  while (*cursor != '\0') {
-    while (*cursor == ',' || std::isspace(static_cast<unsigned char>(*cursor))) {
-      ++cursor;
-    }
-    if (*cursor == '\0') {
-      break;
-    }
-    char* end = nullptr;
-    errno = 0;
-    unsigned long long parsed = std::strtoull(cursor, &end, 0);
-    if (end == cursor) {
-      break;
-    }
-    if (errno == 0 && static_cast<uintptr_t>(parsed) == offset) {
-      return true;
-    }
-    cursor = end;
-  }
-  return false;
 }
 
 extern "C" int mocktail_recover_stack_chk_fail() {
@@ -1635,234 +1459,7 @@ extern "C" int mocktail_recover_stack_chk_fail() {
   return 0;
 }
 
-bool EnvIndexRangeListContains(const char* name, size_t index) {
-  const char* range_list = std::getenv(name);
-  if (range_list == nullptr || *range_list == '\0') {
-    return false;
-  }
-
-  const char* cursor = range_list;
-  while (*cursor != '\0') {
-    while (*cursor == ',' || std::isspace(static_cast<unsigned char>(*cursor))) {
-      ++cursor;
-    }
-    if (*cursor == '\0') {
-      break;
-    }
-
-    char* end = nullptr;
-    unsigned long long start = std::strtoull(cursor, &end, 0);
-    if (end == cursor) {
-      break;
-    }
-
-    unsigned long long stop = start;
-    cursor = end;
-    if (*cursor == '-') {
-      ++cursor;
-      char* range_end = nullptr;
-      stop = std::strtoull(cursor, &range_end, 0);
-      if (range_end == cursor) {
-        break;
-      }
-      cursor = range_end;
-    }
-
-    if (start <= index && index <= stop) {
-      return true;
-    }
-
-    while (*cursor != '\0' && *cursor != ',') {
-      ++cursor;
-    }
-  }
-
-  return false;
-}
-
-
-bool LibRobloxConstructorOffsetSkipped(uintptr_t offset) {
-  return EnvOffsetListContains("MOCKTAIL_SKIP_LIBROBLOX_CTOR_OFFSETS", offset);
-}
-
-bool LibRobloxConstructorIndexSkipped(size_t index) {
-  return EnvIndexRangeListContains("MOCKTAIL_SKIP_LIBROBLOX_CTOR_INDEX_RANGES",
-                                   index);
-}
-
-bool LibRobloxConstructorIndexAllowed(size_t index) {
-  return EnvIndexRangeListContains("MOCKTAIL_ALLOW_LIBROBLOX_CTOR_INDEX_RANGES",
-                                   index);
-}
-
-
-static size_t g_current_ctor_index = 0;
-static std::vector<uintptr_t> g_original_ctors;
 static uintptr_t g_libroblox_base_static = 0;
-static size_t g_libroblox_ctor_start_index = 0;
-static size_t g_libroblox_ctor_end_index = 0;
-static size_t g_libroblox_ctor_executed_count = 0;
-static size_t g_libroblox_ctor_skipped_range_count = 0;
-static size_t g_libroblox_ctor_skipped_default_count = 0;
-static size_t g_libroblox_ctor_skipped_index_count = 0;
-static size_t g_libroblox_ctor_skipped_env_count = 0;
-
-
-
-bool LibRobloxConstructorDefaultQuarantineEnabled() {
-  // The Build-ID profile already supplies the final allowlisted range.
-  // Applying the legacy "only index 0" quarantine on top would contradict it.
-  if (g_allow_host_constructor_replay.load(std::memory_order_acquire)) {
-    return false;
-  }
-  if (!IsEnabled("MOCKTAIL_RUN_LIBROBLOX_CTORS")) {
-    return false;
-  }
-  if (IsDisabled("MOCKTAIL_QUARANTINE_LIBROBLOX_UNSAFE_CTORS")) {
-    return false;
-  }
-  const char* policy = std::getenv("MOCKTAIL_LIBROBLOX_CTOR_POLICY");
-  if (policy != nullptr && (std::strcmp(policy, "all") == 0 ||
-                            std::strcmp(policy, "unsafe") == 0)) {
-    return false;
-  }
-  return true;
-}
-
-bool LibRobloxConstructorDefaultQuarantineSkipped(size_t index) {
-  if (!LibRobloxConstructorDefaultQuarantineEnabled()) {
-    return false;
-  }
-  if (index == 0 || LibRobloxConstructorIndexAllowed(index)) {
-    return false;
-  }
-  return true;
-}
-
-size_t GetCtorIndexEnv(const char* name, size_t default_value,
-                       size_t max_value) {
-  int value = GetEnvInt(name, -1);
-  if (value < 0) {
-    return default_value;
-  }
-  return std::min(static_cast<size_t>(value), max_value);
-}
-
-void MaybePrintLibRobloxConstructorSummary(size_t idx) {
-  if (idx + 1 != g_original_ctors.size()) {
-    return;
-  }
-  std::cout << "  [ctor] Summary: executed="
-            << g_libroblox_ctor_executed_count
-            << " skipped_by_range=" << g_libroblox_ctor_skipped_range_count
-            << " skipped_by_default=" << g_libroblox_ctor_skipped_default_count
-            << " skipped_by_index=" << g_libroblox_ctor_skipped_index_count
-            << " skipped_by_env=" << g_libroblox_ctor_skipped_env_count
-            << '\n'
-            << std::flush;
-}
-
-extern "C" void MocktailConstructorWrapper() {
-  if (g_current_ctor_index >= g_original_ctors.size()) {
-    std::cerr << "  [ctor] Warning: constructor index " << g_current_ctor_index
-              << " out of bounds!\n" << std::flush;
-    return;
-  }
-  size_t idx = g_current_ctor_index++;
-  uintptr_t orig = g_original_ctors[idx];
-  uintptr_t offset = orig - g_libroblox_base_static;
-  const bool trace_constructor = LibRobloxConstructorTraceEnabled();
-  if (trace_constructor) {
-    std::cout << "  [ctor] [" << idx << "/" << g_original_ctors.size()
-              << "] offset 0x" << std::hex << offset << std::dec << '\n'
-              << std::flush;
-  }
-  if (idx < g_libroblox_ctor_start_index ||
-      idx >= g_libroblox_ctor_end_index) {
-    ++g_libroblox_ctor_skipped_range_count;
-    if (trace_constructor) {
-      std::cout << "  [ctor] [" << idx << "] Skipped by ctor index range.\n"
-                << std::flush;
-    }
-    MaybePrintLibRobloxConstructorSummary(idx);
-    return;
-  }
-  const mocktail::compat::HostAbiProfile* active_host_profile =
-      g_active_host_abi_profile.load(std::memory_order_acquire);
-  const bool use_native_mimalloc =
-      g_host_abi_install_attempted &&
-      g_host_abi_install_result.uses_native_mimalloc;
-  if (g_allow_host_constructor_replay.load(std::memory_order_acquire) &&
-      active_host_profile != nullptr &&
-      !(use_native_mimalloc
-            ? active_host_profile->AllowsNativeMimallocConstructor(idx)
-            : active_host_profile->AllowsConstructor(idx))) {
-    ++g_libroblox_ctor_skipped_range_count;
-    if (trace_constructor) {
-      std::cout << "  [ctor] [" << idx << "] Skipped by typed "
-                << (use_native_mimalloc ? "native Mimalloc" : "host bridge")
-                << " run ranges.\n"
-                << std::flush;
-    }
-    MaybePrintLibRobloxConstructorSummary(idx);
-    return;
-  }
-  if (LibRobloxConstructorDefaultQuarantineSkipped(idx)) {
-    ++g_libroblox_ctor_skipped_default_count;
-    if (trace_constructor) {
-      std::cout << "  [ctor] [" << idx
-                << "] Skipped by default unsafe ctor quarantine.\n"
-                << std::flush;
-    }
-    MaybePrintLibRobloxConstructorSummary(idx);
-    return;
-  }
-  if (LibRobloxConstructorIndexSkipped(idx)) {
-    ++g_libroblox_ctor_skipped_index_count;
-    if (trace_constructor) {
-      std::cout << "  [ctor] [" << idx << "] Skipped by ctor index env.\n"
-                << std::flush;
-    }
-    MaybePrintLibRobloxConstructorSummary(idx);
-    return;
-  }
-  if (LibRobloxConstructorOffsetSkipped(offset)) {
-    ++g_libroblox_ctor_skipped_env_count;
-    if (trace_constructor) {
-      std::cout << "  [ctor] [" << idx << "] Skipped by env.\n"
-                << std::flush;
-    }
-    MaybePrintLibRobloxConstructorSummary(idx);
-    return;
-  }
-  if (trace_constructor) {
-    std::cout << "  [ctor] [" << idx << "] Executing.\n" << std::flush;
-  }
-  void (*fn)() = reinterpret_cast<void(*)()>(orig);
-  fn();
-  if (use_native_mimalloc && active_host_profile != nullptr) {
-    const mocktail::compat::NativeMimallocBootstrapStatus bootstrap_status =
-        mocktail::compat::CompleteNativeMimallocConstructor(
-            g_libroblox_base_static, *active_host_profile, idx);
-    if (bootstrap_status ==
-        mocktail::compat::NativeMimallocBootstrapStatus::kInitialized) {
-      std::cout << "  [ctor] Native mimalloc thread state initialized after ["
-                << idx << "]\n"
-                << std::flush;
-    } else if (bootstrap_status ==
-               mocktail::compat::NativeMimallocBootstrapStatus::kFailed) {
-      std::cerr << "  [ctor] Native mimalloc thread state initialization "
-                   "failed after ["
-                << idx << "]\n"
-                << std::flush;
-    }
-  }
-  ++g_libroblox_ctor_executed_count;
-  if (trace_constructor) {
-    std::cout << "  [ctor] [" << idx << "] Done.\n" << std::flush;
-  }
-  MaybePrintLibRobloxConstructorSummary(idx);
-}
 
 extern "C" void mocktail_before_soinfo_constructors(const char* realpath,
                                                     uintptr_t base) {
@@ -1875,147 +1472,15 @@ extern "C" void mocktail_before_soinfo_constructors(const char* realpath,
   g_mocktail_abort_libroblox_base = base;
   g_libroblox_base_static = base;
 
-  const mocktail::compat::HostAbiProfile* host_abi =
-      g_active_host_abi_profile.load(std::memory_order_acquire);
+  // No host allocator bridge and no guest thread initializer: the guest
+  // allocates through the bionic shims and the host handles pthread startup.
+  mocktail::compat::ConfigureBionicPthreadThreadInitializer(nullptr);
+  libc_shim::ConfigureGuestAllocator(nullptr);
 
-  // Host alloc bridges must be in place before any constructor executes.
-  if (HostAbiExperimentRequested() && !InstallActiveHostAbiExperiment(base)) {
-    std::cerr << "  [compat] host ABI install failed before constructors\n"
-              << std::flush;
-    return;
-  }
-
-  const bool force_run_ctors =
-      (std::getenv("MOCKTAIL_SKIP_LIBROBLOX_CTORS") != nullptr &&
-       std::strcmp(std::getenv("MOCKTAIL_SKIP_LIBROBLOX_CTORS"), "0") == 0) ||
-      IsEnabled("MOCKTAIL_RUN_LIBROBLOX_CTORS");
-  const bool want_light_wrap =
-      IsEnabled("MOCKTAIL_WRAP_LIBROBLOX_CTORS") || force_run_ctors;
-  const bool use_native_mimalloc =
-      g_host_abi_install_attempted &&
-      g_host_abi_install_result.uses_native_mimalloc;
-  mocktail::compat::NativeThreadInitializer thread_initializer = nullptr;
-  if (use_native_mimalloc && host_abi != nullptr &&
-      host_abi->data_seeds.allocator_thread_initializer != 0) {
-    thread_initializer =
-        reinterpret_cast<mocktail::compat::NativeThreadInitializer>(
-            base + host_abi->data_seeds.allocator_thread_initializer);
-  }
-  mocktail::compat::ConfigureBionicPthreadThreadInitializer(
-      thread_initializer);
-  libc_shim::GuestAllocator guest_allocator = nullptr;
-  if (use_native_mimalloc && host_abi != nullptr &&
-      host_abi->native_allocator.IsValid()) {
-    guest_allocator = reinterpret_cast<libc_shim::GuestAllocator>(
-        base + host_abi->native_allocator.allocate);
-  }
-  libc_shim::ConfigureGuestAllocator(guest_allocator);
-  const bool has_selected_constructor_ranges =
-      host_abi != nullptr &&
-      (use_native_mimalloc
-           ? host_abi->HasValidNativeMimallocConstructorRanges()
-           : host_abi->HasValidConstructorRanges());
-  const bool have_init_array =
-      g_allow_host_constructor_replay.load(std::memory_order_acquire) &&
-      HostAbiExperimentRequested() &&
-      host_abi != nullptr && host_abi->init_array_offset != 0 &&
-      has_selected_constructor_ranges;
-  if (!(want_light_wrap && have_init_array)) {
-    std::cout << "  [compat] leaving libroblox constructors untouched for "
-                 "this Build-ID profile\n"
-              << std::flush;
-    return;
-  }
-
-  g_current_ctor_index = 0;
-  g_libroblox_ctor_executed_count = 0;
-  g_libroblox_ctor_skipped_range_count = 0;
-  g_libroblox_ctor_skipped_default_count = 0;
-  g_libroblox_ctor_skipped_index_count = 0;
-  g_libroblox_ctor_skipped_env_count = 0;
-
-  size_t kCtorCount = 0;
-  uintptr_t init_array_offset = 0;
-  if (have_init_array) {
-    init_array_offset = host_abi->init_array_offset;
-    kCtorCount = host_abi->init_array_count;
-  }
-  const size_t profile_ctor_start =
-      have_init_array
-          ? (use_native_mimalloc
-                 ? host_abi->NativeMimallocConstructorRangeBegin()
-                 : host_abi->ConstructorRangeBegin())
-          : 0;
-  const size_t profile_ctor_end =
-      have_init_array
-          ? (use_native_mimalloc
-                 ? host_abi->NativeMimallocConstructorRangeEndExclusive()
-                 : host_abi->ConstructorRangeEndExclusive())
-          : kCtorCount;
-  g_libroblox_ctor_start_index = std::max(
-      profile_ctor_start,
-      GetCtorIndexEnv("MOCKTAIL_LIBROBLOX_CTOR_START_INDEX",
-                      profile_ctor_start, kCtorCount));
-  g_libroblox_ctor_end_index = std::min(
-      profile_ctor_end,
-      GetCtorIndexEnv("MOCKTAIL_LIBROBLOX_CTOR_END_INDEX", profile_ctor_end,
-                      kCtorCount));
-  int max_ctors = GetEnvInt("MOCKTAIL_MAX_LIBROBLOX_CTORS", -1);
-  if (max_ctors >= 0) {
-    g_libroblox_ctor_end_index =
-        std::min(g_libroblox_ctor_end_index,
-                 g_libroblox_ctor_start_index +
-                     static_cast<size_t>(max_ctors));
-  }
-  if (g_libroblox_ctor_end_index < g_libroblox_ctor_start_index) {
-    g_libroblox_ctor_end_index = g_libroblox_ctor_start_index;
-  }
-  uintptr_t* init_array =
-      reinterpret_cast<uintptr_t*>(base + init_array_offset);
-
-  long ctor_page_size = sysconf(_SC_PAGESIZE);
-  if (ctor_page_size > 0) {
-    uintptr_t addr = reinterpret_cast<uintptr_t>(init_array);
-    uintptr_t page = addr & ~(static_cast<uintptr_t>(ctor_page_size) - 1);
-    const size_t span =
-        (kCtorCount * sizeof(uintptr_t)) + static_cast<size_t>(ctor_page_size);
-    mprotect(reinterpret_cast<void*>(page), span, PROT_READ | PROT_WRITE);
-  }
-
-  g_original_ctors.clear();
-  g_original_ctors.reserve(kCtorCount);
-  for (size_t i = 0; i < kCtorCount; ++i) {
-    g_original_ctors.push_back(init_array[i]);
-    init_array[i] = reinterpret_cast<uintptr_t>(MocktailConstructorWrapper);
-  }
-  std::cout << "  [compat] wrapping .init_array @+0x" << std::hex
-            << init_array_offset << std::dec << " count=" << kCtorCount
-            << '\n'
+  // The whole .init_array runs natively; see
+  // mocktail_should_skip_soinfo_constructors.
+  std::cout << "  [compat] leaving libroblox constructors untouched\n"
             << std::flush;
-  std::cout << "  [compat] Wrapped " << kCtorCount
-            << " constructors for typed replay"
-            << (LibRobloxConstructorTraceEnabled() ? " with trace" : "")
-            << '\n'
-            << std::flush;
-  std::cout << "  [ctor] Active index range ["
-            << g_libroblox_ctor_start_index << ", "
-            << g_libroblox_ctor_end_index << ")\n"
-            << std::flush;
-  if (use_native_mimalloc) {
-    std::cout << "  [ctor] Native mimalloc integration probe selected; "
-                 "host allocator bridges are disabled\n"
-              << std::flush;
-  }
-  if (LibRobloxConstructorDefaultQuarantineEnabled()) {
-    std::cout
-        << "  [ctor] Default unsafe ctor quarantine enabled: only index 0 "
-           "runs unless MOCKTAIL_ALLOW_LIBROBLOX_CTOR_INDEX_RANGES allows more\n"
-        << std::flush;
-  } else {
-    std::cout << "  [ctor] Default unsafe ctor quarantine disabled\n"
-              << std::flush;
-  }
-
 }
 
 extern "C" bool mocktail_should_skip_soinfo_constructors(const char* realpath) {
@@ -2024,63 +1489,12 @@ extern "C" bool mocktail_should_skip_soinfo_constructors(const char* realpath) {
     return false;
   }
 
-  const bool typed_replay_allowed =
-      g_allow_host_constructor_replay.load(std::memory_order_acquire) &&
-      HostAbiExperimentRequested();
-  if (!typed_replay_allowed) {
-    // Without a Build-ID-scoped replay policy there is nothing to replay them,
-    // so skipping every constructor would leave the engine's static state
-    // uninitialized and fault on the first JNI entry point. Let the linker run
-    // the whole .init_array instead.
-    std::cout << "  [compat] running libroblox static constructors (no "
-                 "Build-ID replay policy for this build)\n"
-              << std::flush;
-    return false;
-  }
-
-  // Explicit host ABI policy, independent of fixed-offset binary patches.
-  // Native libroblox .init_array currently aborts in emutls growth on Linux
-  // hosts (caller off≈0x28bae15 on 2.725.1142). Skip by default for
-  // non-patched profiles so name-based JNI startup remains reachable.
-  //
-  // Controls:
-  //   MOCKTAIL_SKIP_LIBROBLOX_CTORS=1  force skip
-  //   MOCKTAIL_SKIP_LIBROBLOX_CTORS=0  force run
-  //   MOCKTAIL_RUN_LIBROBLOX_CTORS=1   force run (legacy name)
-  const char* skip_constructors = std::getenv("MOCKTAIL_SKIP_LIBROBLOX_CTORS");
-  if (skip_constructors != nullptr) {
-    if (std::strcmp(skip_constructors, "0") == 0) {
-      std::cout << "  [compat] running libroblox static constructors "
-                   "(MOCKTAIL_SKIP_LIBROBLOX_CTORS=0)\n"
-                << std::flush;
-      return false;
-    }
-    std::cout << "  [compat] skipping libroblox static constructors "
-                 "(MOCKTAIL_SKIP_LIBROBLOX_CTORS)\n"
-              << std::flush;
-    return true;
-  }
-
-  const char* run_constructors = std::getenv("MOCKTAIL_RUN_LIBROBLOX_CTORS");
-  if (run_constructors != nullptr && std::strcmp(run_constructors, "0") != 0) {
-    std::cout << "  [compat] running libroblox static constructors "
-                 "(MOCKTAIL_RUN_LIBROBLOX_CTORS)\n"
-              << std::flush;
-    return false;
-  }
-
-  if (typed_replay_allowed) {
-    std::cout
-        << "  [compat] skipping libroblox static constructors for host load "
-           "(set MOCKTAIL_SKIP_LIBROBLOX_CTORS=0 to force native .init_array)\n"
-        << std::flush;
-    return true;
-  }
-
-  std::cout << "  [patch] skipping libroblox static constructors"
-            << " (set MOCKTAIL_RUN_LIBROBLOX_CTORS=1 to enable)\n"
+  // libroblox.so's .init_array must run in full: its static state is needed by
+  // the first JNI entry point, and skipping it faults. There is no per-build
+  // constructor policy any more, so let the linker's own replay run them.
+  std::cout << "  [compat] running libroblox static constructors\n"
             << std::flush;
-  return true;
+  return false;
 }
 
 
@@ -3429,13 +2843,6 @@ void* EngineStartupThread(void* arg) {
     std::cerr << "  [engine] failed to acquire JNIEnv\n";
     return nullptr;
   }
-  if (!InitializeActiveHostAbiThread()) {
-    std::cerr << "  [engine] allocator TLS init failed on startup thread\n"
-              << std::flush;
-    return nullptr;
-  }
-  std::cout << "  [engine] native allocator TLS initialized\n"
-            << std::flush;
   EngineLogPtr("reset JNIEnv", env);
   EngineLog("PublishCurrentJniEnv");
   PublishCurrentJniEnv(env);
@@ -4540,94 +3947,22 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   const std::string library_path =
       runtime_config.roblox_library_path().string();
 
-  const mocktail::compat::BuildIdResult build_id_result =
-      mocktail::compat::ReadElfBuildId(library_path);
-  if (!build_id_result) {
-    std::cerr << "[FATAL] Cannot identify Roblox library '" << library_path
-              << "': " << build_id_result.error << '\n';
-    return EXIT_FAILURE;
-  }
-
-  const char* manifest_override =
-      std::getenv("MOCKTAIL_COMPATIBILITY_MANIFEST");
-  const std::string compatibility_manifest =
-      manifest_override != nullptr && manifest_override[0] != '\0'
-          ? manifest_override
-          : MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST;
-  std::optional<mocktail::compat::BuildProfile> synthesized_profile;
-  const mocktail::compat::ProfileLookupResult profile_result =
-      mocktail::compat::FindBuildProfile(compatibility_manifest,
-                                         build_id_result.build_id);
-  if (!profile_result) {
-    std::cerr << "[FATAL] Cannot read Roblox compatibility profile: "
-              << profile_result.error << '\n';
-    return EXIT_FAILURE;
-  }
-  if (!profile_result.profile.has_value()) {
-    std::cerr << "[WARNING] Roblox Build ID " << build_id_result.build_id
-              << " has no researched compatibility profile; running without "
-                 "allocator interposition or vtable bridges.\n";
-    synthesized_profile =
-        mocktail::compat::MakeUnknownBuildProfile(build_id_result.build_id);
-  }
-
-  const mocktail::compat::BuildProfile& build_profile =
-      synthesized_profile ? *synthesized_profile : *profile_result.profile;
-  const mocktail::compat::HostAbiProfile* host_abi_profile =
-      mocktail::compat::FindHostAbiProfile(build_profile.elf_build_id);
-  const bool experiment_allowed =
-      build_profile.default_allowed || options.allow_unverified_build;
-  g_allow_legacy_binary_patches.store(
-      build_profile.allow_legacy_binary_patches, std::memory_order_release);
-  const bool allow_host_abi_bridges =
-      build_profile.allow_host_abi_bridges && experiment_allowed &&
-      host_abi_profile != nullptr &&
-      host_abi_profile->bridge_entry_count > 0;
-  const bool allow_host_constructor_replay =
-      build_profile.allow_host_constructor_replay &&
-      allow_host_abi_bridges && host_abi_profile->init_array_offset != 0 &&
-      host_abi_profile->HasValidConstructorRanges();
-  g_allow_host_abi_bridges.store(allow_host_abi_bridges,
-                                 std::memory_order_release);
-  g_allow_host_constructor_replay.store(allow_host_constructor_replay,
-                                        std::memory_order_release);
-  g_active_host_abi_profile.store(host_abi_profile,
-                                  std::memory_order_release);
-  g_host_abi_install_attempted = false;
-  g_host_abi_install_result = {};
-  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION",
-                build_profile.version_name.c_str());
-  const std::string roblox_version_code =
-      std::to_string(build_profile.version_code);
-  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION_CODE",
-                roblox_version_code.c_str());
+  // Build-ID profiles are gone: every libroblox.so is treated the same way.
+  // The version identity is a fixed constant the engine and the Roblox web
+  // services accept, and stays overridable for local testing.
+  const char* version_override = std::getenv("MOCKTAIL_ROBLOX_VERSION");
+  const std::string version_name =
+      (version_override != nullptr && version_override[0] != '\0')
+          ? version_override
+          : "2.739.691";
+  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION", version_name.c_str());
+  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION_CODE", "3120");
   const std::string default_user_agent =
-      "Roblox/" + build_profile.version_name +
-      " (Linux; Android 33; Mocktail)";
+      "Roblox/" + version_name + " (Linux; Android 33; Mocktail)";
   SetEnvDefault("MOCKTAIL_USER_AGENT", default_user_agent.c_str());
-  mocktail::compat::SetLegacyBionicDiagnosticsEnabled(
-      build_profile.allow_legacy_binary_patches);
-  std::cout << "  [compat] Roblox " << build_profile.version_name
-            << " Build ID " << build_profile.elf_build_id << " ("
-            << mocktail::compat::BuildStatusName(build_profile.status) << ")\n";
-  std::cout << "  [compat] legacy binary patches: "
-            << (build_profile.allow_legacy_binary_patches ? "enabled"
-                                                          : "disabled")
-            << '\n';
-  std::cout << "  [compat] Build-ID host ABI profile: "
-            << (allow_host_abi_bridges ? "allowed" : "denied")
-            << '\n';
-  std::cout << "  [compat] Build-ID constructor replay: "
-            << (allow_host_constructor_replay ? "allowed" : "denied")
-            << '\n'
+  std::cout << "  [compat] Roblox " << version_name << '\n'
+            << "  [compat] Build-ID profiles: removed\n"
             << std::flush;
-  if (!build_profile.default_allowed && !options.allow_unverified_build) {
-    std::cerr << "[FATAL] This Roblox build is not enabled for normal runs: "
-              << build_profile.reason << '\n'
-              << "  Use --allow-unverified-build only for an explicit "
-                 "compatibility check.\n";
-    return EXIT_FAILURE;
-  }
 
   ApplyAuthStartupDefaults(!dependencies.roblox_credential().empty(),
                            user_overrode_start_lua_app_dm,
@@ -4650,15 +3985,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   }
 #endif
 
-  if (build_profile.allow_legacy_binary_patches) {
-    std::cerr
-        << "[FATAL] Legacy binary patches and signal recovery were removed.\n"
-        << "  Build ID " << build_profile.elf_build_id
-        << " is not supported on this runtime.\n";
-    return EXIT_FAILURE;
-  }
-  std::cout << "  [compat] signal-recovery handler disabled for this Build "
-               "ID\n";
+  std::cout << "  [compat] signal-recovery handler disabled\n";
   const bool is_headless = runtime_config.headless();
   if (!HasEnvValue("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS")) {
     setenv("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS", is_headless ? "1" : "0",
@@ -5723,19 +5050,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   std::cout << "  [linker] Bionic unwind metadata validated for libroblox\n"
             << std::flush;
 
-  // The pre-constructor hook owns installation; repeating arena setup here is
-  // not idempotent.
-  if (HostAbiExperimentRequested() &&
-      (!g_host_abi_install_attempted || !g_host_abi_install_result)) {
-    std::cerr << "\n[FATAL] Host ABI profile did not install before "
-                 "libroblox constructors: "
-              << (g_host_abi_install_result.error != nullptr
-                      ? g_host_abi_install_result.error
-                      : "linker pre-constructor hook was not observed")
-              << '\n';
-    return EXIT_FAILURE;
-  }
-
   PrintStage(5, "Invoking JNI_OnLoad in libroblox.so");
 
   auto* jni_onload =
@@ -5745,25 +5059,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   if (jni_onload == nullptr) {
     std::cerr << "\n[FATAL] Symbol 'JNI_OnLoad' not found in libroblox.so.\n";
     return EXIT_FAILURE;
-  }
-
-  const mocktail::compat::HostAbiProfile* stage5_host_profile =
-      g_active_host_abi_profile.load(std::memory_order_acquire);
-  if (g_host_abi_install_attempted &&
-      g_host_abi_install_result.uses_native_mimalloc &&
-      stage5_host_profile != nullptr) {
-    const mocktail::compat::NativePreJniBootstrapStatus bootstrap_status =
-        mocktail::compat::InitializeNativePreJniRegistry(
-            g_libroblox_base_static, *stage5_host_profile);
-    if (bootstrap_status ==
-        mocktail::compat::NativePreJniBootstrapStatus::kInitialized) {
-      std::cout << "  [compat] native pre-JNI registry initialized\n"
-                << std::flush;
-    } else if (bootstrap_status ==
-               mocktail::compat::NativePreJniBootstrapStatus::kFailed) {
-      std::cerr << "\n[FATAL] native pre-JNI registry initialization failed\n";
-      return EXIT_FAILURE;
-    }
   }
 
   JavaVM* raw_vm = jni_vm->GetJavaVM();
@@ -7224,13 +6519,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     }
   }
 
-  if (!build_profile.default_allowed) {
-    std::cerr
-        << "[FATAL] Compatibility run returned, but Build ID "
-        << build_profile.elf_build_id
-        << " has not passed the readiness gates; refusing a success exit.\n";
-    return EXIT_FAILURE;
-  }
   if (is_headless) {
     std::cerr << "[FATAL] Headless LuaApp readiness evidence is not wired into "
                  "the supported runtime yet.\n";

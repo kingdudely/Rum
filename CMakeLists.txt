@@ -50,11 +50,6 @@ if(Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
   endif()
 endif()
 
-set(MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST
-  "${CMAKE_SOURCE_DIR}/config/roblox_compatibility.json"
-  CACHE FILEPATH
-  "Fallback compatibility manifest used outside an installed runtime"
-)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -323,32 +318,6 @@ target_link_libraries(mocktail_window PUBLIC
   PRIVATE Mocktail::Runtime Mocktail::GlesTextOverlay
 )
 
-add_library(mocktail_roblox_output_device_runtime STATIC
-  src/audio/roblox_output_device_bridge.cc
-)
-target_include_directories(mocktail_roblox_output_device_runtime PUBLIC include)
-target_include_directories(mocktail_roblox_output_device_runtime PRIVATE src)
-target_link_libraries(mocktail_roblox_output_device_runtime PUBLIC
-  mocktail_compat
-  Mocktail::AudioSdl
-  PRIVATE mocktail_linker
-)
-mocktail_apply_compile_options(mocktail_roblox_output_device_runtime)
-
-add_library(mocktail_roblox_fullscreen_runtime STATIC
-  src/runtime/roblox_fullscreen_runtime_bridge.cc
-)
-target_include_directories(mocktail_roblox_fullscreen_runtime PUBLIC include)
-target_include_directories(mocktail_roblox_fullscreen_runtime PRIVATE src)
-target_link_libraries(mocktail_roblox_fullscreen_runtime PUBLIC
-  mocktail_compat
-  PRIVATE
-    mocktail_linker
-    mocktail_window
-    stub_log
-)
-mocktail_apply_compile_options(mocktail_roblox_fullscreen_runtime)
-
 include(${CMAKE_SOURCE_DIR}/cmake/MocktailInput.cmake)
 
 add_library(mocktail_experience_runtime STATIC
@@ -472,22 +441,17 @@ target_link_libraries(mocktail_legacy_runtime PRIVATE
   ${MOCKTAIL_EXECINFO_LINK_LIBRARY}
 )
 target_compile_definitions(mocktail_legacy_runtime PRIVATE
-  "MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST=\"${MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST}\""
+  "MOCKTAIL_UNUSED_LEGACY_DEFINE=1"
 )
 
 add_executable(mocktail src/main.cc)
 target_include_directories(mocktail PRIVATE include src)
 mocktail_apply_compile_options(mocktail)
-target_compile_definitions(mocktail PRIVATE
-  "MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST=\"${MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST}\""
-)
 target_link_libraries(mocktail PRIVATE
   mocktail_legacy_runtime
   mocktail_auth_runtime_composition
   mocktail_failure_dialog_runtime
   mocktail_fmod_jni_audio_bridge
-  mocktail_roblox_output_device_runtime
-  mocktail_roblox_fullscreen_runtime
   mocktail_window
   libc_shim
 )
@@ -571,10 +535,6 @@ install(PROGRAMS "${MOCKTAIL_FREEBSD_SOCKET_HELPER}"
   DESTINATION "${MOCKTAIL_INSTALL_RUNTIME_DIR}"
 )
 endif()
-install(FILES
-    config/roblox_compatibility.json
-  DESTINATION "${MOCKTAIL_INSTALL_DATA_DIR}/metadata"
-)
 install(FILES packaging/space.bigrat.mocktail.desktop
   DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
 )

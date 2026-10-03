@@ -22,11 +22,6 @@ extern volatile uintptr_t g_mocktail_abort_libroblox_base;
 
 namespace mocktail::compat {
 
-// Enables diagnostics that contain offsets from the researched legacy Roblox
-// binary. The default is false and Build-ID policy is the only caller allowed
-// to enable it.
-void SetLegacyBionicDiagnosticsEnabled(bool enabled);
-
 }  // namespace mocktail::compat
 
 // Bionic x86-64 defines pthread_mutexattr_t as an eight-byte long. Keep that

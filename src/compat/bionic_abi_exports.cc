@@ -26,8 +26,6 @@ std::atomic<void*> g_current_jni_env_for_publish{nullptr};
 
 namespace {
 
-std::atomic<bool> g_legacy_bionic_diagnostics_enabled{false};
-
 const char* EnvironmentOr(const char* name, const char* fallback) {
   const char* value = std::getenv(name);
   return value != nullptr && value[0] != '\0' ? value : fallback;
@@ -82,14 +80,6 @@ ssize_t CallHostSendto(int socket_fd, const void* buf, size_t len, int flags,
 
 }  // namespace
 
-namespace mocktail::compat {
-
-void SetLegacyBionicDiagnosticsEnabled(bool enabled) {
-  g_legacy_bionic_diagnostics_enabled.store(enabled, std::memory_order_release);
-}
-
-}  // namespace mocktail::compat
-
 // EGL handle exports — resolved by libegl_stub via dlsym(RTLD_DEFAULT, sym).
 // These bridge the window.cc real EGL context into the stub library.
 extern "C" {
@@ -143,19 +133,6 @@ __attribute__((noreturn)) void mocktail_abort() {
                static_cast<unsigned long>(caller_offset),
                reinterpret_cast<void*>(rax), reinterpret_cast<void*>(rbx),
                reinterpret_cast<void*>(rdi), reinterpret_cast<void*>(r15));
-  if (g_legacy_bionic_diagnostics_enabled.load(std::memory_order_acquire) &&
-      caller_offset == 0x2c18f35 && rbx >= 0x10000 &&
-      rbx < 0x0000800000000000ULL) {
-    const auto* key = reinterpret_cast<const uint64_t*>(rbx);
-    std::fprintf(stderr,
-                 "  [abort] emutls key=%p size=0x%llx align=0x%llx "
-                 "index=0x%llx init=0x%llx\n",
-                 reinterpret_cast<const void*>(key),
-                 static_cast<unsigned long long>(key[0]),
-                 static_cast<unsigned long long>(key[1]),
-                 static_cast<unsigned long long>(key[2]),
-                 static_cast<unsigned long long>(key[3]));
-  }
   std::fflush(stderr);
   std::abort();
 }

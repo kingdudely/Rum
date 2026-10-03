@@ -75,8 +75,6 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
                            &result.options.graphics_backend, &result.error)) {
         return result;
       }
-    } else if (argument == "--allow-unverified-build") {
-      result.options.allow_unverified_build = true;
     } else if (argument == "--assets") {
       if (!ReadOptionValue(argc, argv, &index, argument,
                            &result.options.assets_path,
@@ -247,8 +245,6 @@ std::string CommandLineUsage(const std::string& program_name) {
       << "  --windowed             Force windowed startup (default)\n"
       << "  --graphics <backend>   direct-vulkan | opengl | system | "
          "angle-vulkan (default: direct-vulkan)\n"
-      << "  --allow-unverified-build Run a known but unverified Build-ID "
-         "profile\n"
       << "  --launch-uri <uri>     Join from a roblox: or roblox-player: "
          "website link\n"
       << "  --help, -h             Show this help\n\n"

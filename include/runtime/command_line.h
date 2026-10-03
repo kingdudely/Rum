@@ -30,7 +30,6 @@ struct CommandLineOptions {
   std::string raw_launch_argument;
   std::string launch_request_json;
   int launch_argument_index = -1;
-  bool allow_unverified_build = false;
 };
 
 struct CommandLineParseResult {

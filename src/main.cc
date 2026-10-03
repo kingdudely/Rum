@@ -15,14 +15,10 @@
 #include <utility>
 #include <vector>
 
-#include "compat/elf_build_id.h"
-#include "compat/host_abi_profile.h"
-#include "compat/payload_compatibility.h"
 #include "legacy/legacy_runtime.h"
 #include "libc_shim/libc_shim.h"
 #include "mocktail/audio/fmod_jni_audio_bridge.h"
 #include "mocktail/audio/webrtc_jni_audio_bridge.h"
-#include "mocktail/audio/roblox_output_device_bridge.h"
 #include "runtime/auth_runtime_composition.h"
 #include "runtime/command_line.h"
 #include "runtime/crash_report_policy.h"
@@ -38,7 +34,6 @@
 #include "runtime/process_launch_policy.h"
 #include "runtime/roblox_desktop_app_policy.h"
 #include "runtime/roblox_experience_launch_bridge.h"
-#include "runtime/roblox_fullscreen_runtime_bridge.h"
 #include "runtime/runtime_config_bootstrap.h"
 #include "runtime/runtime_config_file.h"
 #include "runtime/runtime_paths.h"
@@ -230,10 +225,6 @@ int main(int argc, char* argv[]) {
   }
 
   const mocktail::runtime::ProcessEnvironment environment;
-  const std::string built_in_compatibility_manifest = environment.GetOr(
-      "MOCKTAIL_UPDATE_COMPATIBILITY_PATH",
-      environment.GetOr("MOCKTAIL_COMPATIBILITY_MANIFEST",
-                        MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST));
   const mocktail::runtime::RuntimePaths paths =
       mocktail::runtime::RuntimePaths::FromEnvironment(environment);
   std::optional<mocktail::runtime::RobloxExperienceLaunchRequest>
@@ -680,57 +671,6 @@ int main(int argc, char* argv[]) {
     return 2;
   }
 
-  mocktail::runtime::RobloxFullscreenRuntimeBridge fullscreen_bridge;
-  mocktail::audio::RobloxOutputDeviceBridge output_device_bridge;
-  if (command_line.options.mode == mocktail::runtime::CommandMode::kRun) {
-    const std::string compatibility_manifest =
-        environment.GetOr("MOCKTAIL_COMPATIBILITY_MANIFEST",
-                          MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST);
-    const mocktail::compat::PayloadCompatibilityResult compatibility =
-        mocktail::compat::CheckPayloadCompatibility(
-            runtime_config.config.roblox_library_path().string(),
-            compatibility_manifest,
-            command_line.options.allow_unverified_build);
-    if (!compatibility) {
-      std::cerr << "[FATAL] " << compatibility.error << '\n';
-      return EXIT_FAILURE;
-    }
-    if (compatibility.used_unknown_build_profile) {
-      std::cerr << "[WARNING] Roblox Build ID " << compatibility.build_id
-                << " has no researched compatibility profile; running without "
-                   "allocator interposition or vtable bridges.\n";
-    }
-    const mocktail::Status fullscreen_status =
-        fullscreen_bridge.Install(compatibility.profile);
-    if (!fullscreen_status.ok()) {
-      std::cerr << "[FATAL] Cannot install fullscreen runtime bridge: "
-                << fullscreen_status.message() << '\n';
-      return EXIT_FAILURE;
-    }
-    if (compatibility.profile.fmod_output_device_bridge &&
-        compatibility.profile.fmod_output_device_bridge->has_input_devices()) {
-      std::string menu_settings;
-      const char *settings =
-          std::getenv("MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON");
-      if (!mocktail::runtime::MergeAudioDeviceMenuClientSettingsOverrides(
-              settings ? settings : "{}", &menu_settings,
-              &command_line_error) ||
-          setenv("MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON",
-                 menu_settings.c_str(), 1) != 0) {
-        std::cerr << "[FATAL] Cannot configure host audio device menu: "
-                  << command_line_error << '\n';
-        return EXIT_FAILURE;
-      }
-    }
-    const mocktail::Status output_device_status =
-        output_device_bridge.Install(compatibility.profile);
-    if (!output_device_status.ok()) {
-      std::cerr << "[FATAL] Cannot install Roblox output-device bridge: "
-                << output_device_status.message() << '\n';
-      return EXIT_FAILURE;
-    }
-  }
-
   mocktail::legacy::RuntimeDependencies dependencies;
   if (command_line.options.mode == mocktail::runtime::CommandMode::kRun) {
     auto http_client = std::make_shared<mocktail::services::CurlHttpClient>();
@@ -930,8 +870,6 @@ int main(int argc, char* argv[]) {
                               std::to_string(runtime_status) + ".");
   }
   support_bundle_guard.SetExitCode(runtime_status);
-  output_device_bridge.Shutdown();
-  fullscreen_bridge.Shutdown();
   memory_limit_watchdog.Stop();
   const mocktail::Status game_mode_stop_status = game_mode_session.Stop();
   if (!game_mode_stop_status.ok()) {
