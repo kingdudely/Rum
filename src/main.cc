@@ -16,6 +16,7 @@
 #include "libc_shim/libc_shim.h"
 #include "mocktail/audio/fmod_jni_audio_bridge.h"
 #include "mocktail/audio/webrtc_jni_audio_bridge.h"
+#include "mocktail/platform/posix_primitives.h"
 #include "runtime/auth_runtime_composition.h"
 #include "runtime/command_line.h"
 #include "runtime/crash_report_policy.h"
@@ -87,12 +88,7 @@ class ExternalLaunchBrokerScope final {
   std::shared_ptr<mocktail::runtime::ExternalLaunchBroker> broker_;
 };
 
-void SecureErase(char* data, std::size_t size) {
-  volatile char* bytes = data;
-  for (std::size_t index = 0; bytes != nullptr && index < size; ++index) {
-    bytes[index] = '\0';
-  }
-}
+using mocktail::platform::SecureErase;
 
 void SecureEraseArguments(std::vector<std::string>* arguments) {
   if (arguments == nullptr) return;

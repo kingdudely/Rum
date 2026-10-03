@@ -1,5 +1,7 @@
 #include "runtime/session_log.h"
 
+#include "mocktail/platform/posix_primitives.h"
+
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
@@ -167,19 +169,7 @@ bool UpdateLatestLink(const std::filesystem::path& logs_root,
   return true;
 }
 
-bool WriteAll(int descriptor, const char* bytes, std::size_t size) {
-  std::size_t offset = 0;
-  while (offset < size) {
-    const ssize_t written = write(descriptor, bytes + offset, size - offset);
-    if (written > 0) {
-      offset += static_cast<std::size_t>(written);
-      continue;
-    }
-    if (written < 0 && errno == EINTR) continue;
-    return false;
-  }
-  return true;
-}
+using platform::WriteAll;
 
 void RunTeeProcess(int stdout_reader, int stderr_reader, int log_descriptor,
                    int original_stdout, int original_stderr) {
@@ -218,11 +208,12 @@ void RunTeeProcess(int stdout_reader, int stderr_reader, int log_descriptor,
       const ssize_t bytes = read(source.reader, buffer.data(), buffer.size());
       if (bytes > 0) {
         const std::size_t size = static_cast<std::size_t>(bytes);
-        if (log_active && !WriteAll(log_descriptor, buffer.data(), size)) {
+        if (log_active &&
+            !WriteAll(log_descriptor, std::string_view(buffer.data(), size))) {
           log_active = false;
         }
         if (source.output_active &&
-            !WriteAll(source.output, buffer.data(), size)) {
+            !WriteAll(source.output, std::string_view(buffer.data(), size))) {
           source.output_active = false;
         }
       } else if (bytes == 0 || errno != EINTR) {

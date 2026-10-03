@@ -1,5 +1,7 @@
 #include "runtime/runtime_config_bootstrap.h"
 
+#include "mocktail/platform/posix_primitives.h"
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -136,21 +138,11 @@ std::string ErrorMessage(std::string_view action, int error_number) {
 }
 
 bool WriteAll(int file, std::string_view contents, std::string* error) {
-  const char* next = contents.data();
-  std::size_t remaining = contents.size();
-  while (remaining != 0) {
-    const ssize_t written = write(file, next, remaining);
-    if (written < 0) {
-      if (errno == EINTR) {
-        continue;
-      }
-      *error = ErrorMessage("cannot write first-run configuration", errno);
-      return false;
-    }
-    next += written;
-    remaining -= static_cast<std::size_t>(written);
+  if (platform::WriteAll(file, contents)) {
+    return true;
   }
-  return true;
+  *error = ErrorMessage("cannot write first-run configuration", errno);
+  return false;
 }
 
 bool InspectExistingConfig(const std::filesystem::path& config_file,

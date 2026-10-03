@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "jnivm/jnivm.h"
+#include "mocktail/platform/posix_primitives.h"
 #include "runtime/auth_runtime_composition.h"
 #include "runtime/external_launch_broker.h"
 #include "window/window.h"
@@ -469,10 +470,10 @@ Status RobloxExperienceComposition::PromoteAuthenticatedSession() {
   std::string credential;
   if (!vm->CopyRobloxCredentialFromProvider(&credential) ||
       credential.empty()) {
-    SecurelyClearString(&credential);
+    platform::SecureClear(&credential);
     return Status::Ok();
   }
-  SecurelyClearString(&credential);
+  platform::SecureClear(&credential);
   const GameSurface surface =
       surface_provider_.snapshot(surface_provider_.context);
   RobloxLuaAppExperienceReadiness readiness;

@@ -133,6 +133,7 @@ target_include_directories(mocktail_legacy_jnivm PUBLIC
 )
 
 add_library(mocktail_runtime STATIC
+  src/runtime/atomic_json_file.cc
   src/runtime/command_line.cc
   src/runtime/crash_report_policy.cc
   src/runtime/device_memory_profile.cc

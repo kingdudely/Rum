@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "mocktail/graphics/text_overlay_frame.h"
+#include "mocktail/platform/posix_primitives.h"
 
 namespace mocktail {
 namespace graphics {
@@ -112,16 +113,7 @@ bool GraphicsFamilyCanUseSwapchain(
   return false;
 }
 
-void SecureClear(std::vector<std::uint8_t>* bytes) {
-  if (bytes == nullptr) {
-    return;
-  }
-  volatile std::uint8_t* data = bytes->empty() ? nullptr : bytes->data();
-  for (std::size_t index = 0; index < bytes->size(); ++index) {
-    data[index] = 0;
-  }
-  bytes->clear();
-}
+using platform::SecureClear;
 
 void LibplaceboLog(void*, enum pl_log_level level, const char* message) {
   if (level <= PL_LOG_WARN && message != nullptr) {

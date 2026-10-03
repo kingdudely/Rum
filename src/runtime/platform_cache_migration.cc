@@ -17,6 +17,8 @@
 #include <string>
 #include <string_view>
 
+#include "mocktail/platform/posix_primitives.h"
+#include "runtime/atomic_json_file.h"
 #include "runtime/environment.h"
 #include "runtime/runtime_paths.h"
 
@@ -30,26 +32,12 @@ constexpr std::string_view kAndroidDataPrefix =
     "/data/user/0/com.roblox.client";
 constexpr std::string_view kLegacyAndroidDataPrefix =
     "/data/data/com.roblox.client";
-std::atomic<std::uint64_t> g_temporary_sequence{0};
 
-class ScopedFileDescriptor final {
- public:
-  explicit ScopedFileDescriptor(int descriptor = -1)
-      : descriptor_(descriptor) {}
-  ~ScopedFileDescriptor() {
-    if (descriptor_ >= 0) {
-      close(descriptor_);
-    }
-  }
+using platform::ScopedFileDescriptor;
+using platform::WriteAll;
 
-  ScopedFileDescriptor(const ScopedFileDescriptor&) = delete;
-  ScopedFileDescriptor& operator=(const ScopedFileDescriptor&) = delete;
-
-  int get() const { return descriptor_; }
-
- private:
-  int descriptor_ = -1;
-};
+constexpr AtomicJsonWriteNames kAtomicWriteNames{
+    "platform cache metadata", ".mocktail-platform-cache.tmp."};
 
 enum class ReadStatus { kMissing, kReady, kInvalid };
 
@@ -88,25 +76,6 @@ std::optional<std::filesystem::path> TranslateAndroidFilesPath(
   }
   const std::filesystem::path host_path(configured);
   return host_path.is_absolute() ? std::optional(host_path) : std::nullopt;
-}
-
-bool WriteAll(int descriptor, std::string_view bytes) {
-  std::size_t offset = 0;
-  while (offset < bytes.size()) {
-    const ssize_t written =
-        write(descriptor, bytes.data() + offset, bytes.size() - offset);
-    if (written < 0) {
-      if (errno == EINTR) {
-        continue;
-      }
-      return false;
-    }
-    if (written == 0) {
-      return false;
-    }
-    offset += static_cast<std::size_t>(written);
-  }
-  return true;
 }
 
 JsonReadResult ReadJson(const std::filesystem::path& path) {
@@ -154,64 +123,6 @@ JsonReadResult ReadJson(const std::filesystem::path& path) {
             "platform cache metadata is not a JSON object"};
   }
   return {ReadStatus::kReady, std::move(parsed), {}};
-}
-
-bool AtomicWriteJson(const std::filesystem::path& path,
-                     const nlohmann::json& value, std::string* error) {
-  std::error_code filesystem_error;
-  if (!RuntimePaths::EnsureDirectory(path.parent_path(), &filesystem_error)) {
-    *error = "cannot create platform cache metadata directory";
-    return false;
-  }
-  const std::filesystem::file_status target_status =
-      std::filesystem::symlink_status(path, filesystem_error);
-  if (!filesystem_error && std::filesystem::is_symlink(target_status)) {
-    *error = "platform cache metadata target is a symlink";
-    return false;
-  }
-  if (filesystem_error != std::errc::no_such_file_or_directory &&
-      filesystem_error) {
-    *error = "cannot inspect platform cache metadata target";
-    return false;
-  }
-
-  const std::filesystem::path temporary =
-      path.parent_path() /
-      (".mocktail-platform-cache.tmp." + std::to_string(getpid()) + "." +
-       std::to_string(g_temporary_sequence.fetch_add(1)));
-  const int descriptor =
-      open(temporary.c_str(),
-           O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
-  if (descriptor < 0) {
-    *error = "cannot create temporary platform cache metadata";
-    return false;
-  }
-  bool stored = false;
-  {
-    const ScopedFileDescriptor file(descriptor);
-    const std::string bytes = value.dump();
-    stored = fchmod(file.get(), S_IRUSR | S_IWUSR) == 0 &&
-             WriteAll(file.get(), bytes) && fsync(file.get()) == 0;
-  }
-  if (!stored || rename(temporary.c_str(), path.c_str()) != 0) {
-    const int saved_errno = errno;
-    (void)unlink(temporary.c_str());
-    errno = saved_errno;
-    *error = "cannot atomically store platform cache metadata";
-    return false;
-  }
-  const int directory_descriptor =
-      open(path.parent_path().c_str(), O_RDONLY | O_CLOEXEC | O_DIRECTORY);
-  if (directory_descriptor < 0) {
-    *error = "cannot open platform cache metadata directory for sync";
-    return false;
-  }
-  const ScopedFileDescriptor directory(directory_descriptor);
-  if (fsync(directory.get()) != 0) {
-    *error = "cannot sync platform cache metadata directory";
-    return false;
-  }
-  return true;
 }
 
 std::string FingerprintRevision(const nlohmann::json& fingerprint) {
@@ -323,7 +234,7 @@ PlatformCacheMigrationResult MigratePlatformProfileCaches(
         app_storage.value.erase("AppConfiguration");
     if (removed != 0) {
       if (!AtomicWriteJson(result.app_storage_file, app_storage.value,
-                           &result.error)) {
+                           kAtomicWriteNames, &result.error)) {
         return result;
       }
       result.app_storage_updated = true;
@@ -335,7 +246,7 @@ PlatformCacheMigrationResult MigratePlatformProfileCaches(
       {"profile_revision", std::string(desired_revision)},
   };
   if (!AtomicWriteJson(result.fingerprint_file, updated_fingerprint,
-                       &result.error)) {
+                       kAtomicWriteNames, &result.error)) {
     return result;
   }
   return result;
@@ -450,7 +361,8 @@ bool ApplyRobloxThemeCacheOverride(
   if (storage.value == original) {
     return true;
   }
-  return AtomicWriteJson(app_storage_file, storage.value, error);
+  return AtomicWriteJson(app_storage_file, storage.value, kAtomicWriteNames,
+                       error);
 }
 
 }  // namespace runtime

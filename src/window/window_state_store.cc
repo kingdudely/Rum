@@ -1,18 +1,18 @@
 #include "window/window_state_store.h"
 
+#include "mocktail/platform/posix_primitives.h"
+
 #define JSON_NOEXCEPTION 1
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <atomic>
 #include <cerrno>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <string>
-#include <string_view>
 #include <utility>
 
 namespace mocktail {
@@ -23,26 +23,10 @@ constexpr int kSchemaVersion = 1;
 constexpr std::uintmax_t kMaximumStateBytes = 32U * 1024U;
 constexpr int kMaximumExtent = 16384;
 constexpr int kMaximumCoordinateMagnitude = 131072;
-std::atomic<std::uint64_t> g_temporary_sequence{0};
 
-class ScopedFileDescriptor final {
- public:
-  explicit ScopedFileDescriptor(int descriptor = -1)
-      : descriptor_(descriptor) {}
-  ~ScopedFileDescriptor() {
-    if (descriptor_ >= 0) {
-      close(descriptor_);
-    }
-  }
-
-  ScopedFileDescriptor(const ScopedFileDescriptor&) = delete;
-  ScopedFileDescriptor& operator=(const ScopedFileDescriptor&) = delete;
-
-  int get() const { return descriptor_; }
-
- private:
-  int descriptor_ = -1;
-};
+using platform::MakeTemporaryPath;
+using platform::ScopedFileDescriptor;
+using platform::WriteAll;
 
 Status InvalidState(std::string message) {
   return Status::Error(StatusCode::kInvalidArgument, std::move(message));
@@ -50,25 +34,6 @@ Status InvalidState(std::string message) {
 
 Status PlatformError(std::string message) {
   return Status::Error(StatusCode::kPlatformError, std::move(message));
-}
-
-bool WriteAll(int descriptor, std::string_view bytes) {
-  std::size_t offset = 0;
-  while (offset < bytes.size()) {
-    const ssize_t written =
-        write(descriptor, bytes.data() + offset, bytes.size() - offset);
-    if (written < 0) {
-      if (errno == EINTR) {
-        continue;
-      }
-      return false;
-    }
-    if (written == 0) {
-      return false;
-    }
-    offset += static_cast<std::size_t>(written);
-  }
-  return true;
 }
 
 bool IsValidState(const PersistedWindowState& state) {
@@ -234,9 +199,7 @@ Status StoreWindowState(const std::filesystem::path& path,
   const std::string bytes = encoded.dump();
 
   const std::filesystem::path temporary =
-      path.parent_path() /
-      (".roblox-window-state.tmp." + std::to_string(getpid()) + "." +
-       std::to_string(g_temporary_sequence.fetch_add(1)));
+      MakeTemporaryPath(path.parent_path(), ".roblox-window-state.tmp.");
   const int descriptor =
       open(temporary.c_str(),
            O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);

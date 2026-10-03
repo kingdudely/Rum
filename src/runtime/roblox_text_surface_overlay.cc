@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "mocktail/platform/posix_primitives.h"
 #include "runtime/roblox_text_font_resolver.h"
 
 namespace mocktail {
@@ -32,27 +33,7 @@ std::mutex g_active_overlay_mutex;
 RobloxTextSurfaceOverlay* g_active_overlay = nullptr;
 std::atomic<bool> g_overlay_may_present{false};
 
-void SecureClear(std::string* value) {
-  if (value == nullptr) {
-    return;
-  }
-  volatile char* bytes = value->empty() ? nullptr : value->data();
-  for (std::size_t index = 0; index < value->size(); ++index) {
-    bytes[index] = 0;
-  }
-  value->clear();
-}
-
-void SecureClear(std::vector<std::uint8_t>* value) {
-  if (value == nullptr) {
-    return;
-  }
-  volatile std::uint8_t* bytes = value->empty() ? nullptr : value->data();
-  for (std::size_t index = 0; index < value->size(); ++index) {
-    bytes[index] = 0;
-  }
-  value->clear();
-}
+using platform::SecureClear;
 
 struct SensitiveString {
   ~SensitiveString() { SecureClear(&value); }

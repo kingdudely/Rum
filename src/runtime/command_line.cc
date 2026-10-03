@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "compat/guest_abi.h"
+#include "mocktail/platform/posix_primitives.h"
 #include "runtime/roblox_launch_uri.h"
 
 namespace mocktail {
@@ -36,12 +37,7 @@ bool SetEnvironment(const char* name, const std::string& value,
   return false;
 }
 
-void SecureErase(char* data, std::size_t size) {
-  volatile char* bytes = data;
-  for (std::size_t index = 0; bytes != nullptr && index < size; ++index) {
-    bytes[index] = '\0';
-  }
-}
+using platform::SecureErase;
 
 }  // namespace
 

@@ -5,6 +5,7 @@
 #include "jni_strings.h"
 
 #include "mocktail/audio/fmod_thread_floating_point.h"
+#include "mocktail/platform/posix_primitives.h"
 
 #include <algorithm>
 #include <atomic>
@@ -2389,17 +2390,6 @@ bool HasRobloxTextBoxEditableArgument(jmethodID method_id) {
                      kRobloxTextBoxInfoConstructor) == 0;
 }
 
-void ClearSensitiveString(std::string* value) {
-  if (value == nullptr) {
-    return;
-  }
-  volatile char* bytes = value->empty() ? nullptr : value->data();
-  for (std::size_t index = 0; index < value->size(); ++index) {
-    bytes[index] = '\0';
-  }
-  value->clear();
-}
-
 bool IsValidUtf8(const std::vector<jbyte>& bytes) {
   std::size_t index = 0;
   while (index < bytes.size()) {
@@ -2560,7 +2550,7 @@ bool DispatchRobloxTextInputShow(jlong text_box, jboolean show_native_input,
   if (vm != nullptr) {
     (void)vm->DispatchRobloxTextInputShow(request);
   }
-  ClearSensitiveString(&request.text);
+  mocktail::platform::SecureClear(&request.text);
   return true;
 }
 
@@ -2577,7 +2567,7 @@ void DispatchRobloxTextInputReplaceText(jstring text) {
   if (vm != nullptr) {
     (void)vm->DispatchRobloxTextInputReplaceText(snapshot);
   }
-  ClearSensitiveString(&snapshot);
+  mocktail::platform::SecureClear(&snapshot);
 }
 
 bool HandleRobloxTextInputStaticVoidMethodV(jclass clazz,
@@ -4323,7 +4313,7 @@ VM* VM::FromJavaVM(JavaVM* java_vm) {
 
 struct VM::RobloxTextInputBinding {
   ~RobloxTextInputBinding() {
-    ClearSensitiveString(&last_request.text);
+    mocktail::platform::SecureClear(&last_request.text);
     if (context != nullptr && callbacks.shutdown != nullptr) {
       callbacks.shutdown(context.get());
     }
@@ -4371,7 +4361,7 @@ bool VM::DispatchRobloxTextInputShow(
   }
   std::lock_guard<std::recursive_mutex> lock(binding->callback_mutex);
   // An identical show may reopen a TextBox closed without a hide callback.
-  ClearSensitiveString(&binding->last_request.text);
+  mocktail::platform::SecureClear(&binding->last_request.text);
   binding->last_request = request;
   binding->active = true;
   binding->callbacks.show(binding->context.get(), request);
@@ -4393,7 +4383,7 @@ bool VM::DispatchRobloxTextInputHide() {
     return true;
   }
   binding->active = false;
-  ClearSensitiveString(&binding->last_request.text);
+  mocktail::platform::SecureClear(&binding->last_request.text);
   binding->last_request = {};
   binding->callbacks.hide(binding->context.get());
   return true;
@@ -4413,7 +4403,7 @@ bool VM::DispatchRobloxTextInputReplaceText(const std::string& text) {
   if (!binding->active || binding->last_request.text == text) {
     return true;
   }
-  ClearSensitiveString(&binding->last_request.text);
+  mocktail::platform::SecureClear(&binding->last_request.text);
   binding->last_request.text = text;
   binding->callbacks.replace_text(binding->context.get(), text);
   return true;

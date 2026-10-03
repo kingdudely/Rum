@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "jnivm/jnivm.h"
+#include "mocktail/platform/posix_primitives.h"
 #include "runtime/roblox_window_input_runtime.h"
 #include "window/window.h"
 
@@ -23,16 +24,7 @@ constexpr std::size_t kMaximumPendingTextCommands = 64;
 constexpr std::size_t kMaximumPendingTextBytes = 4U * 1024U * 1024U;
 constexpr uint32_t kGeometryRefreshPumpInterval = 8;
 
-void SecureClear(std::string* value) {
-  if (value == nullptr) {
-    return;
-  }
-  volatile char* bytes = value->empty() ? nullptr : value->data();
-  for (std::size_t index = 0; index < value->size(); ++index) {
-    bytes[index] = 0;
-  }
-  value->clear();
-}
+using platform::SecureClear;
 
 int RoundedCoordinate(float value) {
   if (!std::isfinite(value) || value <= 0.0F) {

@@ -14,6 +14,7 @@
 #include <system_error>
 #include <utility>
 
+#include "mocktail/platform/posix_primitives.h"
 #include "runtime/runtime_paths.h"
 
 namespace mocktail {
@@ -23,19 +24,7 @@ namespace {
 constexpr const char kEmptyDefaults[] = "{\"applicationSettings\":{}}";
 constexpr std::uintmax_t kMaximumFflagsFileBytes = 64U * 1024U;
 
-class ScopedFileDescriptor final {
- public:
-  explicit ScopedFileDescriptor(int descriptor) : descriptor_(descriptor) {}
-  ~ScopedFileDescriptor() { close(descriptor_); }
-
-  ScopedFileDescriptor(const ScopedFileDescriptor&) = delete;
-  ScopedFileDescriptor& operator=(const ScopedFileDescriptor&) = delete;
-
-  int get() const { return descriptor_; }
-
- private:
-  int descriptor_;
-};
+using platform::ScopedFileDescriptor;
 
 bool IsSupportedFflagValue(const nlohmann::json& value) {
   return value.is_string() || value.is_boolean() ||

@@ -49,8 +49,6 @@ class SecureRobloxCredential final {
   std::vector<char> bytes_;
 };
 
-void SecurelyClearString(std::string* value);
-
 // Must be created after the credential reaches its final address and destroyed
 // before the credential or VM. Guest bindings block legacy env/disk fallback.
 class ScopedRobloxCredentialBinding final {
