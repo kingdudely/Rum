@@ -4603,6 +4603,149 @@ void RunMainLoop(
   }
 }
 
+// Dumps every resolved engine entry point as an address. Run once after
+// resolution so a startup failure can be attributed to a specific symbol.
+void ReportResolvedEngineSymbols(const RobloxEngineSymbols& symbols) {
+  std::cout << "    native_init_with_params="
+            << reinterpret_cast<const void*>(symbols.init_with_params) << '\n'
+            << "    native_init_client_settings="
+            << reinterpret_cast<const void*>(symbols.init_client_settings)
+            << '\n'
+            << "    native_init_client_settings_signed="
+            << reinterpret_cast<const void*>(
+                   symbols.init_client_settings_signed)
+            << '\n'
+            << "    native_init_client_settings_cached="
+            << reinterpret_cast<const void*>(
+                   symbols.init_client_settings_cached)
+            << '\n'
+            << "    native_init_client_settings_cached_compressed="
+            << reinterpret_cast<const void*>(
+                   symbols.init_client_settings_cached_compressed)
+            << '\n'
+            << "    native_initialize_native_flags="
+            << reinterpret_cast<const void*>(
+                   symbols.initialize_native_flags)
+            << '\n'
+            << "    native_app_bridge_app_start="
+            << reinterpret_cast<const void*>(symbols.app_bridge_app_start)
+            << '\n'
+            << "    native_set_is_first_install="
+            << reinterpret_cast<const void*>(symbols.set_is_first_install)
+            << '\n'
+            << "    native_update_adapter_init="
+            << reinterpret_cast<const void*>(symbols.update_adapter_init)
+            << '\n'
+            << "    native_update_app_ui_sizes="
+            << reinterpret_cast<const void*>(symbols.update_app_ui_sizes)
+            << '\n'
+            << "    native_update_surface_app="
+            << reinterpret_cast<const void*>(symbols.update_surface_app) << '\n'
+            << "    native_start_app_with_params="
+            << reinterpret_cast<const void*>(symbols.start_app_with_params) << '\n'
+            << "    native_send_app_ready="
+            << reinterpret_cast<const void*>(symbols.send_app_ready) << '\n'
+            << "    native_send_game_loaded="
+            << reinterpret_cast<const void*>(symbols.send_game_loaded) << '\n'
+            << "    native_start_lua_app_dm="
+            << reinterpret_cast<const void*>(symbols.start_lua_app_dm) << '\n'
+            << "    native_call_messages_from_main_thread="
+            << reinterpret_cast<const void*>(
+                   symbols.call_messages_from_main_thread)
+            << '\n'
+            << "    native_base_url_protocol_init="
+            << reinterpret_cast<const void*>(symbols.base_url_protocol_init)
+            << '\n'
+            << "    native_set_device_info="
+            << reinterpret_cast<const void*>(symbols.set_device_info)
+            << '\n'
+            << "    native_override_channel_platform_name="
+            << reinterpret_cast<const void*>(
+                   symbols.override_channel_platform_name)
+            << '\n'
+            << "    native_set_roblox_version="
+            << reinterpret_cast<const void*>(symbols.set_roblox_version)
+            << '\n'
+            << "    native_set_http_client_proxy="
+            << reinterpret_cast<const void*>(symbols.set_http_client_proxy)
+            << '\n'
+            << "    native_init_fast_log="
+            << reinterpret_cast<const void*>(symbols.init_fast_log) << '\n'
+            << "    native_set_multiple_cookies="
+            << reinterpret_cast<const void*>(symbols.set_multiple_cookies)
+            << '\n'
+            << "    native_cookie_manager_set_cookie="
+            << reinterpret_cast<const void*>(
+                   symbols.cookie_manager_set_cookie)
+            << '\n'
+            << "    native_set_platform_headers_with_idfa="
+            << reinterpret_cast<const void*>(
+                   symbols.set_platform_headers_with_idfa)
+            << '\n'
+            << "    native_local_storage_set_platform_impl="
+            << reinterpret_cast<const void*>(
+                   symbols.local_storage_set_platform_impl)
+            << '\n'
+            << "    native_retry_init="
+            << reinterpret_cast<const void*>(symbols.retry_init) << '\n'
+            << "    native_set_asset_path="
+            << reinterpret_cast<const void*>(symbols.set_asset_path) << '\n'
+            << "    activity_on_pre_created="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_pre_created)
+            << '\n'
+            << "    activity_on_created="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_created)
+            << '\n'
+            << "    activity_on_post_created="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_post_created)
+            << '\n'
+            << "    activity_on_pre_started="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_pre_started)
+            << '\n'
+            << "    activity_on_started="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_started)
+            << '\n'
+            << "    activity_on_post_started="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_post_started)
+            << '\n'
+            << "    activity_on_pre_resumed="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_pre_resumed)
+            << '\n'
+            << "    activity_on_resumed="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_resumed)
+            << '\n'
+            << "    activity_on_post_resumed="
+            << reinterpret_cast<const void*>(
+                   symbols.activity_lifecycle.on_post_resumed)
+            << '\n'
+            << "    native_game_activity_init="
+            << reinterpret_cast<const void*>(symbols.game_activity_init)
+            << '\n'
+            << "    native_app_lifecycle_set_active="
+            << reinterpret_cast<const void*>(symbols.app_lifecycle_set_active)
+            << '\n'
+            << "    native_on_fragment_start="
+            << reinterpret_cast<const void*>(symbols.on_fragment_start)
+            << '\n'
+            << "    native_pass_supported_refresh_rates="
+            << reinterpret_cast<const void*>(
+                   symbols.pass_supported_refresh_rates)
+            << '\n'
+            << "    native_pass_current_display_refresh_rate="
+            << reinterpret_cast<const void*>(
+                   symbols.pass_current_display_refresh_rate)
+            << '\n'
+            << std::flush;
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -5995,144 +6138,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     g_native_call_messages_from_main_thread =
         symbols.call_messages_from_main_thread;
     std::cout << "  [engine] Stage6 symbol resolve done" << std::endl;
-    std::cout << "    native_init_with_params="
-              << reinterpret_cast<const void*>(symbols.init_with_params) << '\n'
-              << "    native_init_client_settings="
-              << reinterpret_cast<const void*>(symbols.init_client_settings)
-              << '\n'
-              << "    native_init_client_settings_signed="
-              << reinterpret_cast<const void*>(
-                     symbols.init_client_settings_signed)
-              << '\n'
-              << "    native_init_client_settings_cached="
-              << reinterpret_cast<const void*>(
-                     symbols.init_client_settings_cached)
-              << '\n'
-              << "    native_init_client_settings_cached_compressed="
-              << reinterpret_cast<const void*>(
-                     symbols.init_client_settings_cached_compressed)
-              << '\n'
-              << "    native_initialize_native_flags="
-              << reinterpret_cast<const void*>(
-                     symbols.initialize_native_flags)
-              << '\n'
-              << "    native_app_bridge_app_start="
-              << reinterpret_cast<const void*>(symbols.app_bridge_app_start)
-              << '\n'
-              << "    native_set_is_first_install="
-              << reinterpret_cast<const void*>(symbols.set_is_first_install)
-              << '\n'
-              << "    native_update_adapter_init="
-              << reinterpret_cast<const void*>(symbols.update_adapter_init)
-              << '\n'
-              << "    native_update_app_ui_sizes="
-              << reinterpret_cast<const void*>(symbols.update_app_ui_sizes)
-              << '\n'
-              << "    native_update_surface_app="
-              << reinterpret_cast<const void*>(symbols.update_surface_app) << '\n'
-              << "    native_start_app_with_params="
-              << reinterpret_cast<const void*>(symbols.start_app_with_params) << '\n'
-              << "    native_send_app_ready="
-              << reinterpret_cast<const void*>(symbols.send_app_ready) << '\n'
-              << "    native_send_game_loaded="
-              << reinterpret_cast<const void*>(symbols.send_game_loaded) << '\n'
-              << "    native_start_lua_app_dm="
-              << reinterpret_cast<const void*>(symbols.start_lua_app_dm) << '\n'
-              << "    native_call_messages_from_main_thread="
-              << reinterpret_cast<const void*>(
-                     symbols.call_messages_from_main_thread)
-              << '\n'
-              << "    native_base_url_protocol_init="
-              << reinterpret_cast<const void*>(symbols.base_url_protocol_init)
-              << '\n'
-              << "    native_set_device_info="
-              << reinterpret_cast<const void*>(symbols.set_device_info)
-              << '\n'
-              << "    native_override_channel_platform_name="
-              << reinterpret_cast<const void*>(
-                     symbols.override_channel_platform_name)
-              << '\n'
-              << "    native_set_roblox_version="
-              << reinterpret_cast<const void*>(symbols.set_roblox_version)
-              << '\n'
-              << "    native_set_http_client_proxy="
-              << reinterpret_cast<const void*>(symbols.set_http_client_proxy)
-              << '\n'
-              << "    native_init_fast_log="
-              << reinterpret_cast<const void*>(symbols.init_fast_log) << '\n'
-              << "    native_set_multiple_cookies="
-              << reinterpret_cast<const void*>(symbols.set_multiple_cookies)
-              << '\n'
-              << "    native_cookie_manager_set_cookie="
-              << reinterpret_cast<const void*>(
-                     symbols.cookie_manager_set_cookie)
-              << '\n'
-              << "    native_set_platform_headers_with_idfa="
-              << reinterpret_cast<const void*>(
-                     symbols.set_platform_headers_with_idfa)
-              << '\n'
-              << "    native_local_storage_set_platform_impl="
-              << reinterpret_cast<const void*>(
-                     symbols.local_storage_set_platform_impl)
-              << '\n'
-              << "    native_retry_init="
-              << reinterpret_cast<const void*>(symbols.retry_init) << '\n'
-              << "    native_set_asset_path="
-              << reinterpret_cast<const void*>(symbols.set_asset_path) << '\n'
-              << "    activity_on_pre_created="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_pre_created)
-              << '\n'
-              << "    activity_on_created="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_created)
-              << '\n'
-              << "    activity_on_post_created="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_post_created)
-              << '\n'
-              << "    activity_on_pre_started="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_pre_started)
-              << '\n'
-              << "    activity_on_started="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_started)
-              << '\n'
-              << "    activity_on_post_started="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_post_started)
-              << '\n'
-              << "    activity_on_pre_resumed="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_pre_resumed)
-              << '\n'
-              << "    activity_on_resumed="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_resumed)
-              << '\n'
-              << "    activity_on_post_resumed="
-              << reinterpret_cast<const void*>(
-                     symbols.activity_lifecycle.on_post_resumed)
-              << '\n'
-              << "    native_game_activity_init="
-              << reinterpret_cast<const void*>(symbols.game_activity_init)
-              << '\n'
-              << "    native_app_lifecycle_set_active="
-              << reinterpret_cast<const void*>(symbols.app_lifecycle_set_active)
-              << '\n'
-              << "    native_on_fragment_start="
-              << reinterpret_cast<const void*>(symbols.on_fragment_start)
-              << '\n'
-              << "    native_pass_supported_refresh_rates="
-              << reinterpret_cast<const void*>(
-                     symbols.pass_supported_refresh_rates)
-              << '\n'
-              << "    native_pass_current_display_refresh_rate="
-              << reinterpret_cast<const void*>(
-                     symbols.pass_current_display_refresh_rate)
-              << '\n'
-              << std::flush;
+    ReportResolvedEngineSymbols(symbols);
     void* message_bus_publish_response_raw = linker::ResolveSymbol(
         roblox_handle,
         "Java_com_roblox_universalapp_messagebus_MessageBus_"
