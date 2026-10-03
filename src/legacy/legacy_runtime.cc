@@ -4247,6 +4247,197 @@ RobloxEngineSymbols ResolveRobloxEngineSymbols(
   return symbols;
 }
 
+// Which engine startup steps this run will actually call. Real startup calls
+// run by default; only signal recovery falls back to the host
+// implementations, and the "call real" flags stay opt-in where the engine
+// call can block before rendering starts.
+struct StartupDecisions {
+  bool run_set_asset_path = false;
+  bool call_real_set_asset_path = false;
+  bool run_global_init = false;
+  bool run_init_client_settings = false;
+  bool run_post_client_settings = false;
+  bool run_app_bridge_app_start = false;
+  bool run_init_with_params = false;
+  bool call_real_init_with_params = false;
+  bool run_update_screen_orientation = false;
+  bool run_update_surface_app = false;
+  bool call_real_update_surface_app = false;
+  bool run_activity_lifecycle = false;
+  bool run_game_activity_init = false;
+  bool run_set_init_params = false;
+  bool run_game_activity_surface = false;
+  bool run_app_lifecycle_active = false;
+  bool run_native_fragment_start = false;
+  bool run_display_refresh_rate = false;
+  bool run_start_app_with_params = false;
+  bool call_real_start_app_with_params = false;
+  bool run_start_lua_app_dm = false;
+  bool run_native_settings = false;
+  bool run_prepare_jni = false;
+};
+
+StartupDecisions ResolveStartupDecisions(
+    bool has_window, const RobloxEngineSymbols& symbols) {
+  StartupDecisions decisions;
+  // Real startup calls run by default; signal recovery falls back to the
+  // Mocktail implementations.
+  const bool requested_set_asset_path =
+      ShouldRunStartupStep("MOCKTAIL_STEP_SET_ASSET_PATH", true);
+  const bool requested_init_with_params =
+      ShouldRunStartupStep("MOCKTAIL_STEP_INIT_WITH_PARAMS", true);
+  const bool requested_start_app_with_params =
+      ShouldRunStartupStep("MOCKTAIL_STEP_START_APP_WITH_PARAMS", true);
+  decisions.run_set_asset_path = requested_set_asset_path;
+  decisions.call_real_set_asset_path =
+      decisions.run_set_asset_path &&
+      !IsDisabled("MOCKTAIL_CALL_REAL_NATIVE_SET_ASSET_PATH");
+  decisions.run_global_init =
+      ShouldRunStartupStep("MOCKTAIL_STEP_GAME_GLOBAL_INIT",
+                           !IsDisabled("MOCKTAIL_GAME_GLOBAL_INIT"));
+  decisions.run_init_client_settings =
+      ShouldRunStartupStep("MOCKTAIL_STEP_INIT_CLIENT_SETTINGS",
+                           !IsDisabled("MOCKTAIL_INIT_CLIENT_SETTINGS"));
+  decisions.run_post_client_settings =
+      ShouldRunStartupStep("MOCKTAIL_STEP_POST_CLIENT_SETTINGS",
+                           IsEnabled("MOCKTAIL_POST_CLIENT_SETTINGS"));
+  decisions.run_app_bridge_app_start =
+      ShouldRunStartupStep("MOCKTAIL_STEP_APP_BRIDGE_APP_START",
+                           IsEnabled("MOCKTAIL_APP_BRIDGE_APP_START")) &&
+      symbols.app_bridge_app_start != nullptr;
+  decisions.run_init_with_params = requested_init_with_params;
+  decisions.call_real_init_with_params =
+      decisions.run_init_with_params &&
+      !IsDisabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT");
+  decisions.run_update_screen_orientation =
+      ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SCREEN_ORIENTATION",
+                           IsEnabled("MOCKTAIL_UPDATE_SCREEN_ORIENTATION")) &&
+      symbols.update_screen_orientation != nullptr;
+  decisions.run_update_surface_app =
+      ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SURFACE_APP",
+                           IsEnabled("MOCKTAIL_UPDATE_SURFACE_APP"));
+  decisions.call_real_update_surface_app =
+      decisions.run_update_surface_app &&
+      IsEnabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE");
+  decisions.run_activity_lifecycle =
+      ShouldRunStartupStep("MOCKTAIL_STEP_ACTIVITY_LIFECYCLE",
+                           IsEnabled("MOCKTAIL_ACTIVITY_LIFECYCLE"));
+  decisions.run_game_activity_init =
+      ShouldRunStartupStep("MOCKTAIL_STEP_GAME_ACTIVITY_INIT",
+                           has_window || IsEnabled("MOCKTAIL_GAME_ACTIVITY_INIT"));
+  decisions.run_set_init_params =
+      ShouldRunStartupStep("MOCKTAIL_STEP_SET_INIT_PARAMS",
+                           IsEnabled("MOCKTAIL_SET_INIT_PARAMS") ||
+                               (decisions.run_game_activity_init &&
+                                !decisions.run_init_with_params));
+  decisions.run_game_activity_surface =
+      ShouldRunStartupStep(
+          "MOCKTAIL_STEP_GAME_ACTIVITY_SURFACE",
+          has_window && decisions.run_game_activity_init &&
+              IsEnabled("MOCKTAIL_GAME_ACTIVITY_SURFACE"));
+  decisions.run_app_lifecycle_active =
+      ShouldRunStartupStep("MOCKTAIL_STEP_APP_LIFECYCLE_ACTIVE",
+                           has_window && IsEnabled("MOCKTAIL_APP_LIFECYCLE_ACTIVE"));
+  decisions.run_native_fragment_start =
+      ShouldRunStartupStep("MOCKTAIL_STEP_NATIVE_FRAGMENT_START",
+                           has_window &&
+                               IsEnabled("MOCKTAIL_NATIVE_FRAGMENT_START")) &&
+      symbols.on_fragment_start != nullptr;
+  decisions.run_display_refresh_rate =
+      ShouldRunStartupStep(
+          "MOCKTAIL_STEP_PASS_CURRENT_DISPLAY_REFRESH_RATE",
+          has_window &&
+              IsEnabled("MOCKTAIL_PASS_CURRENT_DISPLAY_REFRESH_RATE")) &&
+      (symbols.pass_current_display_refresh_rate != nullptr ||
+       symbols.pass_supported_refresh_rates != nullptr);
+  decisions.run_start_app_with_params = requested_start_app_with_params;
+  // Keep the real call opt-in because it can block before rendering starts.
+  decisions.call_real_start_app_with_params =
+      decisions.run_start_app_with_params &&
+      IsEnabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_START");
+  decisions.run_start_lua_app_dm =
+      ShouldRunStartupStep("MOCKTAIL_STEP_START_LUA_APP_DM",
+                           IsEnabled("MOCKTAIL_START_LUA_APP_DM"));
+  decisions.run_native_settings =
+      ShouldRunStartupStep("MOCKTAIL_STEP_NATIVE_SETTINGS",
+                           decisions.run_init_with_params ||
+                               decisions.run_start_app_with_params);
+  decisions.run_prepare_jni =
+      ShouldRunStartupStep("MOCKTAIL_STEP_PREP_JNI",
+                               decisions.run_set_asset_path || decisions.run_global_init ||
+                                   decisions.run_init_client_settings ||
+                                   decisions.run_post_client_settings ||
+                                   decisions.run_app_bridge_app_start ||
+                                   decisions.run_native_settings ||
+                                   decisions.run_set_init_params ||
+                                   decisions.run_init_with_params ||
+                                   decisions.run_update_screen_orientation ||
+                                   decisions.run_activity_lifecycle ||
+                                   decisions.run_game_activity_init ||
+                                   decisions.run_game_activity_surface ||
+                                   decisions.run_app_lifecycle_active ||
+                                   decisions.run_native_fragment_start ||
+                                   decisions.run_display_refresh_rate ||
+                                   decisions.run_update_surface_app ||
+                                   decisions.run_start_app_with_params ||
+                                   decisions.run_start_lua_app_dm);
+
+  return decisions;
+}
+
+void ReportStartupDecisions(const StartupDecisions& decisions) {
+  PrintStepDecision("prepare JNI args", decisions.run_prepare_jni);
+  PrintStepDecision("nativeSetAssetPath", decisions.run_set_asset_path);
+  PrintStepDecision("nativeGameGlobalInit", decisions.run_global_init);
+  PrintStepDecision("nativeInitClientSettings", decisions.run_init_client_settings);
+  PrintStepDecision("nativePostClientSettingsLoadedInitialization3",
+                    decisions.run_post_client_settings);
+  PrintStepDecision("GameActivity.initializeNativeCode",
+                    decisions.run_game_activity_init);
+  PrintStepDecision("NativeSettings directories", decisions.run_native_settings);
+  PrintStepDecision("nativeAppBridgeSetInitParams", decisions.run_set_init_params);
+  PrintStepDecision("nativeAppBridgeV2InitWithParams", decisions.run_init_with_params);
+  PrintStepDecision("nativeUpdateScreenOrientation",
+                    decisions.run_update_screen_orientation);
+  PrintStepDecision("activity lifecycle", decisions.run_activity_lifecycle);
+  PrintStepDecision("nativeAppBridgeAppStart", decisions.run_app_bridge_app_start);
+  PrintStepDecision("GameActivity surface callbacks",
+                    decisions.run_game_activity_surface);
+  PrintStepDecision("JNIAppLifecycleNativeAdapter.setActive",
+                    decisions.run_app_lifecycle_active);
+  PrintStepDecision("NativeGLInterface.nativeOnFragmentStart",
+                    decisions.run_native_fragment_start);
+  PrintStepDecision("NativeGLInterface.nativePassCurrentDisplayRefreshRate",
+                    decisions.run_display_refresh_rate);
+  PrintStepDecision("nativeAppBridgeStartLuaAppDM", decisions.run_start_lua_app_dm);
+  PrintStepDecision("nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams",
+                    decisions.run_update_surface_app);
+  PrintStepDecision("nativeAppBridgeV2StartAppWithParams",
+                    decisions.run_start_app_with_params);
+  if (decisions.run_set_asset_path && !decisions.call_real_set_asset_path) {
+    PrintNativeBypass("nativeSetAssetPath",
+                      "MOCKTAIL_CALL_REAL_NATIVE_SET_ASSET_PATH");
+  }
+  if (decisions.run_init_with_params && !decisions.call_real_init_with_params) {
+    PrintNativeBypass("nativeAppBridgeV2InitWithParams",
+                      "MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT");
+  }
+  if (decisions.run_update_surface_app && !decisions.call_real_update_surface_app) {
+    PrintNativeBypass("nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams",
+                      "MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE");
+  }
+  if (decisions.run_start_app_with_params && !decisions.call_real_start_app_with_params) {
+    PrintNativeBypass("nativeAppBridgeV2StartAppWithParams",
+                      "MOCKTAIL_CALL_REAL_APP_BRIDGE_START");
+  }
+  std::cout << "  [engine] startup decisions resolved. "
+            << "run_prepare_jni=" << (decisions.run_prepare_jni ? 1 : 0) << '\n'
+            << "  run_init_with_params=" << (decisions.run_init_with_params ? 1 : 0)
+            << " run_start_app_with_params="
+            << (decisions.run_start_app_with_params ? 1 : 0) << '\n' << std::flush;
+
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -5813,157 +6004,9 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
 
     std::cout << "  [compat] skipped fixed-offset Stage 6 patch set\n"
               << std::flush;
-    // Real startup calls run by default; signal recovery falls back to the
-    // Mocktail implementations.
-    const bool requested_set_asset_path =
-        ShouldRunStartupStep("MOCKTAIL_STEP_SET_ASSET_PATH", true);
-    const bool requested_init_with_params =
-        ShouldRunStartupStep("MOCKTAIL_STEP_INIT_WITH_PARAMS", true);
-    const bool requested_start_app_with_params =
-        ShouldRunStartupStep("MOCKTAIL_STEP_START_APP_WITH_PARAMS", true);
-    const bool run_set_asset_path = requested_set_asset_path;
-    const bool call_real_set_asset_path =
-        run_set_asset_path &&
-        !IsDisabled("MOCKTAIL_CALL_REAL_NATIVE_SET_ASSET_PATH");
-    const bool run_global_init =
-        ShouldRunStartupStep("MOCKTAIL_STEP_GAME_GLOBAL_INIT",
-                             !IsDisabled("MOCKTAIL_GAME_GLOBAL_INIT"));
-    const bool run_init_client_settings =
-        ShouldRunStartupStep("MOCKTAIL_STEP_INIT_CLIENT_SETTINGS",
-                             !IsDisabled("MOCKTAIL_INIT_CLIENT_SETTINGS"));
-    const bool run_post_client_settings =
-        ShouldRunStartupStep("MOCKTAIL_STEP_POST_CLIENT_SETTINGS",
-                             IsEnabled("MOCKTAIL_POST_CLIENT_SETTINGS"));
-    const bool run_app_bridge_app_start =
-        ShouldRunStartupStep("MOCKTAIL_STEP_APP_BRIDGE_APP_START",
-                             IsEnabled("MOCKTAIL_APP_BRIDGE_APP_START")) &&
-        symbols.app_bridge_app_start != nullptr;
-    const bool run_init_with_params = requested_init_with_params;
-    const bool call_real_init_with_params =
-        run_init_with_params &&
-        !IsDisabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT");
-    const bool run_update_screen_orientation =
-        ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SCREEN_ORIENTATION",
-                             IsEnabled("MOCKTAIL_UPDATE_SCREEN_ORIENTATION")) &&
-        symbols.update_screen_orientation != nullptr;
-    const bool run_update_surface_app =
-        ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SURFACE_APP",
-                             IsEnabled("MOCKTAIL_UPDATE_SURFACE_APP"));
-    const bool call_real_update_surface_app =
-        run_update_surface_app &&
-        IsEnabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE");
-    const bool run_activity_lifecycle =
-        ShouldRunStartupStep("MOCKTAIL_STEP_ACTIVITY_LIFECYCLE",
-                             IsEnabled("MOCKTAIL_ACTIVITY_LIFECYCLE"));
-    const bool run_game_activity_init =
-        ShouldRunStartupStep("MOCKTAIL_STEP_GAME_ACTIVITY_INIT",
-                             has_window || IsEnabled("MOCKTAIL_GAME_ACTIVITY_INIT"));
-    const bool run_set_init_params =
-        ShouldRunStartupStep("MOCKTAIL_STEP_SET_INIT_PARAMS",
-                             IsEnabled("MOCKTAIL_SET_INIT_PARAMS") ||
-                                 (run_game_activity_init &&
-                                  !run_init_with_params));
-    const bool run_game_activity_surface =
-        ShouldRunStartupStep(
-            "MOCKTAIL_STEP_GAME_ACTIVITY_SURFACE",
-            has_window && run_game_activity_init &&
-                IsEnabled("MOCKTAIL_GAME_ACTIVITY_SURFACE"));
-    const bool run_app_lifecycle_active =
-        ShouldRunStartupStep("MOCKTAIL_STEP_APP_LIFECYCLE_ACTIVE",
-                             has_window && IsEnabled("MOCKTAIL_APP_LIFECYCLE_ACTIVE"));
-    const bool run_native_fragment_start =
-        ShouldRunStartupStep("MOCKTAIL_STEP_NATIVE_FRAGMENT_START",
-                             has_window &&
-                                 IsEnabled("MOCKTAIL_NATIVE_FRAGMENT_START")) &&
-        symbols.on_fragment_start != nullptr;
-    const bool run_display_refresh_rate =
-        ShouldRunStartupStep(
-            "MOCKTAIL_STEP_PASS_CURRENT_DISPLAY_REFRESH_RATE",
-            has_window &&
-                IsEnabled("MOCKTAIL_PASS_CURRENT_DISPLAY_REFRESH_RATE")) &&
-        (symbols.pass_current_display_refresh_rate != nullptr ||
-         symbols.pass_supported_refresh_rates != nullptr);
-    const bool run_start_app_with_params = requested_start_app_with_params;
-    // Keep the real call opt-in because it can block before rendering starts.
-    const bool call_real_start_app_with_params =
-        run_start_app_with_params &&
-        IsEnabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_START");
-    const bool run_start_lua_app_dm =
-        ShouldRunStartupStep("MOCKTAIL_STEP_START_LUA_APP_DM",
-                             IsEnabled("MOCKTAIL_START_LUA_APP_DM"));
-    const bool run_native_settings =
-        ShouldRunStartupStep("MOCKTAIL_STEP_NATIVE_SETTINGS",
-                             run_init_with_params ||
-                                 run_start_app_with_params);
-    const bool run_prepare_jni =
-        ShouldRunStartupStep("MOCKTAIL_STEP_PREP_JNI",
-                                 run_set_asset_path || run_global_init ||
-                                     run_init_client_settings ||
-                                     run_post_client_settings ||
-                                     run_app_bridge_app_start ||
-                                     run_native_settings ||
-                                     run_set_init_params ||
-                                     run_init_with_params ||
-                                     run_update_screen_orientation ||
-                                     run_activity_lifecycle ||
-                                     run_game_activity_init ||
-                                     run_game_activity_surface ||
-                                     run_app_lifecycle_active ||
-                                     run_native_fragment_start ||
-                                     run_display_refresh_rate ||
-                                     run_update_surface_app ||
-                                     run_start_app_with_params ||
-                                     run_start_lua_app_dm);
-
-    PrintStepDecision("prepare JNI args", run_prepare_jni);
-    PrintStepDecision("nativeSetAssetPath", run_set_asset_path);
-    PrintStepDecision("nativeGameGlobalInit", run_global_init);
-    PrintStepDecision("nativeInitClientSettings", run_init_client_settings);
-    PrintStepDecision("nativePostClientSettingsLoadedInitialization3",
-                      run_post_client_settings);
-    PrintStepDecision("GameActivity.initializeNativeCode",
-                      run_game_activity_init);
-    PrintStepDecision("NativeSettings directories", run_native_settings);
-    PrintStepDecision("nativeAppBridgeSetInitParams", run_set_init_params);
-    PrintStepDecision("nativeAppBridgeV2InitWithParams", run_init_with_params);
-    PrintStepDecision("nativeUpdateScreenOrientation",
-                      run_update_screen_orientation);
-    PrintStepDecision("activity lifecycle", run_activity_lifecycle);
-    PrintStepDecision("nativeAppBridgeAppStart", run_app_bridge_app_start);
-    PrintStepDecision("GameActivity surface callbacks",
-                      run_game_activity_surface);
-    PrintStepDecision("JNIAppLifecycleNativeAdapter.setActive",
-                      run_app_lifecycle_active);
-    PrintStepDecision("NativeGLInterface.nativeOnFragmentStart",
-                      run_native_fragment_start);
-    PrintStepDecision("NativeGLInterface.nativePassCurrentDisplayRefreshRate",
-                      run_display_refresh_rate);
-    PrintStepDecision("nativeAppBridgeStartLuaAppDM", run_start_lua_app_dm);
-    PrintStepDecision("nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams",
-                      run_update_surface_app);
-    PrintStepDecision("nativeAppBridgeV2StartAppWithParams",
-                      run_start_app_with_params);
-    if (run_set_asset_path && !call_real_set_asset_path) {
-      PrintNativeBypass("nativeSetAssetPath",
-                        "MOCKTAIL_CALL_REAL_NATIVE_SET_ASSET_PATH");
-    }
-    if (run_init_with_params && !call_real_init_with_params) {
-      PrintNativeBypass("nativeAppBridgeV2InitWithParams",
-                        "MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT");
-    }
-    if (run_update_surface_app && !call_real_update_surface_app) {
-      PrintNativeBypass("nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams",
-                        "MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE");
-    }
-    if (run_start_app_with_params && !call_real_start_app_with_params) {
-      PrintNativeBypass("nativeAppBridgeV2StartAppWithParams",
-                        "MOCKTAIL_CALL_REAL_APP_BRIDGE_START");
-    }
-    std::cout << "  [engine] startup decisions resolved. "
-              << "run_prepare_jni=" << (run_prepare_jni ? 1 : 0) << '\n'
-              << "  run_init_with_params=" << (run_init_with_params ? 1 : 0)
-              << " run_start_app_with_params="
-              << (run_start_app_with_params ? 1 : 0) << '\n' << std::flush;
+    const StartupDecisions decisions =
+        ResolveStartupDecisions(has_window, symbols);
+    ReportStartupDecisions(decisions);
 
     // The direct GAME path still runs CoreScripts that query app protocols.
     // Install these independently of ExperienceProtocol's dynamic launch path.
@@ -6102,29 +6145,29 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         dependencies.account_identity(),
         &dependencies.roblox_credential(),
         game_session_runtime.get(),
-        run_prepare_jni,
-        run_set_asset_path,
-        call_real_set_asset_path,
-        run_global_init,
-        run_init_client_settings,
-        run_post_client_settings,
-        run_app_bridge_app_start,
-        run_native_settings,
-        run_set_init_params,
-        run_init_with_params,
-        call_real_init_with_params,
-        run_update_screen_orientation,
-        run_update_surface_app,
-        call_real_update_surface_app,
-        run_start_app_with_params,
-        call_real_start_app_with_params,
-        run_activity_lifecycle,
-        run_game_activity_init,
-        run_game_activity_surface,
-        run_app_lifecycle_active,
-        run_native_fragment_start,
-        run_display_refresh_rate,
-        run_start_lua_app_dm,
+        decisions.run_prepare_jni,
+        decisions.run_set_asset_path,
+        decisions.call_real_set_asset_path,
+        decisions.run_global_init,
+        decisions.run_init_client_settings,
+        decisions.run_post_client_settings,
+        decisions.run_app_bridge_app_start,
+        decisions.run_native_settings,
+        decisions.run_set_init_params,
+        decisions.run_init_with_params,
+        decisions.call_real_init_with_params,
+        decisions.run_update_screen_orientation,
+        decisions.run_update_surface_app,
+        decisions.call_real_update_surface_app,
+        decisions.run_start_app_with_params,
+        decisions.call_real_start_app_with_params,
+        decisions.run_activity_lifecycle,
+        decisions.run_game_activity_init,
+        decisions.run_game_activity_surface,
+        decisions.run_app_lifecycle_active,
+        decisions.run_native_fragment_start,
+        decisions.run_display_refresh_rate,
+        decisions.run_start_lua_app_dm,
         symbols.global_init,
         symbols.init_client_settings,
         symbols.init_client_settings_signed,
