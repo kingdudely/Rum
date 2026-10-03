@@ -5916,6 +5916,203 @@ void FinishRobloxAppLifecycle(
   }
 }
 
+// Registers every Android/Java class the engine resolves by name through
+// FindClass. JNI_OnLoad looks these descriptors up, so the table has to be
+// in place before the engine library is loaded. The context and activity
+// classes are held in locals purely so their registrations outlive this
+// function.
+void RegisterAndroidSdkJniClasses(const std::shared_ptr<jnivm::VM>& jni_vm) {
+  auto context_class = jni_vm->RegisterClass("android/content/Context");
+  auto activity_class =
+      jni_vm->RegisterClass("com/roblox/client/RobloxActivity");
+  auto settings_class = jni_vm->RegisterClass("rbx/JNIRobloxSettings");
+
+  settings_class->RegisterMethod(
+      "nativeInitClientSettings", "()V",
+      [](JNIEnv* /*env*/, jobject /*obj*/) {
+        std::cout << "  [JNI callback] nativeInitClientSettings invoked\n";
+      });
+
+  auto native_gl_interface_class =
+      jni_vm->RegisterClass("com/roblox/engine/jni/NativeGLInterface");
+  g_native_gl_class_for_main_thread =
+      reinterpret_cast<jclass>(native_gl_interface_class.get());
+  g_vm_for_main_thread_pump = jni_vm.get();
+  jni_vm->RegisterClass("com/roblox/engine/jni/NativeInputInterface");
+  jni_vm->RegisterClass("com/roblox/engine/jni/NativeSettingsInterface");
+  jni_vm->RegisterClass("com/roblox/engine/jni/NativeAppBridgeInterface");
+  jni_vm->RegisterClass("com/roblox/engine/jni/NativeGLJavaInterface");
+  jni_vm->RegisterClass("com/roblox/engine/jni/EngineJavaCallback2");
+  jni_vm->RegisterClass("com/roblox/engine/jni/OnAppBridgeNotificationListener");
+  jni_vm->RegisterClass("com/roblox/client/flags/FlagJniInterface");
+  jni_vm->RegisterClass("com/roblox/client/flags/NativeFlagsInitResult");
+  jni_vm->RegisterClass("com/roblox/engine/jni/model/DeviceStaticParams");
+  jni_vm->RegisterClass("com/roblox/engine/jni/model/DeviceParams");
+  jni_vm->RegisterClass("com/roblox/engine/jni/model/PlatformParams");
+  jni_vm->RegisterClass("com/roblox/engine/jni/model/NativeTextBoxInfo");
+  jni_vm->RegisterClass("com/roblox/engine/jni/autovalue/InitParams");
+  jni_vm->RegisterClass("com/roblox/engine/jni/autovalue/StartAppParams");
+  jni_vm->RegisterClass("com/roblox/client/startup/MainGameActivity");
+  jni_vm->RegisterClass("com/roblox/client/startup/NativeHelper");
+  jni_vm->RegisterClass(
+      "com/roblox/universalapp/activitylifecyclecallbacks/"
+      "JNIActivityLifecycleCallbacks");
+  jni_vm->RegisterClass("com/roblox/universalapp/messagebus/MessageBus");
+  jni_vm->RegisterClass("com/roblox/universalapp/messagebus/Connection");
+  jni_vm->RegisterClass(
+      "com/roblox/universalapp/systemtheme/SystemThemeProtocol");
+  jni_vm->RegisterClass("com/roblox/universalapp/cookie/CookieProtocol");
+  jni_vm->RegisterClass(
+      "com/roblox/universalapp/linking/JNIWebLoginProtocol");
+  jni_vm->RegisterClass("com/roblox/universalapp/cookie/JNICookieManager");
+  jni_vm->RegisterClass("com/roblox/universalapp/cookie/JNICookieProtocol");
+  jni_vm->RegisterClass(
+      "com/roblox/universalapp/cookie/JNICookieProtocol$OnSetCookieHandler");
+  jni_vm->RegisterClass("com/roblox/client/JNIAAssetManagerSetup");
+  jni_vm->RegisterClass("org/fmod/FMOD");
+  jni_vm->RegisterClass("android/content/res/AssetManager");
+  jni_vm->RegisterClass("android/media/AudioManager");
+  jni_vm->RegisterClass(
+      "com/roblox/protocols/systemdialog/PlatformSystemDialogHandler");
+  jni_vm->RegisterClass(
+      "com/roblox/protocols/systemdialogplatforminterface/generated/"
+      "SystemDialogRequest");
+  jni_vm->RegisterClass(
+      "com/roblox/protocols/systemdialogplatforminterface/generated/"
+      "ISystemDialogCallback");
+  jni_vm->RegisterClass("com/google/androidgamesdk/GameActivity");
+  jni_vm->RegisterClass("com/google/androidgamesdk/gametextinput/InputConnection");
+  jni_vm->RegisterClass("com/google/androidgamesdk/gametextinput/State");
+  jni_vm->RegisterClass("com/roblox/client/LocalStorageManager");
+  jni_vm->RegisterClass(
+      "com/roblox/protocols/localstorageplatforminterface/generated/"
+      "ILocalStorageHandlerCore");
+  jni_vm->RegisterClass(
+      "com/roblox/protocols/localstorageplatforminterface/generated/"
+      "ILocalStorageHandlerCore$CppProxy");
+  jni_vm->RegisterClass(
+      "com/roblox/protocols/localstorageplatforminterface/generated/"
+      "IPlatformLocalStorageHandler");
+  jni_vm->RegisterClass(
+      "com/roblox/protocols/localstorageplatforminterface/generated/"
+      "IPlatformLocalStorageHandler$CppProxy");
+  jni_vm->RegisterClass("java/util/HashSet");
+  jni_vm->RegisterClass("java/util/Iterator");
+  jni_vm->RegisterClass("android/os/LocaleList");
+  jni_vm->RegisterClass("java/util/Locale");
+  jni_vm->RegisterClass("androidx/core/graphics/Insets");
+  jni_vm->RegisterClass("androidx/core/view/WindowInsetsCompat$Type");
+  jni_vm->RegisterClass("android/view/MotionEvent");
+  jni_vm->RegisterClass("android/view/KeyEvent");
+  jni_vm->RegisterClass("android/view/Surface");
+  jni_vm->RegisterClass("java/lang/String");
+  jni_vm->RegisterClass("java/lang/Object");
+
+  std::cout << "  Registered " << jni_vm->GetClassCount()
+            << " JNI class(es)\n";
+}
+
+// Registers the Bionic networking, pthread and process-level entry points the
+// engine imports from libc and libdl. These are straight pass-through
+// wrappers, so they go in directly rather than through the bulk symbol
+// table the GL and Vulkan symbols go through.
+void RegisterBionicNetworkAndPthreadSymbols() {
+  RegisterBionicDnsWrappers();
+  RegisterBionicPathWrappers();
+  linker::RegisterSymbol("prctl",
+                         reinterpret_cast<void*>(mocktail_bionic_prctl));
+  linker::RegisterSymbol(
+      "setsockopt", reinterpret_cast<void*>(mocktail_bionic_setsockopt));
+  linker::RegisterSymbol("sendmsg",
+                         reinterpret_cast<void*>(mocktail_bionic_sendmsg));
+  linker::RegisterSymbol("mprotect", reinterpret_cast<void*>(mocktail_mprotect));
+  linker::RegisterSymbol("pthread_condattr_init",
+                         reinterpret_cast<void*>(mocktail_pthread_condattr_init));
+  linker::RegisterSymbol("pthread_condattr_destroy",
+                         reinterpret_cast<void*>(mocktail_pthread_condattr_destroy));
+  linker::RegisterSymbol("pthread_condattr_setclock",
+                         reinterpret_cast<void*>(mocktail_pthread_condattr_setclock));
+  linker::RegisterSymbol("pthread_cond_init",
+                         reinterpret_cast<void*>(mocktail_pthread_cond_init));
+  linker::RegisterSymbol("pthread_cond_destroy",
+                         reinterpret_cast<void*>(mocktail_pthread_cond_destroy));
+  linker::RegisterSymbol("pthread_cond_signal",
+                         reinterpret_cast<void*>(mocktail_pthread_cond_signal));
+  linker::RegisterSymbol("pthread_cond_broadcast",
+                         reinterpret_cast<void*>(mocktail_pthread_cond_broadcast));
+  linker::RegisterSymbol("pthread_cond_wait",
+                         reinterpret_cast<void*>(mocktail_pthread_cond_wait));
+  linker::RegisterSymbol("pthread_cond_timedwait",
+                         reinterpret_cast<void*>(mocktail_pthread_cond_timedwait));
+  linker::RegisterSymbol("pthread_mutexattr_init",
+                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_init));
+  linker::RegisterSymbol("pthread_mutexattr_destroy",
+                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_destroy));
+  linker::RegisterSymbol("pthread_mutexattr_settype",
+                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_settype));
+  linker::RegisterSymbol("pthread_mutex_init",
+                         reinterpret_cast<void*>(mocktail_pthread_mutex_init));
+  linker::RegisterSymbol("pthread_mutex_destroy",
+                         reinterpret_cast<void*>(mocktail_pthread_mutex_destroy));
+  linker::RegisterSymbol("pthread_mutex_lock",
+                         reinterpret_cast<void*>(mocktail_pthread_mutex_lock));
+  linker::RegisterSymbol("pthread_mutex_trylock",
+                         reinterpret_cast<void*>(mocktail_pthread_mutex_trylock));
+  linker::RegisterSymbol("pthread_mutex_unlock",
+                         reinterpret_cast<void*>(mocktail_pthread_mutex_unlock));
+  linker::RegisterSymbol("pthread_once",
+                         reinterpret_cast<void*>(mocktail_pthread_once));
+  linker::RegisterSymbol("pthread_spin_init",
+                         reinterpret_cast<void*>(mocktail_pthread_spin_init));
+  linker::RegisterSymbol("pthread_spin_destroy",
+                         reinterpret_cast<void*>(mocktail_pthread_spin_destroy));
+  linker::RegisterSymbol("pthread_spin_lock",
+                         reinterpret_cast<void*>(mocktail_pthread_spin_lock));
+  linker::RegisterSymbol("pthread_spin_trylock",
+                         reinterpret_cast<void*>(mocktail_pthread_spin_trylock));
+  linker::RegisterSymbol("pthread_spin_unlock",
+                         reinterpret_cast<void*>(mocktail_pthread_spin_unlock));
+  linker::RegisterSymbol(
+      "pthread_attr_init",
+      reinterpret_cast<void*>(mocktail_pthread_attr_init));
+  linker::RegisterSymbol(
+      "pthread_attr_destroy",
+      reinterpret_cast<void*>(mocktail_pthread_attr_destroy));
+  linker::RegisterSymbol(
+      "pthread_attr_setstacksize",
+      reinterpret_cast<void*>(mocktail_pthread_attr_setstacksize));
+  linker::RegisterSymbol(
+      "pthread_attr_setdetachstate",
+      reinterpret_cast<void*>(mocktail_pthread_attr_setdetachstate));
+  linker::RegisterSymbol(
+      "pthread_attr_setschedparam",
+      reinterpret_cast<void*>(mocktail_pthread_attr_setschedparam));
+  linker::RegisterSymbol(
+      "pthread_getattr_np",
+      reinterpret_cast<void*>(mocktail_pthread_getattr_np));
+  linker::RegisterSymbol(
+      "pthread_attr_getstack",
+      reinterpret_cast<void*>(mocktail_pthread_attr_getstack));
+  linker::RegisterSymbol("pthread_barrier_init",
+                         reinterpret_cast<void*>(mocktail_pthread_barrier_init));
+  linker::RegisterSymbol(
+      "pthread_barrier_destroy",
+      reinterpret_cast<void*>(mocktail_pthread_barrier_destroy));
+  linker::RegisterSymbol("pthread_barrier_wait",
+                         reinterpret_cast<void*>(mocktail_pthread_barrier_wait));
+  linker::RegisterSymbol(
+      "pthread_create",
+      reinterpret_cast<void*>(mocktail_bionic_pthread_create));
+  linker::RegisterSymbol(
+      "pthread_setschedparam",
+      reinterpret_cast<void*>(mocktail_bionic_pthread_setschedparam));
+  linker::RegisterSymbol(
+      "sched_setscheduler",
+      reinterpret_cast<void*>(mocktail_bionic_sched_setscheduler));
+  linker::RegisterSymbol("abort", reinterpret_cast<void*>(mocktail_abort));
+  linker::RegisterSymbol("__stack_chk_fail", reinterpret_cast<void*>(mocktail_recover_stack_chk_fail));
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -6039,94 +6236,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   // FindClass needs these descriptors before JNI_OnLoad.
   PrintStage(2, "Registering Android SDK JNI classes");
 
-  auto context_class = jni_vm->RegisterClass("android/content/Context");
-  auto activity_class =
-      jni_vm->RegisterClass("com/roblox/client/RobloxActivity");
-  auto settings_class = jni_vm->RegisterClass("rbx/JNIRobloxSettings");
-
-  settings_class->RegisterMethod(
-      "nativeInitClientSettings", "()V",
-      [](JNIEnv* /*env*/, jobject /*obj*/) {
-        std::cout << "  [JNI callback] nativeInitClientSettings invoked\n";
-      });
-
-  auto native_gl_interface_class =
-      jni_vm->RegisterClass("com/roblox/engine/jni/NativeGLInterface");
-  g_native_gl_class_for_main_thread =
-      reinterpret_cast<jclass>(native_gl_interface_class.get());
-  g_vm_for_main_thread_pump = jni_vm.get();
-  jni_vm->RegisterClass("com/roblox/engine/jni/NativeInputInterface");
-  jni_vm->RegisterClass("com/roblox/engine/jni/NativeSettingsInterface");
-  jni_vm->RegisterClass("com/roblox/engine/jni/NativeAppBridgeInterface");
-  jni_vm->RegisterClass("com/roblox/engine/jni/NativeGLJavaInterface");
-  jni_vm->RegisterClass("com/roblox/engine/jni/EngineJavaCallback2");
-  jni_vm->RegisterClass("com/roblox/engine/jni/OnAppBridgeNotificationListener");
-  jni_vm->RegisterClass("com/roblox/client/flags/FlagJniInterface");
-  jni_vm->RegisterClass("com/roblox/client/flags/NativeFlagsInitResult");
-  jni_vm->RegisterClass("com/roblox/engine/jni/model/DeviceStaticParams");
-  jni_vm->RegisterClass("com/roblox/engine/jni/model/DeviceParams");
-  jni_vm->RegisterClass("com/roblox/engine/jni/model/PlatformParams");
-  jni_vm->RegisterClass("com/roblox/engine/jni/model/NativeTextBoxInfo");
-  jni_vm->RegisterClass("com/roblox/engine/jni/autovalue/InitParams");
-  jni_vm->RegisterClass("com/roblox/engine/jni/autovalue/StartAppParams");
-  jni_vm->RegisterClass("com/roblox/client/startup/MainGameActivity");
-  jni_vm->RegisterClass("com/roblox/client/startup/NativeHelper");
-  jni_vm->RegisterClass(
-      "com/roblox/universalapp/activitylifecyclecallbacks/"
-      "JNIActivityLifecycleCallbacks");
-  jni_vm->RegisterClass("com/roblox/universalapp/messagebus/MessageBus");
-  jni_vm->RegisterClass("com/roblox/universalapp/messagebus/Connection");
-  jni_vm->RegisterClass(
-      "com/roblox/universalapp/systemtheme/SystemThemeProtocol");
-  jni_vm->RegisterClass("com/roblox/universalapp/cookie/CookieProtocol");
-  jni_vm->RegisterClass(
-      "com/roblox/universalapp/linking/JNIWebLoginProtocol");
-  jni_vm->RegisterClass("com/roblox/universalapp/cookie/JNICookieManager");
-  jni_vm->RegisterClass("com/roblox/universalapp/cookie/JNICookieProtocol");
-  jni_vm->RegisterClass(
-      "com/roblox/universalapp/cookie/JNICookieProtocol$OnSetCookieHandler");
-  jni_vm->RegisterClass("com/roblox/client/JNIAAssetManagerSetup");
-  jni_vm->RegisterClass("org/fmod/FMOD");
-  jni_vm->RegisterClass("android/content/res/AssetManager");
-  jni_vm->RegisterClass("android/media/AudioManager");
-  jni_vm->RegisterClass(
-      "com/roblox/protocols/systemdialog/PlatformSystemDialogHandler");
-  jni_vm->RegisterClass(
-      "com/roblox/protocols/systemdialogplatforminterface/generated/"
-      "SystemDialogRequest");
-  jni_vm->RegisterClass(
-      "com/roblox/protocols/systemdialogplatforminterface/generated/"
-      "ISystemDialogCallback");
-  jni_vm->RegisterClass("com/google/androidgamesdk/GameActivity");
-  jni_vm->RegisterClass("com/google/androidgamesdk/gametextinput/InputConnection");
-  jni_vm->RegisterClass("com/google/androidgamesdk/gametextinput/State");
-  jni_vm->RegisterClass("com/roblox/client/LocalStorageManager");
-  jni_vm->RegisterClass(
-      "com/roblox/protocols/localstorageplatforminterface/generated/"
-      "ILocalStorageHandlerCore");
-  jni_vm->RegisterClass(
-      "com/roblox/protocols/localstorageplatforminterface/generated/"
-      "ILocalStorageHandlerCore$CppProxy");
-  jni_vm->RegisterClass(
-      "com/roblox/protocols/localstorageplatforminterface/generated/"
-      "IPlatformLocalStorageHandler");
-  jni_vm->RegisterClass(
-      "com/roblox/protocols/localstorageplatforminterface/generated/"
-      "IPlatformLocalStorageHandler$CppProxy");
-  jni_vm->RegisterClass("java/util/HashSet");
-  jni_vm->RegisterClass("java/util/Iterator");
-  jni_vm->RegisterClass("android/os/LocaleList");
-  jni_vm->RegisterClass("java/util/Locale");
-  jni_vm->RegisterClass("androidx/core/graphics/Insets");
-  jni_vm->RegisterClass("androidx/core/view/WindowInsetsCompat$Type");
-  jni_vm->RegisterClass("android/view/MotionEvent");
-  jni_vm->RegisterClass("android/view/KeyEvent");
-  jni_vm->RegisterClass("android/view/Surface");
-  jni_vm->RegisterClass("java/lang/String");
-  jni_vm->RegisterClass("java/lang/Object");
-
-  std::cout << "  Registered " << jni_vm->GetClassCount()
-            << " JNI class(es)\n";
+  RegisterAndroidSdkJniClasses(jni_vm);
 
   const bool has_window = InitializeHostWindow(
       is_headless, runtime_config, dependencies,
@@ -6282,100 +6392,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     std::cout << "  [vulkan] registered exact Android loader adapter exports: "
               << vulkan_exports << '\n';
   }
-  RegisterBionicDnsWrappers();
-  RegisterBionicPathWrappers();
-  linker::RegisterSymbol("prctl",
-                         reinterpret_cast<void*>(mocktail_bionic_prctl));
-  linker::RegisterSymbol(
-      "setsockopt", reinterpret_cast<void*>(mocktail_bionic_setsockopt));
-  linker::RegisterSymbol("sendmsg",
-                         reinterpret_cast<void*>(mocktail_bionic_sendmsg));
-  linker::RegisterSymbol("mprotect", reinterpret_cast<void*>(mocktail_mprotect));
-  linker::RegisterSymbol("pthread_condattr_init",
-                         reinterpret_cast<void*>(mocktail_pthread_condattr_init));
-  linker::RegisterSymbol("pthread_condattr_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_condattr_destroy));
-  linker::RegisterSymbol("pthread_condattr_setclock",
-                         reinterpret_cast<void*>(mocktail_pthread_condattr_setclock));
-  linker::RegisterSymbol("pthread_cond_init",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_init));
-  linker::RegisterSymbol("pthread_cond_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_destroy));
-  linker::RegisterSymbol("pthread_cond_signal",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_signal));
-  linker::RegisterSymbol("pthread_cond_broadcast",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_broadcast));
-  linker::RegisterSymbol("pthread_cond_wait",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_wait));
-  linker::RegisterSymbol("pthread_cond_timedwait",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_timedwait));
-  linker::RegisterSymbol("pthread_mutexattr_init",
-                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_init));
-  linker::RegisterSymbol("pthread_mutexattr_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_destroy));
-  linker::RegisterSymbol("pthread_mutexattr_settype",
-                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_settype));
-  linker::RegisterSymbol("pthread_mutex_init",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_init));
-  linker::RegisterSymbol("pthread_mutex_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_destroy));
-  linker::RegisterSymbol("pthread_mutex_lock",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_lock));
-  linker::RegisterSymbol("pthread_mutex_trylock",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_trylock));
-  linker::RegisterSymbol("pthread_mutex_unlock",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_unlock));
-  linker::RegisterSymbol("pthread_once",
-                         reinterpret_cast<void*>(mocktail_pthread_once));
-  linker::RegisterSymbol("pthread_spin_init",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_init));
-  linker::RegisterSymbol("pthread_spin_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_destroy));
-  linker::RegisterSymbol("pthread_spin_lock",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_lock));
-  linker::RegisterSymbol("pthread_spin_trylock",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_trylock));
-  linker::RegisterSymbol("pthread_spin_unlock",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_unlock));
-  linker::RegisterSymbol(
-      "pthread_attr_init",
-      reinterpret_cast<void*>(mocktail_pthread_attr_init));
-  linker::RegisterSymbol(
-      "pthread_attr_destroy",
-      reinterpret_cast<void*>(mocktail_pthread_attr_destroy));
-  linker::RegisterSymbol(
-      "pthread_attr_setstacksize",
-      reinterpret_cast<void*>(mocktail_pthread_attr_setstacksize));
-  linker::RegisterSymbol(
-      "pthread_attr_setdetachstate",
-      reinterpret_cast<void*>(mocktail_pthread_attr_setdetachstate));
-  linker::RegisterSymbol(
-      "pthread_attr_setschedparam",
-      reinterpret_cast<void*>(mocktail_pthread_attr_setschedparam));
-  linker::RegisterSymbol(
-      "pthread_getattr_np",
-      reinterpret_cast<void*>(mocktail_pthread_getattr_np));
-  linker::RegisterSymbol(
-      "pthread_attr_getstack",
-      reinterpret_cast<void*>(mocktail_pthread_attr_getstack));
-  linker::RegisterSymbol("pthread_barrier_init",
-                         reinterpret_cast<void*>(mocktail_pthread_barrier_init));
-  linker::RegisterSymbol(
-      "pthread_barrier_destroy",
-      reinterpret_cast<void*>(mocktail_pthread_barrier_destroy));
-  linker::RegisterSymbol("pthread_barrier_wait",
-                         reinterpret_cast<void*>(mocktail_pthread_barrier_wait));
-  linker::RegisterSymbol(
-      "pthread_create",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_create));
-  linker::RegisterSymbol(
-      "pthread_setschedparam",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_setschedparam));
-  linker::RegisterSymbol(
-      "sched_setscheduler",
-      reinterpret_cast<void*>(mocktail_bionic_sched_setscheduler));
-  linker::RegisterSymbol("abort", reinterpret_cast<void*>(mocktail_abort));
-  linker::RegisterSymbol("__stack_chk_fail", reinterpret_cast<void*>(mocktail_recover_stack_chk_fail));
+  RegisterBionicNetworkAndPthreadSymbols();
   (void)registered;
   std::cout << "  [linker] Registered " << registered << " / " << total_symbols
             << " known symbols.\n";
