@@ -5808,6 +5808,114 @@ bool InstallExperiencePlatformProtocols(
   return true;
 }
 
+// Takes down the host-side bridges in the order the window gives them up:
+// text input first, then the window input runtime that may already have
+// torn the first one down, then the platform protocol bridges.
+void FinishWindowBridges(
+    mocktail::runtime::RobloxTextInputJniBridge* text_input_bridge,
+    mocktail::runtime::RobloxWindowInputRuntime* window_input_runtime,
+    GamePlatformProtocols* game_protocols,
+    RunCompletionState* completion) {
+  if (text_input_bridge != nullptr) {
+    completion->input_shutdown_completed = text_input_bridge->Shutdown().ok();
+  }
+  if (window_input_runtime != nullptr) {
+    completion->input_shutdown_completed =
+        window_input_runtime->Shutdown().ok() &&
+        completion->input_shutdown_completed;
+  }
+  if (game_protocols->calls != nullptr) {
+    (void)game_protocols->calls->Shutdown();
+    game_protocols->calls.reset();
+  }
+  if (game_protocols->permissions != nullptr) {
+    (void)game_protocols->permissions->Shutdown();
+    game_protocols->permissions.reset();
+  }
+}
+
+// Tears down the experience composition and reports whether the place was
+// still up when it went. If it was, the app-lifecycle shutdown below has
+// nothing left to drive.
+bool FinishExperienceComposition(
+    jnivm::VM* jni_vm,
+    std::shared_ptr<mocktail::runtime::RobloxExperienceComposition>
+        experience_composition,
+    std::shared_ptr<ExperienceLifecycleTarget>* experience_lifecycle_target,
+    RunCompletionState* completion) {
+  bool experience_destroyed_app = false;
+  if (experience_composition != nullptr) {
+    jni_vm->ClearRobloxExperienceLifecycleCallbacks();
+    experience_lifecycle_target->reset();
+    const mocktail::runtime::GameSessionSnapshot snapshot =
+        experience_composition->Snapshot();
+    experience_destroyed_app =
+        snapshot.game_running || snapshot.game_paused ||
+        snapshot.game_present_pending;
+    const mocktail::Status experience_shutdown =
+        experience_composition->Shutdown();
+    if (experience_destroyed_app) {
+      completion->lifecycle_shutdown_completed = experience_shutdown.ok();
+    }
+    if (!experience_shutdown.ok()) {
+      std::cerr << "  [main] ExperienceProtocol shutdown failed: "
+                << experience_shutdown.message() << '\n';
+    }
+  }
+  return experience_destroyed_app;
+}
+
+// The last thing between the window closing and the process exiting. Either
+// the game session runtime reports the state the engine left its lifecycle
+// in, or the symbols are resolved here and the legacy app lifecycle is
+// driven directly.
+void FinishRobloxAppLifecycle(
+    void* roblox_handle,
+    mocktail::runtime::RobloxGameSessionRuntime* game_session_runtime,
+    mocktail::window::ScopedPresentObserver* game_present_observer,
+    bool experience_destroyed_app,
+    RunCompletionState* completion) {
+  if (game_session_runtime != nullptr) {
+    const mocktail::runtime::GameSessionUpdateResult shutdown_result =
+        game_session_runtime->Shutdown();
+    completion->lifecycle_shutdown_completed =
+        shutdown_result.ok() &&
+        shutdown_result.state == mocktail::runtime::GameSessionState::kStopped;
+    std::cout << "  [main] Roblox lifecycle shutdown: "
+              << mocktail::runtime::GameSessionStateName(shutdown_result.state)
+              << " (" << shutdown_result.message << ")\n"
+              << std::flush;
+    game_present_observer->Reset();
+  } else if (!experience_destroyed_app) {
+    const mocktail::runtime::RobloxSymbolLookup lifecycle_lookup(
+        &ResolveRobloxCapabilitySymbol, &roblox_handle);
+    const mocktail::runtime::RobloxAppLifecycleResolution
+        lifecycle_resolution =
+            mocktail::runtime::ResolveRobloxAppLifecycleSymbols(
+                lifecycle_lookup);
+    if (lifecycle_resolution.ok()) {
+      JNIEnv* shutdown_env = AttachMainThreadJniEnv();
+      mocktail::runtime::RobloxAppLifecycle lifecycle(
+          *lifecycle_resolution.symbols());
+      const mocktail::runtime::RobloxAppShutdownResult shutdown_result =
+          lifecycle.Shutdown(shutdown_env,
+                             g_native_gl_class_for_main_thread);
+      completion->lifecycle_shutdown_completed = shutdown_result.ok();
+      std::cout << "  [main] Roblox lifecycle shutdown: "
+                << mocktail::runtime::RobloxAppShutdownStatusName(
+                       shutdown_result.status)
+                << " (" << shutdown_result.message << ")\n"
+                << std::flush;
+    } else {
+      std::cerr << "  [main] Roblox lifecycle resolution failed: "
+                << mocktail::runtime::RobloxAppLifecycleResolutionStatusName(
+                       lifecycle_resolution.status())
+                << '\n'
+                << std::flush;
+    }
+  }
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -6762,80 +6870,14 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                 experience_composition.get());
     std::cout << "  [main] window closed, shutting down\n" << std::flush;
     completion.real_frame_presented = mocktail::window::HasPresentedFrame();
-    if (text_input_bridge != nullptr) {
-      completion.input_shutdown_completed = text_input_bridge->Shutdown().ok();
-    }
-    if (window_input_runtime != nullptr) {
-      completion.input_shutdown_completed =
-          window_input_runtime->Shutdown().ok() &&
-          completion.input_shutdown_completed;
-    }
-    if (game_protocols.calls != nullptr) {
-      (void)game_protocols.calls->Shutdown();
-      game_protocols.calls.reset();
-    }
-    if (game_protocols.permissions != nullptr) {
-      (void)game_protocols.permissions->Shutdown();
-      game_protocols.permissions.reset();
-    }
-    bool experience_destroyed_app = false;
-    if (experience_composition != nullptr) {
-      jni_vm->ClearRobloxExperienceLifecycleCallbacks();
-      experience_lifecycle_target.reset();
-      const mocktail::runtime::GameSessionSnapshot snapshot =
-          experience_composition->Snapshot();
-      experience_destroyed_app =
-          snapshot.game_running || snapshot.game_paused ||
-          snapshot.game_present_pending;
-      const mocktail::Status experience_shutdown =
-          experience_composition->Shutdown();
-      if (experience_destroyed_app) {
-        completion.lifecycle_shutdown_completed = experience_shutdown.ok();
-      }
-      if (!experience_shutdown.ok()) {
-        std::cerr << "  [main] ExperienceProtocol shutdown failed: "
-                  << experience_shutdown.message() << '\n';
-      }
-    }
-    if (game_session_runtime != nullptr) {
-      const mocktail::runtime::GameSessionUpdateResult shutdown_result =
-          game_session_runtime->Shutdown();
-      completion.lifecycle_shutdown_completed =
-          shutdown_result.ok() &&
-          shutdown_result.state == mocktail::runtime::GameSessionState::kStopped;
-      std::cout << "  [main] Roblox lifecycle shutdown: "
-                << mocktail::runtime::GameSessionStateName(shutdown_result.state)
-                << " (" << shutdown_result.message << ")\n"
-                << std::flush;
-      game_present_observer.Reset();
-    } else if (!experience_destroyed_app) {
-      const mocktail::runtime::RobloxSymbolLookup lifecycle_lookup(
-          &ResolveRobloxCapabilitySymbol, &roblox_handle);
-      const mocktail::runtime::RobloxAppLifecycleResolution
-          lifecycle_resolution =
-              mocktail::runtime::ResolveRobloxAppLifecycleSymbols(
-                  lifecycle_lookup);
-      if (lifecycle_resolution.ok()) {
-        JNIEnv* shutdown_env = AttachMainThreadJniEnv();
-        mocktail::runtime::RobloxAppLifecycle lifecycle(
-            *lifecycle_resolution.symbols());
-        const mocktail::runtime::RobloxAppShutdownResult shutdown_result =
-            lifecycle.Shutdown(shutdown_env,
-                               g_native_gl_class_for_main_thread);
-        completion.lifecycle_shutdown_completed = shutdown_result.ok();
-        std::cout << "  [main] Roblox lifecycle shutdown: "
-                  << mocktail::runtime::RobloxAppShutdownStatusName(
-                         shutdown_result.status)
-                  << " (" << shutdown_result.message << ")\n"
-                  << std::flush;
-      } else {
-        std::cerr << "  [main] Roblox lifecycle resolution failed: "
-                  << mocktail::runtime::RobloxAppLifecycleResolutionStatusName(
-                         lifecycle_resolution.status())
-                  << '\n'
-                  << std::flush;
-      }
-    }
+    FinishWindowBridges(text_input_bridge.get(), window_input_runtime.get(),
+                        &game_protocols, &completion);
+    const bool experience_destroyed_app = FinishExperienceComposition(
+        jni_vm.get(), experience_composition,
+        &experience_lifecycle_target, &completion);
+    FinishRobloxAppLifecycle(roblox_handle, game_session_runtime.get(),
+                             &game_present_observer,
+                             experience_destroyed_app, &completion);
     FinishWindowShutdown(dependencies, &completion);
   } else {
     RunHeadlessKeepalive();
