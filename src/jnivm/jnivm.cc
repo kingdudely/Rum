@@ -12,6 +12,7 @@
 #include <cerrno>
 #include <cstdarg>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -113,6 +114,63 @@ std::unordered_set<jlong> g_local_storage_users;
 jlong g_local_storage_current_user = kLocalStorageUninitializedUser;
 bool g_cookie_store_loaded = false;
 std::string g_cookie_header;
+
+// Android's ANDROID_ID is a 16-hex-digit value that is stable per app per
+// device and regenerated on factory reset. Deriving it from the host machine
+// id plus the package name reproduces exactly those properties, and caching it
+// under the data root keeps it stable even if the host id later changes.
+const char* RobloxAndroidId() {
+  static const std::string value = [] {
+    const char* data_root = std::getenv("MOCKTAIL_DATA_ROOT");
+    const std::string cache_path =
+        data_root != nullptr && data_root[0] != '\0'
+            ? std::string(data_root) + "/android-id"
+            : std::string();
+
+    if (!cache_path.empty()) {
+      std::ifstream persisted(cache_path);
+      std::string cached;
+      if (persisted >> cached && cached.size() == 16) {
+        return cached;
+      }
+    }
+
+    // FNV-1a/64 over the host identity, keyed by package name.
+    std::string seed;
+    for (const char* path : {"/etc/machine-id", "/var/lib/dbus/machine-id"}) {
+      std::ifstream identity(path);
+      std::string line;
+      if (identity >> line && !line.empty()) {
+        seed = line;
+        break;
+      }
+    }
+    if (seed.empty()) {
+      seed = "roblox-linux-default-device";
+    }
+    seed += "\x1fcom.roblox.client";
+
+    std::uint64_t hash = 1469598103934665603ULL;
+    for (const char c : seed) {
+      hash = static_cast<std::uint64_t>(
+                 static_cast<unsigned char>(c)) ^
+             hash;
+      hash *= 1099511628211ULL;
+    }
+    char formatted[17];
+    std::snprintf(formatted, sizeof(formatted), "%016llx",
+                  static_cast<unsigned long long>(hash));
+
+    if (!cache_path.empty()) {
+      std::ofstream persisted(cache_path, std::ios::trunc);
+      if (persisted) {
+        persisted << formatted << '\n';
+      }
+    }
+    return std::string(formatted);
+  }();
+  return value.c_str();
+}
 
 bool EnvironmentTraceEnabled(const char* name) {
   const char* value = std::getenv(name);
@@ -3098,7 +3156,7 @@ jobject StaticObjectResultForMethod(jmethodID method_id) {
     return MakeString(identity.device_code.c_str());
   }
   if (std::strcmp(name, "getBuildId") == 0) {
-    return MakeString("MOCKTAIL");
+    return MakeString("3120");
   }
   if (std::strcmp(name, "getBuildType") == 0) {
     return MakeString("user");
@@ -3204,7 +3262,7 @@ jobject ObjectResultForMethod(jmethodID method_id) {
     return MakeString(identity.device_code.c_str());
   }
   if (std::strcmp(name, "getBuildId") == 0) {
-    return MakeString("MOCKTAIL");
+    return MakeString("3120");
   }
   if (std::strcmp(name, "getBuildType") == 0) {
     return MakeString("user");
@@ -6387,7 +6445,7 @@ void VM::InitJNIFunctionTables() {
     }
     auto* name = reinterpret_cast<const char*>(fieldID);
     if (name && std::strcmp(name, "ANDROID_ID") == 0) {
-      return MakeString("mocktail-android-id");
+      return MakeString(RobloxAndroidId());
     }
     if (name && std::strcmp(name, "INSTANCE") == 0) {
       return MakePlatformSystemDialogHandlerObject();

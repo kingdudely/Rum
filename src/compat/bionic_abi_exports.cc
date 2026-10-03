@@ -167,13 +167,13 @@ int __system_property_get(const char* name, char* value) {
   } else if (std::strcmp(name, "ro.product.cpu.abilist32") == 0) {
     result = "";
   } else if (std::strcmp(name, "ro.product.manufacturer") == 0) {
-    result = EnvironmentOr("MOCKTAIL_DEVICE_MANUFACTURER", "Mocktail");
+    result = EnvironmentOr("MOCKTAIL_DEVICE_MANUFACTURER", "Google");
   } else if (std::strcmp(name, "ro.product.model") == 0) {
-    result = EnvironmentOr("MOCKTAIL_DEVICE_MODEL", "Mocktail Linux");
+    result = EnvironmentOr("MOCKTAIL_DEVICE_MODEL", "Pixel 7");
   } else if (std::strcmp(name, "ro.product.brand") == 0) {
     result = EnvironmentOr("MOCKTAIL_DEVICE_BRAND", "google");
   } else if (std::strcmp(name, "ro.product.device") == 0) {
-    result = EnvironmentOr("MOCKTAIL_DEVICE_CODE", "mocktail");
+    result = EnvironmentOr("MOCKTAIL_DEVICE_CODE", "panther");
   } else if (std::strcmp(name, "ro.hardware") == 0) {
     result = "ranchu";
   } else if (std::strcmp(name, "debug.hwui.renderer") == 0) {

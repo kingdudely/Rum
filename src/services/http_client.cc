@@ -112,7 +112,7 @@ HttpResponse PerformRequest(const HttpRequest& request,
                    request.timeout_ms > 0 ? request.timeout_ms : 15000L);
   curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT_MS, 5000L);
   curl_easy_setopt(handle, CURLOPT_ACCEPT_ENCODING, "");
-  curl_easy_setopt(handle, CURLOPT_USERAGENT, "Mocktail/0.1");
+  curl_easy_setopt(handle, CURLOPT_USERAGENT, "Roblox/2.739.691");
   curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, error_buffer.data());
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, WriteResponse);
   curl_easy_setopt(handle, CURLOPT_WRITEDATA, &writer);

@@ -235,7 +235,7 @@ Status StoreWindowState(const std::filesystem::path& path,
 
   const std::filesystem::path temporary =
       path.parent_path() /
-      (".mocktail-window-state.tmp." + std::to_string(getpid()) + "." +
+      (".roblox-window-state.tmp." + std::to_string(getpid()) + "." +
        std::to_string(g_temporary_sequence.fetch_add(1)));
   const int descriptor =
       open(temporary.c_str(),

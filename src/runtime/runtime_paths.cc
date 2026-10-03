@@ -668,21 +668,30 @@ bool PrepareManagedPayloadWorkingDirectory(const RuntimePaths& paths,
   return true;
 }
 
-std::filesystem::path ResolveAdjacentRobloxAssetPath(
-    const std::filesystem::path& roblox_library,
-    const std::filesystem::path& working_directory) {
-  if (roblox_library.empty() || working_directory.empty()) {
-    return {};
-  }
-  std::filesystem::path resolved_library = roblox_library;
-  if (!resolved_library.is_absolute()) {
-    resolved_library = working_directory / resolved_library;
-  }
-  resolved_library = resolved_library.lexically_normal();
-  if (!resolved_library.is_absolute() || !resolved_library.has_parent_path()) {
-    return {};
-  }
-  return (resolved_library.parent_path() / "assets/content").lexically_normal();
+std::filesystem::path ExecutableDirectory() {
+  static const std::filesystem::path cached = [] {
+    std::error_code error;
+    const std::filesystem::path self =
+        std::filesystem::read_symlink("/proc/self/exe", error);
+    if (error || self.empty() || !self.has_parent_path()) {
+      return std::filesystem::path();
+    }
+    return self.parent_path().lexically_normal();
+  }();
+  return cached;
+}
+
+std::filesystem::path DefaultRobloxLibraryPath() {
+  const std::filesystem::path directory = ExecutableDirectory();
+  return directory.empty() ? std::filesystem::path()
+                           : (directory / "libroblox.so").lexically_normal();
+}
+
+std::filesystem::path DefaultRobloxAssetPath() {
+  const std::filesystem::path directory = ExecutableDirectory();
+  return directory.empty()
+             ? std::filesystem::path()
+             : (directory / "assets" / "content").lexically_normal();
 }
 
 }  // namespace runtime

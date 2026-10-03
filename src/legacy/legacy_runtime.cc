@@ -567,7 +567,7 @@ void* OpenRealGlesLibrary() {
       return handle;
     }
   }
-  std::cerr << "  [gles] real libGLESv2 not found; using Mocktail GLES shim\n";
+  std::cerr << "  [gles] real libGLESv2 not found; using host GLES shim\n";
   return nullptr;
 }
 
@@ -1844,12 +1844,12 @@ jobject BuildDeviceParams(JNIEnv* env) {
   }
 
   const std::string device_name =
-      GetEnvString("MOCKTAIL_DEVICE_NAME", "Mocktail Linux");
+      GetEnvString("MOCKTAIL_DEVICE_NAME", "Pixel 7");
   const std::string manufacturer =
-      GetEnvString("MOCKTAIL_DEVICE_MANUFACTURER", "Mocktail");
+      GetEnvString("MOCKTAIL_DEVICE_MANUFACTURER", "Google");
   const std::string device_sku = GetEnvString(
       "MOCKTAIL_DEVICE_SKU",
-      ("mocktail-" + std::string(mocktail::compat::kGuestCpuName)).c_str());
+      std::string(mocktail::compat::kGuestCpuName).c_str());
   const std::string soc_model =
       GetEnvString("MOCKTAIL_DEVICE_SOC_MODEL",
                    std::string(mocktail::compat::kGuestCpuName).c_str());
@@ -1931,7 +1931,7 @@ jobject BuildAppBridgeInitParams(JNIEnv* env, jstring client_settings,
                  start_game_device_params);
   SetStringField(env, params, "baseURL", "https://www.roblox.com");
   const std::string user_agent = GetEnvString(
-      "MOCKTAIL_USER_AGENT", "Roblox/unknown (Linux; Android 33; Mocktail)");
+      "MOCKTAIL_USER_AGENT", "Roblox/unknown (Linux; Android 33)");
   SetStringField(env, params, "userAgent", user_agent.c_str());
   SetBooleanField(env, params, "isTablet", JNI_FALSE);
   SetBooleanField(env, params, "isPotato", JNI_FALSE);
@@ -1988,7 +1988,7 @@ jobject BuildAppBridgeInitParams(JNIEnv* env, jstring client_settings,
       GetEnvString("MOCKTAIL_ROBLOX_VERSION", "unknown");
   SetStringField(env, params, "appVersion", init_app_version.c_str());
   const std::string init_device_name =
-      GetEnvString("MOCKTAIL_DEVICE_NAME", "Mocktail Headless");
+      GetEnvString("MOCKTAIL_DEVICE_NAME", "Pixel 7");
   SetStringField(env, params, "deviceName", init_device_name.c_str());
   SetStringField(env, params, "locale", "en_us");
   SetRobloxServiceUrlFields(env, params);
@@ -2025,7 +2025,7 @@ jobject BuildPlatformParams(JNIEnv* env, jobject surface, bool is_headless) {
   SetObjectField(env, params, "surface", "Landroid/view/Surface;", surface);
   SetStringField(env, params, "platform", "Android");
   const std::string platform_device_name =
-      GetEnvString("MOCKTAIL_DEVICE_NAME", "Mocktail Headless");
+      GetEnvString("MOCKTAIL_DEVICE_NAME", "Pixel 7");
   SetStringField(env, params, "deviceName", platform_device_name.c_str());
   SetStringField(env, params, "locale", "en_us");
   SetStringField(env, params, "assetFolderPath", DefaultAssetPath().c_str());
@@ -2146,7 +2146,7 @@ jobject BuildStartAppParams(JNIEnv* env, jstring app_params,
       GetEnvString("MOCKTAIL_ROBLOX_VERSION", "unknown");
   SetStringField(env, params, "appVersion", start_app_version.c_str());
   const std::string start_device_name =
-      GetEnvString("MOCKTAIL_DEVICE_NAME", "Mocktail Linux");
+      GetEnvString("MOCKTAIL_DEVICE_NAME", "Pixel 7");
   SetStringField(env, params, "deviceName", start_device_name.c_str());
   SetStringField(env, params, "locale", "en_us");
   SetRobloxServiceUrlFields(env, params);
@@ -2890,7 +2890,7 @@ void* EngineStartupThread(void* arg) {
   jstring base_url = env->NewStringUTF("https://www.roblox.com/");
   jstring user_agent = NewStringFromEnvDefault(
       env, "MOCKTAIL_USER_AGENT",
-      "Roblox/unknown (Linux; Android 33; Mocktail)");
+      "Roblox/unknown (Linux; Android 33)");
   jstring android_id =
       NewStringFromEnvDefault(env, "MOCKTAIL_ANDROID_ID", "0000000000000000");
   jstring launch_source =
@@ -3884,7 +3884,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       HasEnvValue("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP");
 
   std::cout << "======================================================\n"
-            << "  Mocktail Roblox Compatibility Layer\n"
+            << "  Roblox Linux Client\n"
             << "======================================================\n"
             << std::flush;
 
@@ -3941,7 +3941,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   SetEnvDefault("MOCKTAIL_ROBLOX_VERSION", version_name.c_str());
   SetEnvDefault("MOCKTAIL_ROBLOX_VERSION_CODE", "3120");
   const std::string default_user_agent =
-      "Roblox/" + version_name + " (Linux; Android 33; Mocktail)";
+      "Roblox/" + version_name + " (Linux; Android 33)";
   SetEnvDefault("MOCKTAIL_USER_AGENT", default_user_agent.c_str());
   std::cout << "  [compat] Roblox " << version_name << '\n'
             << "  [compat] Build-ID profiles: removed\n"
@@ -4235,7 +4235,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       std::cerr << "  [graphics] exact Bionic EGL adapter unavailable: "
                 << bionic_egl_bridge.error() << '\n';
       if (IsEnabled("MOCKTAIL_REQUIRE_REAL_GRAPHICS")) {
-        std::cerr << "[FATAL] Windowed mode requires Mocktail's exact "
+        std::cerr << "[FATAL] Windowed mode requires the exact "
                      "Bionic EGL adapter.\n";
         return EXIT_FAILURE;
       }
@@ -4283,7 +4283,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     if (h) {
       std::cout << "  [stubs] Preloaded " << name;
       if (exact_adapter) {
-        std::cout << " via exact Mocktail adapter";
+        std::cout << " via exact host adapter";
       }
       std::cout << '\n';
       stub_handles.push_back(h);
@@ -4930,7 +4930,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     if (gl_from_stub > 0 || gl_unresolved > 0 || (gl_from_window == 0 &&
                                                   gl_from_real_gles == 0 &&
                                                   gl_from_host == 0)) {
-      std::cerr << "[FATAL] Mocktail cannot guarantee real GL symbols for "
+      std::cerr << "[FATAL] Cannot guarantee real GL symbols for "
                    "windowed mode.\n"
                 << "  Set MOCKTAIL_GLES_FORCE_STUB=1 or "
                    "MOCKTAIL_GLES_NOOP_DRAW_CALLS=1 to continue with stubs.\n"

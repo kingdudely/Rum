@@ -35,7 +35,7 @@ constexpr uintptr_t AlignControlMessage(size_t size) noexcept {
 }
 
 [[noreturn]] void EntropyFailure() noexcept {
-  std::fputs("mocktail: secure random source failed\n", stderr);
+  std::fputs("roblox: secure random source failed\n", stderr);
   std::abort();
 }
 

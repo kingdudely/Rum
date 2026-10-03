@@ -153,6 +153,9 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
   config.headless_ = LegacyEnabled(environment, "MOCKTAIL_HEADLESS");
   config.roblox_library_path_ = environment.GetOr(
       "ROBLOX_LIB_PATH", config.roblox_library_path_.string());
+  if (config.roblox_library_path_.empty()) {
+    config.roblox_library_path_ = DefaultRobloxLibraryPath();
+  }
   config.graphics_backend_name_ = environment.GetOr(
       "MOCKTAIL_GRAPHICS_BACKEND", config.graphics_backend_name_);
   config.graphics_backend_ =

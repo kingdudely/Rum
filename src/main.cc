@@ -277,7 +277,7 @@ int main(int argc, char* argv[]) {
           support_bundle_guard.SetExitCode(EXIT_SUCCESS);
           return EXIT_SUCCESS;
         }
-        std::cerr << "[FATAL] Cannot send website join to running Mocktail: "
+        std::cerr << "[FATAL] Cannot send website join to running client: "
                   << forward_status.message() << '\n';
         (void)mocktail::runtime::ShowFailureDialog(
             environment,
@@ -485,28 +485,37 @@ int main(int argc, char* argv[]) {
               << " MiB\n";
   }
   SecureEraseArguments(&cgroup_reexec_arguments);
-  // Mocktail no longer downloads or manages the Roblox payload. The client
-  // library must be supplied explicitly via ROBLOX_LIB_PATH / --libroblox.
-  const bool uses_managed_payload = false;
-  if (!environment.HasNonEmpty("ROBLOX_LIB_PATH") &&
-      runtime_config.config.roblox_library_path() ==
-          std::filesystem::path("rbx_bin/libroblox.so")) {
-    std::cerr << "[FATAL] Provide the Roblox client library via --libroblox\n";
+  // There is no managed payload: the client library is whatever sits next to
+  // this executable, or whatever --roblox-lib / ROBLOX_LIB_PATH names.
+  const std::filesystem::path roblox_library =
+      runtime_config.config.roblox_library_path();
+  if (roblox_library.empty() ||
+      !std::filesystem::is_regular_file(roblox_library)) {
+    std::cerr << "[FATAL] No libroblox.so. Place it next to this executable, "
+                 "or pass --roblox-lib <path>\n";
     return EXIT_FAILURE;
   }
-  if (!uses_managed_payload &&
-      !environment.HasNonEmpty("MOCKTAIL_ASSET_PATH")) {
-    const std::filesystem::path adjacent_assets =
-        mocktail::runtime::ResolveAdjacentRobloxAssetPath(
-            runtime_config.config.roblox_library_path(),
-            paths.working_directory());
-    if (adjacent_assets.empty() ||
-        setenv("MOCKTAIL_ASSET_PATH", adjacent_assets.c_str(), 1) != 0) {
-      std::cerr << "[FATAL] Cannot bind assets to explicit Roblox library\n";
+  // Assets default to <exe dir>/assets/content; --assets / MOCKTAIL_ASSET_PATH
+  // override. Everything downstream reads MOCKTAIL_ASSET_PATH, so the
+  // command-line value is folded in here.
+  if (!command_line.options.assets_path.empty() &&
+      !environment.HasNonEmpty("MOCKTAIL_ASSET_PATH") &&
+      setenv("MOCKTAIL_ASSET_PATH", command_line.options.assets_path.c_str(),
+             1) != 0) {
+    std::cerr << "[FATAL] Cannot apply --assets\n";
+    return EXIT_FAILURE;
+  }
+  if (!environment.HasNonEmpty("MOCKTAIL_ASSET_PATH")) {
+    const std::filesystem::path default_assets =
+        mocktail::runtime::DefaultRobloxAssetPath();
+    if (default_assets.empty() ||
+        setenv("MOCKTAIL_ASSET_PATH", default_assets.c_str(), 1) != 0) {
+      std::cerr << "[FATAL] No assets directory. Place it at "
+                << "<exe dir>/assets/content, or pass --assets <path>\n";
       return EXIT_FAILURE;
     }
-    std::cout << "  [runtime] explicit Roblox library uses adjacent assets: "
-              << adjacent_assets << '\n';
+    std::cout << "  [runtime] using executable-relative assets: "
+              << default_assets << '\n';
   }
   if (!mocktail::runtime::ExportRuntimePathEnvironment(paths,
                                                        &command_line_error)) {

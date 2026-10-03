@@ -11,6 +11,7 @@
 #include "runtime/environment.h"
 #include "runtime/frame_rate_policy.h"
 #include "runtime/performance_policy.h"
+#include "runtime/runtime_paths.h"
 
 namespace mocktail {
 namespace runtime {
@@ -114,7 +115,7 @@ class RuntimeConfig {
 
  private:
   bool headless_ = false;
-  std::filesystem::path roblox_library_path_ = "rbx_bin/libroblox.so";
+  std::filesystem::path roblox_library_path_ = DefaultRobloxLibraryPath();
   GraphicsBackend graphics_backend_ = GraphicsBackend::kVulkan;
   std::string graphics_backend_name_ = "direct-vulkan";
   WindowConfig window_;

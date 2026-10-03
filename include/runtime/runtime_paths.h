@@ -112,13 +112,16 @@ bool PrepareManagedPayloadWorkingDirectory(const RuntimePaths& paths,
                                            const ActivePayloadPaths& active,
                                            std::string* error = nullptr);
 
-// Keeps an explicit research libroblox.so override paired with the assets
-// extracted from the same payload. Relative library paths are resolved against
-// the runtime working directory so downstream policy files always receive an
-// absolute path.
-std::filesystem::path ResolveAdjacentRobloxAssetPath(
-    const std::filesystem::path& roblox_library,
-    const std::filesystem::path& working_directory);
+// The directory holding the running executable. Empty if it cannot be
+// determined. Every default path resolves against this, never the CWD, so the
+// client behaves the same however it is invoked.
+std::filesystem::path ExecutableDirectory();
+
+// Bare-`roblox` layouts ship libroblox.so and assets/content side by side.
+// Both default to the executable's own directory: <exe dir>/libroblox.so and
+// <exe dir>/assets/content.
+std::filesystem::path DefaultRobloxLibraryPath();
+std::filesystem::path DefaultRobloxAssetPath();
 
 }  // namespace runtime
 }  // namespace mocktail
