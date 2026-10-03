@@ -4438,6 +4438,171 @@ void ReportStartupDecisions(const StartupDecisions& decisions) {
 
 }
 
+// Pumps SDL until the window closes. Each tick drains typed window-surface
+// events, runs the engine's deferred main-thread work, and delivers
+// platform events and dynamic launch requests. Clears
+// *game_surface_events_completed when a typed event or a launch request
+// fails, so the caller aborts the run instead of spinning on a broken
+// bridge.
+void RunMainLoop(
+    bool* game_surface_events_completed,
+    mocktail::runtime::RobloxGameSessionRuntime* game_session_runtime,
+    mocktail::runtime::RobloxExperienceComposition* experience_composition) {
+  std::unique_ptr<mocktail::window::WindowGameSurfaceBridge> surface_bridge;
+  if (game_session_runtime != nullptr) {
+    surface_bridge =
+        std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
+            mocktail::window::MakeWindowGameSurfaceEventSource(),
+            mocktail::window::MakeWindowGameSurfaceConsumer(
+                game_session_runtime),
+            mocktail::window::MakeWindowResizeReadinessCommitObserver());
+  } else if (experience_composition != nullptr &&
+             experience_composition->subscribed()) {
+    mocktail::window::WindowGameSurfaceConsumer experience_consumer{
+        experience_composition, &ExperienceSurfaceCreated,
+        &ExperienceSurfaceChanged, &ExperienceSurfaceDestroyed};
+    surface_bridge =
+        std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
+            mocktail::window::MakeWindowGameSurfaceEventSource(),
+            experience_consumer,
+            mocktail::window::MakeWindowResizeReadinessCommitObserver());
+  }
+  const auto drain_game_surface_events = [&]() {
+    if (surface_bridge == nullptr) {
+      return true;
+    }
+    const mocktail::window::WindowGameSurfaceDrainResult result =
+        surface_bridge->Drain();
+    if (!result.ok()) {
+      std::cerr << "[FATAL] Typed GAME surface bridge rejected an event: "
+                << result.status.message() << '\n';
+      return false;
+    }
+    if (result.drained_events != 0) {
+      const mocktail::window::WindowGameSurfaceBridgeSnapshot snapshot =
+          surface_bridge->Snapshot();
+      std::cout << "  [game-session] typed window surface events committed="
+                << result.drained_events
+                << " last_generation=" << snapshot.last_generation << '\n'
+                << std::flush;
+    }
+    return true;
+  };
+  int main_loop_ticks = 0;
+  const bool fps_trace = IsEnabled("MOCKTAIL_TRACE_FPS");
+  const bool trace_main_loop = IsEnabled("MOCKTAIL_TRACE_MAIN_LOOP");
+  uint64_t fps_window_start_ns = fps_trace ? MonotonicNanos() : 0;
+  uint64_t fps_samples = 0;
+  uint64_t fps_tick_ns = 0;
+  uint64_t fps_sdl_ns = 0;
+  uint64_t fps_platform_ns = 0;
+  uint64_t fps_engine_ns = 0;
+  uint64_t fps_launch_ns = 0;
+  uint64_t fps_pace_sleep_ns = 0;
+  while (true) {
+    const uint64_t fps_tick_start_ns = fps_trace ? MonotonicNanos() : 0;
+    const bool keep_window_open = mocktail::window::PumpEvents();
+    *game_surface_events_completed = drain_game_surface_events();
+    const uint64_t fps_after_sdl_ns = fps_trace ? MonotonicNanos() : 0;
+    if (!game_surface_events_completed || !keep_window_open) {
+      break;
+    }
+    ++main_loop_ticks;
+    if (trace_main_loop &&
+        (main_loop_ticks <= 10 || main_loop_ticks % 100 == 0)) {
+      std::cerr << "  [main] SDL event loop tick #" << main_loop_ticks
+                << '\n'
+                << std::flush;
+    }
+    RunPendingMainThreadTaskSchedulerForeground();
+    if (g_pending_main_thread_start_lua_app_dm &&
+        !g_pending_main_thread_start_lua_started &&
+        g_vm_for_main_thread_pump &&
+        g_native_gl_class_for_main_thread &&
+        MonotonicMillis() >= g_pending_main_thread_start_lua_due_ms) {
+      g_pending_main_thread_start_lua_started = true;
+      JNIEnv* env = AttachMainThreadJniEnv();
+      if (env == nullptr) {
+        continue;
+      }
+      if (IsEnabled("MOCKTAIL_TRACE_START_LUA_JNI")) {
+        setenv("MOCKTAIL_JNI_TRACE", "1", 1);
+      }
+      std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM\n"
+                << std::flush;
+      g_pending_main_thread_start_lua_app_dm(
+          env, g_native_gl_class_for_main_thread);
+      std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM returned\n"
+                << std::flush;
+    }
+    if (experience_composition != nullptr) {
+      const mocktail::Status platform_event_status =
+          experience_composition->DrainPlatformEvents();
+      if (!platform_event_status.ok()) {
+        std::cerr << "[FATAL] Roblox platform event delivery failed: "
+                  << platform_event_status.message() << '\n';
+        *game_surface_events_completed = false;
+        break;
+      }
+    }
+    const uint64_t fps_after_platform_ns =
+        fps_trace ? MonotonicNanos() : 0;
+    PumpRobloxMainThreadMessagesOnce();
+    const uint64_t fps_after_engine_ns = fps_trace ? MonotonicNanos() : 0;
+    if (experience_composition != nullptr &&
+        experience_composition->subscribed()) {
+      const mocktail::Status launch_status =
+          experience_composition->DrainLaunchRequests();
+      if (!launch_status.ok()) {
+        std::cerr << "[FATAL] Dynamic experience launch failed: "
+                  << launch_status.message() << '\n';
+        *game_surface_events_completed = false;
+        break;
+      }
+    }
+    const uint64_t fps_after_launch_ns = fps_trace ? MonotonicNanos() : 0;
+    const uint64_t fps_pace_ns = mocktail::window::PaceInputPump();
+    if (fps_trace) {
+      const uint64_t fps_tick_end_ns = MonotonicNanos();
+      ++fps_samples;
+      fps_tick_ns += fps_tick_end_ns - fps_tick_start_ns;
+      fps_sdl_ns += fps_after_sdl_ns - fps_tick_start_ns;
+      fps_platform_ns += fps_after_platform_ns - fps_after_sdl_ns;
+      fps_engine_ns += fps_after_engine_ns - fps_after_platform_ns;
+      fps_launch_ns += fps_after_launch_ns - fps_after_engine_ns;
+      fps_pace_sleep_ns += fps_pace_ns;
+      if (fps_tick_end_ns - fps_window_start_ns >= 1000000000ULL &&
+          fps_samples != 0) {
+        std::fprintf(stderr,
+                     "  [fps] main n=%llu tick=%llu us sdl=%llu us "
+                     "drain=%llu us engine=%llu us launch=%llu us "
+                     "pace_sleep=%llu us\n",
+                     static_cast<unsigned long long>(fps_samples),
+                     static_cast<unsigned long long>(fps_tick_ns /
+                                                     fps_samples / 1000ULL),
+                     static_cast<unsigned long long>(fps_sdl_ns /
+                                                     fps_samples / 1000ULL),
+                     static_cast<unsigned long long>(fps_platform_ns /
+                                                     fps_samples / 1000ULL),
+                     static_cast<unsigned long long>(fps_engine_ns /
+                                                     fps_samples / 1000ULL),
+                     static_cast<unsigned long long>(fps_launch_ns /
+                                                     fps_samples / 1000ULL),
+                     static_cast<unsigned long long>(fps_pace_sleep_ns /
+                                                     fps_samples / 1000ULL));
+        fps_window_start_ns = fps_tick_end_ns;
+        fps_samples = 0;
+        fps_tick_ns = 0;
+        fps_sdl_ns = 0;
+        fps_platform_ns = 0;
+        fps_engine_ns = 0;
+        fps_launch_ns = 0;
+        fps_pace_sleep_ns = 0;
+      }
+    }
+  }
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -6386,159 +6551,8 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   if (mocktail::window::IsInitialised()) {
     std::cout << "  [main] entering SDL event loop (close the window to quit)\n"
               << std::flush;
-    std::unique_ptr<mocktail::window::WindowGameSurfaceBridge> surface_bridge;
-    if (game_session_runtime != nullptr) {
-      surface_bridge =
-          std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
-              mocktail::window::MakeWindowGameSurfaceEventSource(),
-              mocktail::window::MakeWindowGameSurfaceConsumer(
-                  game_session_runtime.get()),
-              mocktail::window::MakeWindowResizeReadinessCommitObserver());
-    } else if (experience_composition != nullptr &&
-               experience_composition->subscribed()) {
-      mocktail::window::WindowGameSurfaceConsumer experience_consumer{
-          experience_composition.get(), &ExperienceSurfaceCreated,
-          &ExperienceSurfaceChanged, &ExperienceSurfaceDestroyed};
-      surface_bridge =
-          std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
-              mocktail::window::MakeWindowGameSurfaceEventSource(),
-              experience_consumer,
-              mocktail::window::MakeWindowResizeReadinessCommitObserver());
-    }
-    const auto drain_game_surface_events = [&]() {
-      if (surface_bridge == nullptr) {
-        return true;
-      }
-      const mocktail::window::WindowGameSurfaceDrainResult result =
-          surface_bridge->Drain();
-      if (!result.ok()) {
-        std::cerr << "[FATAL] Typed GAME surface bridge rejected an event: "
-                  << result.status.message() << '\n';
-        return false;
-      }
-      if (result.drained_events != 0) {
-        const mocktail::window::WindowGameSurfaceBridgeSnapshot snapshot =
-            surface_bridge->Snapshot();
-        std::cout << "  [game-session] typed window surface events committed="
-                  << result.drained_events
-                  << " last_generation=" << snapshot.last_generation << '\n'
-                  << std::flush;
-      }
-      return true;
-    };
-    int main_loop_ticks = 0;
-    const bool fps_trace = IsEnabled("MOCKTAIL_TRACE_FPS");
-    const bool trace_main_loop = IsEnabled("MOCKTAIL_TRACE_MAIN_LOOP");
-    uint64_t fps_window_start_ns = fps_trace ? MonotonicNanos() : 0;
-    uint64_t fps_samples = 0;
-    uint64_t fps_tick_ns = 0;
-    uint64_t fps_sdl_ns = 0;
-    uint64_t fps_platform_ns = 0;
-    uint64_t fps_engine_ns = 0;
-    uint64_t fps_launch_ns = 0;
-    uint64_t fps_pace_sleep_ns = 0;
-    while (true) {
-      const uint64_t fps_tick_start_ns = fps_trace ? MonotonicNanos() : 0;
-      const bool keep_window_open = mocktail::window::PumpEvents();
-      game_surface_events_completed = drain_game_surface_events();
-      const uint64_t fps_after_sdl_ns = fps_trace ? MonotonicNanos() : 0;
-      if (!game_surface_events_completed || !keep_window_open) {
-        break;
-      }
-      ++main_loop_ticks;
-      if (trace_main_loop &&
-          (main_loop_ticks <= 10 || main_loop_ticks % 100 == 0)) {
-        std::cerr << "  [main] SDL event loop tick #" << main_loop_ticks
-                  << '\n'
-                  << std::flush;
-      }
-      RunPendingMainThreadTaskSchedulerForeground();
-      if (g_pending_main_thread_start_lua_app_dm &&
-          !g_pending_main_thread_start_lua_started &&
-          g_vm_for_main_thread_pump &&
-          g_native_gl_class_for_main_thread &&
-          MonotonicMillis() >= g_pending_main_thread_start_lua_due_ms) {
-        g_pending_main_thread_start_lua_started = true;
-        JNIEnv* env = AttachMainThreadJniEnv();
-        if (env == nullptr) {
-          continue;
-        }
-        if (IsEnabled("MOCKTAIL_TRACE_START_LUA_JNI")) {
-          setenv("MOCKTAIL_JNI_TRACE", "1", 1);
-        }
-        std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM\n"
-                  << std::flush;
-        g_pending_main_thread_start_lua_app_dm(
-            env, g_native_gl_class_for_main_thread);
-        std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM returned\n"
-                  << std::flush;
-      }
-      if (experience_composition != nullptr) {
-        const mocktail::Status platform_event_status =
-            experience_composition->DrainPlatformEvents();
-        if (!platform_event_status.ok()) {
-          std::cerr << "[FATAL] Roblox platform event delivery failed: "
-                    << platform_event_status.message() << '\n';
-          game_surface_events_completed = false;
-          break;
-        }
-      }
-      const uint64_t fps_after_platform_ns =
-          fps_trace ? MonotonicNanos() : 0;
-      PumpRobloxMainThreadMessagesOnce();
-      const uint64_t fps_after_engine_ns = fps_trace ? MonotonicNanos() : 0;
-      if (experience_composition != nullptr &&
-          experience_composition->subscribed()) {
-        const mocktail::Status launch_status =
-            experience_composition->DrainLaunchRequests();
-        if (!launch_status.ok()) {
-          std::cerr << "[FATAL] Dynamic experience launch failed: "
-                    << launch_status.message() << '\n';
-          game_surface_events_completed = false;
-          break;
-        }
-      }
-      const uint64_t fps_after_launch_ns = fps_trace ? MonotonicNanos() : 0;
-      const uint64_t fps_pace_ns = mocktail::window::PaceInputPump();
-      if (fps_trace) {
-        const uint64_t fps_tick_end_ns = MonotonicNanos();
-        ++fps_samples;
-        fps_tick_ns += fps_tick_end_ns - fps_tick_start_ns;
-        fps_sdl_ns += fps_after_sdl_ns - fps_tick_start_ns;
-        fps_platform_ns += fps_after_platform_ns - fps_after_sdl_ns;
-        fps_engine_ns += fps_after_engine_ns - fps_after_platform_ns;
-        fps_launch_ns += fps_after_launch_ns - fps_after_engine_ns;
-        fps_pace_sleep_ns += fps_pace_ns;
-        if (fps_tick_end_ns - fps_window_start_ns >= 1000000000ULL &&
-            fps_samples != 0) {
-          std::fprintf(stderr,
-                       "  [fps] main n=%llu tick=%llu us sdl=%llu us "
-                       "drain=%llu us engine=%llu us launch=%llu us "
-                       "pace_sleep=%llu us\n",
-                       static_cast<unsigned long long>(fps_samples),
-                       static_cast<unsigned long long>(fps_tick_ns /
-                                                       fps_samples / 1000ULL),
-                       static_cast<unsigned long long>(fps_sdl_ns /
-                                                       fps_samples / 1000ULL),
-                       static_cast<unsigned long long>(fps_platform_ns /
-                                                       fps_samples / 1000ULL),
-                       static_cast<unsigned long long>(fps_engine_ns /
-                                                       fps_samples / 1000ULL),
-                       static_cast<unsigned long long>(fps_launch_ns /
-                                                       fps_samples / 1000ULL),
-                       static_cast<unsigned long long>(fps_pace_sleep_ns /
-                                                       fps_samples / 1000ULL));
-          fps_window_start_ns = fps_tick_end_ns;
-          fps_samples = 0;
-          fps_tick_ns = 0;
-          fps_sdl_ns = 0;
-          fps_platform_ns = 0;
-          fps_engine_ns = 0;
-          fps_launch_ns = 0;
-          fps_pace_sleep_ns = 0;
-        }
-      }
-    }
+    RunMainLoop(&game_surface_events_completed, game_session_runtime.get(),
+                experience_composition.get());
     std::cout << "  [main] window closed, shutting down\n" << std::flush;
     real_frame_presented = mocktail::window::HasPresentedFrame();
     if (text_input_bridge != nullptr) {
