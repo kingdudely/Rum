@@ -197,6 +197,19 @@ jfloat JNICALL CallFloatMethod(JNIEnv* /*env*/, jobject obj,
 jdouble JNICALL CallDoubleMethod(JNIEnv* /*env*/, jobject /*obj*/,
                                  jmethodID /*methodID*/, ...);
 
+// ABI probe, read by jnivm/abi_probe.cc. Each table's owner collects it so the
+// probe does not have to see the storage. "recognized" means the method landed
+// on one of Mocktail's own compat handlers rather than falling through to the
+// default stub, which is the signal that an upstream rename broke us.
+struct ProbeMethod {
+  std::string name;
+  std::string signature;
+  bool recognized = false;
+};
+void CollectRequestedMethods(std::vector<ProbeMethod>* out);
+void CollectRequestedClasses(std::vector<std::string>* out);
+void CollectRequestedFields(std::vector<std::string>* out);
+
 }  // namespace jnivm::internal
 
 #endif  // MOCKTAIL_JNIVM_JNI_HELPERS_H_

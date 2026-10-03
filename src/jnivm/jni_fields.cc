@@ -16,6 +16,11 @@ jfieldID StoreFieldId(const char* name) {
   return reinterpret_cast<jfieldID>(const_cast<char*>(stored->c_str()));
 }
 
+void CollectRequestedFields(std::vector<std::string>* out) {
+  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
+  out->assign(g_field_names.begin(), g_field_names.end());
+}
+
 void SetStaticObjectFieldRaw(const char* name, jobject value) {
   if (name == nullptr) return;
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);

@@ -14,6 +14,7 @@
 
 #include "legacy/legacy_runtime.h"
 #include "libc_shim/libc_shim.h"
+#include "jnivm/abi_probe.h"
 #include "mocktail/audio/fmod_jni_audio_bridge.h"
 #include "mocktail/audio/webrtc_jni_audio_bridge.h"
 #include "mocktail/platform/posix_primitives.h"
@@ -1055,6 +1056,9 @@ int main(int argc, char* argv[]) {
   }
   const int runtime_status =
       mocktail::legacy::Run(command_line.options, std::move(dependencies));
+  // Reads the JNI class, method and field tables, so it has to happen while
+  // those are still intact. No-op unless MOCKTAIL_ABI_PROBE is set.
+  jnivm::WriteAbiProbe();
   // The engine has had its chance at the web-login ticket; it is a bearer
   // value, so it does not outlive native startup.
   mocktail::runtime::ScrubEngineLaunchUri(&command_line.options);

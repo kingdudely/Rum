@@ -116,6 +116,7 @@ pkg_check_modules(LIBYAML REQUIRED IMPORTED_TARGET yaml-0.1)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 
 add_library(mocktail_legacy_jnivm STATIC
+  src/jnivm/abi_probe.cc
   src/jnivm/jnivm.cc
   src/jnivm/jni_audio.cc
   src/jnivm/jni_function_tables.cc
