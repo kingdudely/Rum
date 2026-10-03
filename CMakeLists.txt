@@ -117,9 +117,15 @@ pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 
 add_library(mocktail_legacy_jnivm STATIC
   src/jnivm/jnivm.cc
+  src/jnivm/jni_audio.cc
+  src/jnivm/jni_function_tables.cc
+  src/jnivm/jni_identity_cookies.cc
+  src/jnivm/jni_message_bus.cc
   src/jnivm/jni_references.cc
   src/jnivm/jni_fields.cc
+  src/jnivm/jni_roblox_text_input.cc
   src/jnivm/jni_strings.cc
+  src/jnivm/jni_vm_lifecycle.cc
 )
 add_library(Mocktail::LegacyJni ALIAS mocktail_legacy_jnivm)
 target_include_directories(mocktail_legacy_jnivm PUBLIC include)
