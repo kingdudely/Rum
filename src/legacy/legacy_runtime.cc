@@ -122,8 +122,6 @@ thread_local sigjmp_buf g_start_lua_app_dm_jmp_buf;
 thread_local volatile sig_atomic_t g_start_lua_app_dm_recovery_in_progress = 0;
 thread_local sigjmp_buf g_send_app_ready_jmp_buf;
 thread_local volatile sig_atomic_t g_send_app_ready_recovery_in_progress = 0;
-thread_local sigjmp_buf g_send_game_loaded_jmp_buf;
-thread_local volatile sig_atomic_t g_send_game_loaded_recovery_in_progress = 0;
 thread_local sigjmp_buf g_set_asset_path_jmp_buf;
 thread_local volatile sig_atomic_t g_set_asset_path_recovery_in_progress = 0;
 thread_local sigjmp_buf g_game_global_init_jmp_buf;
@@ -146,10 +144,6 @@ thread_local volatile sig_atomic_t g_app_bridge_app_start_recovery_in_progress =
 thread_local sigjmp_buf g_game_activity_init_jmp_buf;
 thread_local volatile sig_atomic_t g_game_activity_init_recovery_in_progress =
     0;
-thread_local sigjmp_buf g_game_activity_surface_jmp_buf;
-thread_local volatile sig_atomic_t g_game_activity_surface_recovery_in_progress = 0;
-thread_local sigjmp_buf g_activity_lifecycle_jmp_buf;
-thread_local volatile sig_atomic_t g_activity_lifecycle_recovery_in_progress = 0;
 thread_local sigjmp_buf g_update_screen_orientation_jmp_buf;
 thread_local volatile sig_atomic_t
     g_update_screen_orientation_recovery_in_progress = 0;
@@ -309,13 +303,9 @@ struct EngineStartupContext {
   bool run_init_with_params;
   bool call_real_init_with_params;
   bool run_update_screen_orientation;
-  bool run_update_surface_app;
-  bool call_real_update_surface_app;
   bool run_start_app_with_params;
   bool call_real_start_app_with_params;
-  bool run_activity_lifecycle;
   bool run_game_activity_init;
-  bool run_game_activity_surface;
   bool run_app_lifecycle_active;
   bool run_native_fragment_start;
   bool run_display_refresh_rate;
@@ -359,15 +349,11 @@ struct EngineStartupContext {
   NativeAppBridgeObjectParamsFn native_init_with_params;
   NativeNoArgFn native_update_adapter_init;
   NativeUpdateScreenOrientationFn native_update_screen_orientation;
-  NativeUpdateAppUiSizesFn native_update_app_ui_sizes;
   NativeSetTaskSchedulerBackgroundModeFn
       native_set_task_scheduler_background_mode;
-  NativeUpdateSurfaceAppFn native_update_surface_app;
   NativeAppBridgeObjectParamsFn native_start_app_with_params;
   NativeSendAppReadyFn native_send_app_ready;
-  NativeSendGameLoadedFn native_send_game_loaded;
   NativeSetStringParamFn native_set_asset_path;
-  NativeActivityLifecycleCallbacks activity_lifecycle_callbacks;
   NativeGameActivityInitFn native_game_activity_init;
   NativeNoArgFn native_app_lifecycle_set_active;
   NativeNoArgFn native_on_fragment_start;
@@ -630,12 +616,8 @@ void ApplyRuntimeDefaults() {
   // run. Keep this inline by default; the detached worker can outlive teardown.
   SetEnvDefault("MOCKTAIL_SEND_APP_READY", "1");
   SetEnvDefault("MOCKTAIL_SEND_APP_READY_THREAD", "0");
-  SetEnvDefault("MOCKTAIL_SEND_GAME_LOADED", "0");
-  SetEnvDefault("MOCKTAIL_SEND_GAME_LOADED_THREAD", "0");
   SetEnvDefault("MOCKTAIL_UPDATE_SCREEN_ORIENTATION", "0");
   SetEnvDefault("MOCKTAIL_STEP_UPDATE_SURFACE_APP", "0");
-  SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE", "0");
-  SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE_THREAD", "0");
   // Keep the ASMA/V2 NativeGL path as the default. GameActivity's native app
   // glue currently stalls V2 init on surface flags; leave it available opt-in.
   SetEnvDefault("MOCKTAIL_STEP_GAME_ACTIVITY_INIT", "0");
@@ -2845,78 +2827,6 @@ JNIEnv* EnsureStartupEnv(EngineStartupContext* context, JNIEnv*& env) {
   return env;
 }
 
-// Drives the engine's activity-lifecycle callbacks (create/start/resume) through
-// a freshly constructed JNIActivityLifecycleCallbacks. Each callback is guarded by
-// its own sigsetjmp so a faulting native call is reported and stepped over
-// rather than taking the process down.
-void RunActivityLifecycle(EngineStartupContext* context, JNIEnv*& env) {
-  env = EnsureStartupEnv(context, env);
-  if (context->vm != nullptr) {
-    context->vm->RestoreFunctions();
-    env = context->vm->GetJNIEnv();
-    PublishCurrentJniEnv(env);
-  }
-  jobject lifecycle_callbacks =
-      NewObject(env,
-                "com/roblox/universalapp/activitylifecyclecallbacks/"
-                "JNIActivityLifecycleCallbacks");
-  const char* activity_name_env =
-      std::getenv("MOCKTAIL_ACTIVITY_LIFECYCLE_ACTIVITY_NAME");
-  const char* activity_name =
-      activity_name_env != nullptr && activity_name_env[0] != '\0'
-          ? activity_name_env
-          : "MainGameActivity";
-  jstring activity_name_string = env->NewStringUTF(activity_name);
-  std::cout << "  [engine] activity lifecycle for " << activity_name << '\n'
-            << std::flush;
-  auto invoke_lifecycle_callback =
-      [&](const char* label, NativeActivityLifecycleStringFn callback) {
-        if (callback == nullptr) {
-          return;
-        }
-        std::cout << "  [engine] JNIActivityLifecycleCallbacks." << label
-                  << '\n'
-                  << std::flush;
-        if (sigsetjmp(g_activity_lifecycle_jmp_buf, 1) == 0) {
-          g_activity_lifecycle_recovery_in_progress = 1;
-          callback(env, lifecycle_callbacks, activity_name_string);
-          g_activity_lifecycle_recovery_in_progress = 0;
-          std::cout << "  [engine] JNIActivityLifecycleCallbacks." << label
-                    << " returned\n"
-                    << std::flush;
-        } else {
-          g_activity_lifecycle_recovery_in_progress = 0;
-          std::cerr << "  [engine] JNIActivityLifecycleCallbacks." << label
-                    << " recovered from crash\n"
-                    << std::flush;
-        }
-      };
-  invoke_lifecycle_callback(
-      "nativeOnPreCreated",
-      context->activity_lifecycle_callbacks.on_pre_created);
-  invoke_lifecycle_callback(
-      "nativeOnCreated", context->activity_lifecycle_callbacks.on_created);
-  invoke_lifecycle_callback(
-      "nativeOnPostCreated",
-      context->activity_lifecycle_callbacks.on_post_created);
-  invoke_lifecycle_callback(
-      "nativeOnPreStarted",
-      context->activity_lifecycle_callbacks.on_pre_started);
-  invoke_lifecycle_callback(
-      "nativeOnStarted", context->activity_lifecycle_callbacks.on_started);
-  invoke_lifecycle_callback(
-      "nativeOnPostStarted",
-      context->activity_lifecycle_callbacks.on_post_started);
-  invoke_lifecycle_callback(
-      "nativeOnPreResumed",
-      context->activity_lifecycle_callbacks.on_pre_resumed);
-  invoke_lifecycle_callback(
-      "nativeOnResumed", context->activity_lifecycle_callbacks.on_resumed);
-  invoke_lifecycle_callback(
-      "nativeOnPostResumed",
-      context->activity_lifecycle_callbacks.on_post_resumed);
-  std::cout << "  [engine] activity lifecycle returned\n" << std::flush;
-}
 
 // Tells the engine what the display can do: first its current refresh rate, then
 // optionally the full list of supported rates. Both are optional in their own
@@ -3011,33 +2921,6 @@ if (context->native_send_app_ready &&
   }
 }
 
-if (context->native_send_game_loaded &&
-    ShouldRunStartupStep("MOCKTAIL_SEND_GAME_LOADED", false)) {
-  env = EnsureStartupEnv(context, env);
-  volatile sig_atomic_t send_game_loaded_recovered = 0;
-  std::cout << "  [engine] nativeAppBridgeV2SendAppEventOnGameLoaded\n"
-            << std::flush;
-  if (sigsetjmp(g_send_game_loaded_jmp_buf, 1) == 0) {
-    g_send_game_loaded_recovery_in_progress = kStage6RecoveryInline;
-    jstring empty_game_loaded_arg = env->NewStringUTF("");
-    jstring home_feature = env->NewStringUTF("Home");
-    context->native_send_game_loaded(env, native_gl_class, home_feature,
-                                     empty_game_loaded_arg,
-                                     empty_game_loaded_arg);
-    g_send_game_loaded_recovery_in_progress = kStage6RecoveryInactive;
-  } else {
-    send_game_loaded_recovered = 1;
-    g_send_game_loaded_recovery_in_progress = kStage6RecoveryInactive;
-    std::cerr
-        << "  [engine] nativeAppBridgeV2SendAppEventOnGameLoaded recovered\n"
-        << std::flush;
-  }
-  if (send_game_loaded_recovered == 0) {
-    std::cout
-        << "  [engine] nativeAppBridgeV2SendAppEventOnGameLoaded returned\n"
-        << std::flush;
-  }
-}
 }
 
 void* EngineStartupThread(void* arg) {
@@ -3630,70 +3513,7 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 
   if (context->run_game_activity_init && context->native_game_activity_init) {
     env = EnsureStartupEnv(context, env);
-    jlong handle = run_game_activity_initialize();
-    if (context->run_game_activity_surface && handle != 0) {
-      if (!IsDisabled("MOCKTAIL_GAME_ACTIVITY_CLEAR_APP_CMD_SLOT")) {
-        auto** game_activity_slots = reinterpret_cast<void**>(
-            static_cast<uintptr_t>(handle));
-        std::cout << "  [engine] GameActivity slot[1] before clear="
-                  << game_activity_slots[1] << '\n'
-                  << std::flush;
-        game_activity_slots[1] = nullptr;
-      }
-      auto* on_start = reinterpret_cast<GameActivityLifecycleFn>(
-          mocktail_gameactivity_on_start_native);
-      auto* on_resume = reinterpret_cast<GameActivityLifecycleFn>(
-          mocktail_gameactivity_on_resume_native);
-      auto* on_surface_created = reinterpret_cast<GameActivitySurfaceCreatedFn>(
-          mocktail_gameactivity_on_surface_created_native);
-      auto* on_surface_changed = reinterpret_cast<GameActivitySurfaceChangedFn>(
-          mocktail_gameactivity_on_surface_changed_native);
-      auto* on_surface_redraw_needed =
-          reinterpret_cast<GameActivitySurfaceCreatedFn>(
-              mocktail_gameactivity_on_surface_redraw_needed_native);
-      std::cout << "  [engine] GameActivity callbacks:"
-                << " start=" << reinterpret_cast<void*>(on_start)
-                << " resume=" << reinterpret_cast<void*>(on_resume)
-                << " created=" << reinterpret_cast<void*>(on_surface_created)
-                << " changed=" << reinterpret_cast<void*>(on_surface_changed)
-                << " redraw="
-                << reinterpret_cast<void*>(on_surface_redraw_needed) << '\n'
-                << std::flush;
-      const bool run_lifecycle_callbacks =
-          IsEnabled("MOCKTAIL_GAME_ACTIVITY_LIFECYCLE_CALLBACKS");
-      if (sigsetjmp(g_game_activity_surface_jmp_buf, 1) == 0) {
-        g_game_activity_surface_recovery_in_progress = 1;
-      if (run_lifecycle_callbacks && on_start) {
-        on_start(env, game_activity, handle);
-      }
-      if (run_lifecycle_callbacks && on_resume) {
-        on_resume(env, game_activity, handle);
-      }
-      if (run_lifecycle_callbacks && on_surface_created) {
-        on_surface_created(env, game_activity, handle, surface);
-      }
-      if (run_lifecycle_callbacks && on_surface_changed) {
-        const mocktail::runtime::DisplaySize changed_size =
-            HostWindowPixelSize();
-        on_surface_changed(env, game_activity, handle, surface, 4,
-                           changed_size.width, changed_size.height);
-      }
-      if (run_lifecycle_callbacks && on_surface_redraw_needed) {
-        on_surface_redraw_needed(env, game_activity, handle, surface);
-      }
-        g_game_activity_surface_recovery_in_progress = 0;
-        std::cout << "  [engine] GameActivity surface callbacks returned\n"
-                  << std::flush;
-      } else {
-        g_game_activity_surface_recovery_in_progress = 0;
-        std::cerr << "  [engine] GameActivity surface callbacks recovered\n"
-                  << std::flush;
-      }
-    }
-  }
-
-  if (context->run_activity_lifecycle) {
-    RunActivityLifecycle(context, env);
+    run_game_activity_initialize();
   }
 
   if (context->run_app_lifecycle_active &&
@@ -3726,15 +3546,6 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 
   ReportDisplayRefreshRates(context, env, native_gl_class);
 
-  if (context->native_update_app_ui_sizes &&
-      ShouldRunStartupStep("MOCKTAIL_UPDATE_APP_UI_SIZES", false)) {
-    env = EnsureStartupEnv(context, env);
-    std::cout << "  [engine] updateAppUISizes\n" << std::flush;
-    const mocktail::runtime::DisplaySize ui_size = HostWindowPixelSize();
-    context->native_update_app_ui_sizes(env, native_gl_class, ui_size.width,
-                                        ui_size.height, 0, 0, 0);
-    std::cout << "  [engine] updateAppUISizes returned\n" << std::flush;
-  }
 
   int init_delay_ms = GetEnvInt("MOCKTAIL_APPBRIDGE_INIT_DELAY_MS", 0);
   if (init_delay_ms > 0) {
@@ -3784,22 +3595,6 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
     }
   }
 
-	  if (context->run_update_surface_app) {
-	    env = EnsureStartupEnv(context, env);
-	    std::cout << "  [engine] nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams\n"
-	              << std::flush;
-      if (context->call_real_update_surface_app) {
-        context->native_update_surface_app(env, native_gl_class, surface,
-                                           platform_params);
-        std::cout
-            << "  [engine] nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams returned\n"
-            << std::flush;
-      } else {
-        std::cout
-            << "  [engine] nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams bypassed\n"
-            << std::flush;
-      }
-	  }
 
   if (IsEnabled("MOCKTAIL_ASMA_START_TASK_SCHEDULER_FOREGROUND") &&
       context->native_set_task_scheduler_background_mode) {
@@ -4470,12 +4265,8 @@ struct StartupDecisions {
   bool run_init_with_params = false;
   bool call_real_init_with_params = false;
   bool run_update_screen_orientation = false;
-  bool run_update_surface_app = false;
-  bool call_real_update_surface_app = false;
-  bool run_activity_lifecycle = false;
   bool run_game_activity_init = false;
   bool run_set_init_params = false;
-  bool run_game_activity_surface = false;
   bool run_app_lifecycle_active = false;
   bool run_native_fragment_start = false;
   bool run_display_refresh_rate = false;
@@ -4522,15 +4313,6 @@ StartupDecisions ResolveStartupDecisions(
       ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SCREEN_ORIENTATION",
                            IsEnabled("MOCKTAIL_UPDATE_SCREEN_ORIENTATION")) &&
       symbols.update_screen_orientation != nullptr;
-  decisions.run_update_surface_app =
-      ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SURFACE_APP",
-                           IsEnabled("MOCKTAIL_UPDATE_SURFACE_APP"));
-  decisions.call_real_update_surface_app =
-      decisions.run_update_surface_app &&
-      IsEnabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE");
-  decisions.run_activity_lifecycle =
-      ShouldRunStartupStep("MOCKTAIL_STEP_ACTIVITY_LIFECYCLE",
-                           IsEnabled("MOCKTAIL_ACTIVITY_LIFECYCLE"));
   decisions.run_game_activity_init =
       ShouldRunStartupStep("MOCKTAIL_STEP_GAME_ACTIVITY_INIT",
                            has_window || IsEnabled("MOCKTAIL_GAME_ACTIVITY_INIT"));
@@ -4539,11 +4321,6 @@ StartupDecisions ResolveStartupDecisions(
                            IsEnabled("MOCKTAIL_SET_INIT_PARAMS") ||
                                (decisions.run_game_activity_init &&
                                 !decisions.run_init_with_params));
-  decisions.run_game_activity_surface =
-      ShouldRunStartupStep(
-          "MOCKTAIL_STEP_GAME_ACTIVITY_SURFACE",
-          has_window && decisions.run_game_activity_init &&
-              IsEnabled("MOCKTAIL_GAME_ACTIVITY_SURFACE"));
   decisions.run_app_lifecycle_active =
       ShouldRunStartupStep("MOCKTAIL_STEP_APP_LIFECYCLE_ACTIVE",
                            has_window && IsEnabled("MOCKTAIL_APP_LIFECYCLE_ACTIVE"));
@@ -4581,13 +4358,10 @@ StartupDecisions ResolveStartupDecisions(
                                    decisions.run_set_init_params ||
                                    decisions.run_init_with_params ||
                                    decisions.run_update_screen_orientation ||
-                                   decisions.run_activity_lifecycle ||
                                    decisions.run_game_activity_init ||
-                                   decisions.run_game_activity_surface ||
                                    decisions.run_app_lifecycle_active ||
                                    decisions.run_native_fragment_start ||
                                    decisions.run_display_refresh_rate ||
-                                   decisions.run_update_surface_app ||
                                    decisions.run_start_app_with_params ||
                                    decisions.run_start_lua_app_dm);
 
@@ -4608,10 +4382,7 @@ void ReportStartupDecisions(const StartupDecisions& decisions) {
   PrintStepDecision("nativeAppBridgeV2InitWithParams", decisions.run_init_with_params);
   PrintStepDecision("nativeUpdateScreenOrientation",
                     decisions.run_update_screen_orientation);
-  PrintStepDecision("activity lifecycle", decisions.run_activity_lifecycle);
   PrintStepDecision("nativeAppBridgeAppStart", decisions.run_app_bridge_app_start);
-  PrintStepDecision("GameActivity surface callbacks",
-                    decisions.run_game_activity_surface);
   PrintStepDecision("JNIAppLifecycleNativeAdapter.setActive",
                     decisions.run_app_lifecycle_active);
   PrintStepDecision("NativeGLInterface.nativeOnFragmentStart",
@@ -4619,8 +4390,6 @@ void ReportStartupDecisions(const StartupDecisions& decisions) {
   PrintStepDecision("NativeGLInterface.nativePassCurrentDisplayRefreshRate",
                     decisions.run_display_refresh_rate);
   PrintStepDecision("nativeAppBridgeStartLuaAppDM", decisions.run_start_lua_app_dm);
-  PrintStepDecision("nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams",
-                    decisions.run_update_surface_app);
   PrintStepDecision("nativeAppBridgeV2StartAppWithParams",
                     decisions.run_start_app_with_params);
   if (decisions.run_set_asset_path && !decisions.call_real_set_asset_path) {
@@ -4630,10 +4399,6 @@ void ReportStartupDecisions(const StartupDecisions& decisions) {
   if (decisions.run_init_with_params && !decisions.call_real_init_with_params) {
     PrintNativeBypass("nativeAppBridgeV2InitWithParams",
                       "MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT");
-  }
-  if (decisions.run_update_surface_app && !decisions.call_real_update_surface_app) {
-    PrintNativeBypass("nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams",
-                      "MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE");
   }
   if (decisions.run_start_app_with_params && !decisions.call_real_start_app_with_params) {
     PrintNativeBypass("nativeAppBridgeV2StartAppWithParams",
@@ -4897,7 +4662,6 @@ bool InitializeHostWindow(
     bool is_headless, const mocktail::runtime::RuntimeConfig& runtime_config,
     const mocktail::legacy::RuntimeDependencies& dependencies,
     bool user_overrode_main_thread_message_pump,
-    bool user_overrode_call_update_surface,
     bool user_overrode_call_start_app) {
   // Create SDL/EGL before loading Android stubs so SDL binds the host graphics
   // backend. The window stays hidden until the first real frame.
@@ -5017,10 +4781,6 @@ bool InitializeHostWindow(
       setenv("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "1", 1);
       std::cout << "  [window] windowed startup: auto-enabled main-thread "
                 << "message pump\n"
-                << std::flush;
-    }
-    if (!user_overrode_call_update_surface) {
-      std::cout << "  [window] windowed startup: leaving real UpdateSurfaceAppWithPlatformParams opt-in\n"
                 << std::flush;
     }
     if (!user_overrode_call_start_app &&
@@ -5176,13 +4936,9 @@ EngineStartupContext BuildEngineStartupContext(
     decisions.run_init_with_params,
     decisions.call_real_init_with_params,
     decisions.run_update_screen_orientation,
-    decisions.run_update_surface_app,
-    decisions.call_real_update_surface_app,
     decisions.run_start_app_with_params,
     decisions.call_real_start_app_with_params,
-    decisions.run_activity_lifecycle,
     decisions.run_game_activity_init,
-    decisions.run_game_activity_surface,
     decisions.run_app_lifecycle_active,
     decisions.run_native_fragment_start,
     decisions.run_display_refresh_rate,
@@ -5225,14 +4981,10 @@ EngineStartupContext BuildEngineStartupContext(
     symbols.init_with_params,
     symbols.update_adapter_init,
     symbols.update_screen_orientation,
-    symbols.update_app_ui_sizes,
     symbols.set_task_scheduler_background_mode,
-    symbols.update_surface_app,
     symbols.start_app_with_params,
     symbols.send_app_ready,
-    symbols.send_game_loaded,
     symbols.set_asset_path,
-    symbols.activity_lifecycle,
     symbols.game_activity_init,
     symbols.app_lifecycle_set_active,
     symbols.on_fragment_start,
@@ -6085,8 +5837,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       HasEnvValue("MOCKTAIL_STEP_START_APP_WITH_PARAMS");
   const bool user_overrode_call_start_app =
       HasEnvValue("MOCKTAIL_CALL_REAL_APP_BRIDGE_START");
-  const bool user_overrode_call_update_surface =
-      HasEnvValue("MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE");
   const bool user_overrode_main_thread_message_pump =
       HasEnvValue("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP");
 
@@ -6202,8 +5952,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
 
   const bool has_window = InitializeHostWindow(
       is_headless, runtime_config, dependencies,
-      user_overrode_main_thread_message_pump,
-      user_overrode_call_update_surface, user_overrode_call_start_app);
+      user_overrode_main_thread_message_pump, user_overrode_call_start_app);
   PrintStage(3, "Building Bionic symbol table from stubs");
 
   libc_shim::Install();

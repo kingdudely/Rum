@@ -12,14 +12,14 @@ namespace mocktail {
 namespace runtime {
 namespace {
 
-constexpr std::array<std::string_view, 7> kUnsafeDetachedThreadOverrides = {
+// Overrides that put an engine call on a detached thread. Every name here has
+// a step it belongs to, so retiring a step retires its thread override too.
+constexpr std::array<std::string_view, 5> kUnsafeDetachedThreadOverrides = {
     "MOCKTAIL_APP_BRIDGE_APP_START_THREAD",
     "MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT_THREAD",
     "MOCKTAIL_START_LUA_APP_DM_THREAD",
-    "MOCKTAIL_CALL_REAL_APP_BRIDGE_UPDATE_SURFACE_THREAD",
     "MOCKTAIL_CALL_REAL_APP_BRIDGE_START_THREAD",
     "MOCKTAIL_SEND_APP_READY_THREAD",
-    "MOCKTAIL_SEND_GAME_LOADED_THREAD",
 };
 
 bool LegacyEnabled(const Environment& environment, std::string_view name) {
