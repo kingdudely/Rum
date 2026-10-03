@@ -10,8 +10,8 @@
 #include <utility>
 
 #include "jnivm/jnivm.h"
+#include "runtime/auth_runtime_composition.h"
 #include "runtime/external_launch_broker.h"
-#include "runtime/webview_helper_launcher.h"
 #include "window/window.h"
 
 namespace mocktail {
@@ -21,7 +21,6 @@ namespace {
 constexpr size_t kMaxPendingLaunchRequests = 8;
 // libroblox's static TLS requires the proven 16 MiB guest-thread stack floor.
 constexpr size_t kLaunchWorkerStackSize = 64ULL * 1024 * 1024;
-constexpr std::chrono::milliseconds kWebSurfaceReadyTimeout{3000};
 constexpr char kRobloxBaseUrl[] = "https://www.roblox.com/";
 
 Status Invalid(std::string message) {
@@ -105,8 +104,11 @@ Status CheckJni(JNIEnv* env, const char* operation) {
           " failed in experience composition");
 }
 
+// SystemTheme.systemThemeUpdated is published on the shared MessageBus. It
+// only needs getMessageId + publishRaw, so it borrows the launch bridge's
+// resolved symbols instead of keeping a WebViewProtocol dependency alive.
 Status PublishSystemTheme(JNIEnv* env,
-                          const RobloxWebViewMessageBusSymbols& symbols,
+                          const RobloxSystemThemeSymbols& symbols,
                           jobject message_bus) {
   jclass message_bus_class =
       env->FindClass("com/roblox/universalapp/messagebus/MessageBus");
@@ -142,46 +144,6 @@ Status PublishSystemTheme(JNIEnv* env,
   if (message_bus_class != nullptr)
     env->DeleteLocalRef(message_bus_class);
   return status;
-}
-
-Status LaunchRobloxWebSurface(
-    const std::string& url, const char* transport,
-    WebViewHelperExitObserver exit_observer = {},
-    std::shared_ptr<WebViewHelperProcess>* process = nullptr) {
-  std::filesystem::path helper;
-  const char* helper_override = std::getenv("MOCKTAIL_WEBVIEW_HELPER");
-  if (helper_override != nullptr && helper_override[0] != '\0') {
-    helper = helper_override;
-  } else {
-    std::error_code error;
-    const std::filesystem::path executable =
-        std::filesystem::read_symlink("/proc/self/exe", error);
-    if (error || executable.empty()) {
-      return Unavailable("could not resolve Mocktail executable directory");
-    }
-    helper = executable.parent_path() / "mocktail_webview_helper";
-  }
-  std::fprintf(stderr, "  [%s] opening validated Roblox web surface\n",
-               transport);
-  const WebViewHelperLaunchResult launched =
-      LaunchWebViewHelper(helper, url, std::move(exit_observer));
-  if (!launched) {
-    return Unavailable("could not display Roblox web surface: " +
-                       launched.error);
-  }
-  if (launched.process == nullptr ||
-      !launched.process->WaitUntilReady(kWebSurfaceReadyTimeout)) {
-    if (launched.process != nullptr) {
-      (void)launched.process->RequestClose();
-    }
-    return Unavailable(
-        "Roblox web surface did not become ready before the deadline");
-  }
-  if (process != nullptr) {
-    *process = launched.process;
-  }
-  std::fprintf(stderr, "  [%s] Roblox web surface launched\n", transport);
-  return Status::Ok();
 }
 
 template <typename Value>
@@ -271,16 +233,6 @@ struct RobloxExperienceComposition::LaunchTask {
   Status result = Status::Ok();
 };
 
-struct RobloxExperienceComposition::WebSurfaceExitTarget {
-  std::mutex mutex;
-  RobloxExperienceComposition* composition = nullptr;
-};
-
-struct RobloxExperienceComposition::WebSurfaceExitContext {
-  std::shared_ptr<WebSurfaceExitTarget> target;
-  uint64_t process_generation = 0;
-};
-
 struct RobloxExperienceComposition::LifecycleTarget {
   std::mutex mutex;
   RobloxExperienceComposition* composition = nullptr;
@@ -299,21 +251,18 @@ bool RobloxLuaAppExperienceReadiness::complete() const {
 RobloxExperienceComposition::RobloxExperienceComposition(
     JniEnvironmentProvider environment,
     RobloxExperienceMessageBusSymbols message_bus_symbols,
-    RobloxWebViewMessageBusSymbols web_view_symbols,
-    RobloxBrowserServiceSymbols browser_service_symbols,
+    RobloxSystemThemeSymbols system_theme_symbols,
     RobloxPermissionsMessageBusSymbols permissions_symbols,
     RobloxGameSessionSymbols game_symbols,
     RobloxExperienceJniFactory jni_factory,
     RobloxFreshLaunchPresentBoundary present_boundary,
     RobloxGameSurfaceJniConfig surface_config,
-    const SecureRobloxCredential* initial_web_view_credential,
     RobloxExperienceSurfaceProvider surface_provider,
     RobloxExperiencePresenceObserver presence_observer,
-    bool clear_persisted_web_view_cookie, bool microphone_enabled)
+    bool microphone_enabled)
     : environment_(environment),
       message_bus_symbols_(message_bus_symbols),
-      web_view_symbols_(web_view_symbols),
-      browser_service_symbols_(browser_service_symbols),
+      system_theme_symbols_(system_theme_symbols),
       permissions_symbols_(permissions_symbols),
       microphone_enabled_(microphone_enabled),
       game_symbols_(game_symbols),
@@ -327,21 +276,8 @@ RobloxExperienceComposition::RobloxExperienceComposition(
               : RobloxExperienceSurfaceProvider{nullptr,
                                                 &SnapshotProductionSurface}),
       presence_observer_(presence_observer),
-      web_surface_exit_target_(std::make_shared<WebSurfaceExitTarget>()),
-      lifecycle_target_(std::make_shared<LifecycleTarget>()),
-      clear_persisted_web_view_cookie_(clear_persisted_web_view_cookie) {
-  web_surface_exit_target_->composition = this;
+      lifecycle_target_(std::make_shared<LifecycleTarget>()) {
   lifecycle_target_->composition = this;
-  if (initial_web_view_credential != nullptr) {
-    WebViewRobloxCookieResult prepared =
-        PrepareWebViewRobloxCookie(*initial_web_view_credential);
-    if (prepared) {
-      web_view_cookie_ = std::move(prepared.cookie);
-      web_view_cookie_synchronized_ = true;
-    } else {
-      web_view_cookie_initialization_error_ = std::move(prepared.error);
-    }
-  }
 }
 
 RobloxExperienceComposition::~RobloxExperienceComposition() {
@@ -349,19 +285,14 @@ RobloxExperienceComposition::~RobloxExperienceComposition() {
 }
 
 Status RobloxExperienceComposition::InitializePlatformProtocols() {
-  if (!web_view_cookie_initialization_error_.empty()) {
-    return FailedPrecondition(web_view_cookie_initialization_error_);
-  }
-  if (!environment_.valid() || !web_view_symbols_.complete() ||
-      !browser_service_symbols_.complete() ||
-      !permissions_symbols_.complete() || !jni_factory_.complete()) {
+  if (!environment_.valid() || !permissions_symbols_.complete() ||
+      !jni_factory_.complete()) {
     return FailedPrecondition("platform protocol prerequisites are incomplete");
   }
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (platform_protocols_initialized_ || objects_ != nullptr ||
-        web_view_bridge_ != nullptr || permissions_bridge_ != nullptr ||
-        call_protocol_bridge_ != nullptr) {
+        permissions_bridge_ != nullptr || call_protocol_bridge_ != nullptr) {
       return FailedPrecondition("platform protocols are already initialized");
     }
   }
@@ -372,57 +303,18 @@ Status RobloxExperienceComposition::InitializePlatformProtocols() {
     return status;
   }
 
-  RobloxWebViewMessageBusObjects web_view_objects;
+  jobject message_bus = nullptr;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    web_view_objects.message_bus =
-        objects_ != nullptr ? objects_->message_bus : nullptr;
+    message_bus = objects_ != nullptr ? objects_->message_bus : nullptr;
   }
-  if (web_view_objects.message_bus == nullptr) {
+  if (message_bus == nullptr) {
     (void)ReleaseGlobalObjects();
     return FailedPrecondition("platform MessageBus root is unavailable");
   }
-  web_view_objects.callback_factory_context = jni_factory_.context;
-  web_view_objects.create_raw_callback = jni_factory_.create_raw_callback;
-  web_view_objects.clear_raw_callback = jni_factory_.clear_raw_callback;
-  web_view_objects.create_request_handler = jni_factory_.create_request_handler;
-  web_view_objects.clear_request_handler = jni_factory_.clear_request_handler;
-  web_view_objects.set_platform_web_callbacks =
-      jni_factory_.set_platform_web_callbacks;
-  web_view_objects.clear_platform_web_callbacks =
-      jni_factory_.clear_platform_web_callbacks;
 
-  auto web_view_bridge = std::make_unique<RobloxWebViewBridge>(
-      environment_, web_view_symbols_, web_view_objects,
-      RobloxWebViewSink{this, &RobloxExperienceComposition::DispatchWebViewOpen,
-                        &RobloxExperienceComposition::DispatchWebViewMutate,
-                        &RobloxExperienceComposition::DispatchWebViewClose,
-                        &RobloxExperienceComposition::DispatchWebViewCookie});
-  status = web_view_bridge->Initialize();
-  if (!status.ok()) {
-    (void)ReleaseGlobalObjects();
-    return status;
-  }
-
-  RobloxBrowserServiceCallbackFactory factory;
-  factory.context = jni_factory_.context;
-  factory.create_callback = jni_factory_.create_mem_storage_callback;
-  factory.clear_callback = jni_factory_.clear_mem_storage_callback;
-  auto browser_service_bridge = std::make_unique<RobloxBrowserServiceBridge>(
-      environment_, browser_service_symbols_, factory,
-      RobloxBrowserServiceSink{
-          this, &RobloxExperienceComposition::DispatchBrowserServiceOpen,
-          &RobloxExperienceComposition::DispatchBrowserServiceClose,
-          &RobloxExperienceComposition::DispatchBrowserServiceConfig,
-          &RobloxExperienceComposition::DispatchBrowserServiceExecute});
-  status = browser_service_bridge->Initialize();
-  if (!status.ok()) {
-    (void)web_view_bridge->Shutdown();
-    (void)ReleaseGlobalObjects();
-    return status;
-  }
   RobloxPermissionsMessageBusObjects permissions_objects{
-      web_view_objects.message_bus,
+      message_bus,
       jni_factory_.context,
       jni_factory_.create_raw_callback,
       jni_factory_.clear_raw_callback,
@@ -433,8 +325,6 @@ Status RobloxExperienceComposition::InitializePlatformProtocols() {
       microphone_enabled_);
   status = permissions_bridge->Initialize();
   if (!status.ok()) {
-    (void)browser_service_bridge->Shutdown();
-    (void)web_view_bridge->Shutdown();
     (void)ReleaseGlobalObjects();
     return status;
   }
@@ -443,22 +333,17 @@ Status RobloxExperienceComposition::InitializePlatformProtocols() {
   status = call_protocol_bridge->Initialize();
   if (!status.ok()) {
     (void)permissions_bridge->Shutdown();
-    (void)browser_service_bridge->Shutdown();
-    (void)web_view_bridge->Shutdown();
     (void)ReleaseGlobalObjects();
     return status;
   }
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    web_view_bridge_ = std::move(web_view_bridge);
-    browser_service_bridge_ = std::move(browser_service_bridge);
     permissions_bridge_ = std::move(permissions_bridge);
     call_protocol_bridge_ = std::move(call_protocol_bridge);
     platform_protocols_initialized_ = true;
   }
   std::fprintf(stderr,
-               "  [platform] Android WebViewProtocol, BrowserService and "
-               "PermissionsProtocol and CallProtocol "
+               "  [platform] Android PermissionsProtocol and CallProtocol "
                "bridges ready\n");
   return Status::Ok();
 }
@@ -477,8 +362,7 @@ Status RobloxExperienceComposition::OnLuaAppReady(
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!platform_protocols_initialized_ || objects_ == nullptr ||
-        objects_->message_bus == nullptr || web_view_bridge_ == nullptr ||
-        browser_service_bridge_ == nullptr || permissions_bridge_ == nullptr ||
+        objects_->message_bus == nullptr ||
         call_protocol_bridge_ == nullptr) {
       return FailedPrecondition(
           "platform protocols must be initialized before LuaApp readiness");
@@ -521,7 +405,7 @@ Status RobloxExperienceComposition::OnLuaAppReady(
     JNIEnv* env = nullptr;
     status = environment_.Acquire(&env);
     if (status.ok()) {
-      status = PublishSystemTheme(env, web_view_symbols_,
+      status = PublishSystemTheme(env, system_theme_symbols_,
                                   bridge_objects.message_bus);
     }
   }
@@ -546,377 +430,6 @@ Status RobloxExperienceComposition::OnLuaAppReady(
   return status.ok() ? DrainExternalLaunchRequests() : status;
 }
 
-Status RobloxExperienceComposition::OpenWebSurface(
-    const std::string& url, const char* transport, WebSurfaceRoute route,
-    WebViewHelperExitObserver exit_observer,
-    const WebSurfacePresentation& presentation) {
-  if (route == WebSurfaceRoute::kNone || !exit_observer.valid()) {
-    return Invalid("WebView surface open request is incomplete");
-  }
-  std::lock_guard<std::mutex> operation_lock(web_surface_operation_mutex_);
-
-  std::shared_ptr<WebViewHelperProcess> current;
-  SecureWebViewRobloxCookie cookie;
-  uint64_t process_generation = 0;
-  uint64_t logical_generation = 0;
-  bool clear_persisted_cookie = false;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!web_view_cookie_synchronized_) {
-      return FailedPrecondition("WebView authentication is not synchronized");
-    }
-    current = web_surface_process_;
-    cookie = web_view_cookie_.Clone();
-    clear_persisted_cookie = clear_persisted_web_view_cookie_;
-    process_generation = web_surface_process_generation_;
-    logical_generation = next_web_surface_logical_generation_++;
-    if (logical_generation == 0 || next_web_surface_logical_generation_ == 0) {
-      return FailedPrecondition(
-          "WebView logical surface generation is exhausted");
-    }
-  }
-
-  const bool spawn = current == nullptr || !current->running();
-  if (spawn) {
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      process_generation = next_web_surface_process_generation_++;
-      if (process_generation == 0 ||
-          next_web_surface_process_generation_ == 0) {
-        return FailedPrecondition("WebView process generation is exhausted");
-      }
-    }
-    auto exit_context = std::make_shared<WebSurfaceExitContext>();
-    exit_context->target = web_surface_exit_target_;
-    exit_context->process_generation = process_generation;
-    Status status = LaunchRobloxWebSurface(
-        url, transport,
-        WebViewHelperExitObserver{
-            exit_context, &RobloxExperienceComposition::WebSurfaceExited},
-        &current);
-    if (!status.ok()) {
-      return status;
-    }
-  }
-
-  // Serialize setup so presentation state cannot leak between routes.
-  const bool cookie_synchronized =
-      clear_persisted_cookie ? current->ClearRobloxCookie()
-                             : current->SetRobloxCookie(cookie.value());
-  if (!current->SetTitle(presentation.title) ||
-      !current->SetVisible(presentation.visible) ||
-      !current->SetBackNavigationDisabled(
-          presentation.back_navigation_disabled) ||
-      !current->SetShowDomainAsTitle(presentation.show_domain_as_title) ||
-      !cookie_synchronized || (!spawn && !current->LoadUrl(url))) {
-    (void)current->RequestClose();
-    return Unavailable("could not configure reusable Roblox web surface");
-  }
-  if (!current->running()) {
-    if (spawn) {
-      (void)current->RequestClose();
-    }
-    return Unavailable("Roblox web surface exited during configuration");
-  }
-
-  WebViewHelperExitObserver superseded_observer;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    superseded_observer = std::move(web_surface_logical_exit_observer_);
-    web_surface_process_ = current;
-    web_surface_process_generation_ = process_generation;
-    web_surface_route_ = route;
-    web_surface_logical_generation_ = logical_generation;
-    web_surface_logical_exit_observer_ = std::move(exit_observer);
-  }
-  if (superseded_observer.valid()) {
-    superseded_observer.on_exit(superseded_observer.context.get());
-  }
-  if (!current->running()) {
-    HandleWebSurfaceExit(process_generation);
-    return Unavailable("Roblox web surface exited while committing route");
-  }
-  return Status::Ok();
-}
-
-Status RobloxExperienceComposition::CloseWebSurface() {
-  std::lock_guard<std::mutex> operation_lock(web_surface_operation_mutex_);
-  std::shared_ptr<WebViewHelperProcess> process;
-  WebViewHelperExitObserver exit_observer;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (web_surface_route_ == WebSurfaceRoute::kNone) {
-      return Status::Ok();
-    }
-    process = std::move(web_surface_process_);
-    web_surface_process_generation_ = 0;
-    exit_observer = std::move(web_surface_logical_exit_observer_);
-    web_surface_route_ = WebSurfaceRoute::kNone;
-    web_surface_logical_generation_ = 0;
-  }
-  // A closed challenge must stop executing. Reusing its hidden document lets
-  // late callbacks from the old attempt reach the next login attempt. The APK
-  // removes its WebView fragment here and creates a new one on the next open.
-  const bool closed =
-      process == nullptr || !process->running() || process->RequestClose();
-  if (exit_observer.valid()) {
-    exit_observer.on_exit(exit_observer.context.get());
-  }
-  if (!closed) {
-    return Unavailable("could not close Roblox web surface");
-  }
-  return Status::Ok();
-}
-
-void RobloxExperienceComposition::WebSurfaceExited(void* context) {
-  auto* exit_context = static_cast<WebSurfaceExitContext*>(context);
-  if (exit_context == nullptr || exit_context->target == nullptr ||
-      exit_context->process_generation == 0) {
-    return;
-  }
-  std::lock_guard<std::mutex> target_lock(exit_context->target->mutex);
-  if (exit_context->target->composition != nullptr) {
-    exit_context->target->composition->HandleWebSurfaceExit(
-        exit_context->process_generation);
-  }
-}
-
-void RobloxExperienceComposition::HandleWebSurfaceExit(
-    uint64_t process_generation) {
-  WebViewHelperExitObserver exit_observer;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (web_surface_process_generation_ != process_generation) {
-      return;
-    }
-    web_surface_process_.reset();
-    web_surface_process_generation_ = 0;
-    web_surface_route_ = WebSurfaceRoute::kNone;
-    web_surface_logical_generation_ = 0;
-    exit_observer = std::move(web_surface_logical_exit_observer_);
-  }
-  if (exit_observer.valid()) {
-    exit_observer.on_exit(exit_observer.context.get());
-  }
-}
-
-Status RobloxExperienceComposition::DispatchWebViewOpen(
-    void* context, const RobloxWebViewOpenRequest& request,
-    WebViewHelperExitObserver exit_observer) {
-  if (context == nullptr) {
-    return Invalid("WebView dispatch context is null");
-  }
-  auto* composition = static_cast<RobloxExperienceComposition*>(context);
-  WebSurfacePresentation presentation;
-  if (!request.title.empty()) {
-    presentation.title = request.title;
-  }
-  presentation.visible = request.is_visible.value_or(true);
-  presentation.show_domain_as_title =
-      request.show_domain_as_title.value_or(false);
-  // The host helper has no toolbar, so a hidden Roblox back button disables
-  // host back navigation too.
-  presentation.back_navigation_disabled =
-      request.back_button_visible.has_value() && !*request.back_button_visible;
-  return composition->OpenWebSurface(request.url, "webview",
-                                     WebSurfaceRoute::kWebView,
-                                     std::move(exit_observer), presentation);
-}
-
-Status RobloxExperienceComposition::DispatchWebViewMutate(
-    void* context, const RobloxWebViewMutationRequest& request) {
-  if (context == nullptr) {
-    return Invalid("WebView mutation context is null");
-  }
-  auto* composition = static_cast<RobloxExperienceComposition*>(context);
-  std::lock_guard<std::mutex> operation_lock(
-      composition->web_surface_operation_mutex_);
-  std::shared_ptr<WebViewHelperProcess> process;
-  {
-    std::lock_guard<std::mutex> lock(composition->mutex_);
-    process = composition->web_surface_route_ != WebSurfaceRoute::kNone
-                  ? composition->web_surface_process_
-                  : nullptr;
-  }
-  if (process == nullptr || !process->running()) {
-    return FailedPrecondition("WebView window is not running");
-  }
-  if (request.url.has_value() && !process->LoadUrl(*request.url)) {
-    return Unavailable("could not update the WebView window URL");
-  }
-  if (request.title.has_value() && !process->SetTitle(*request.title)) {
-    return Unavailable("could not update the WebView window title");
-  }
-  if (request.is_visible.has_value() &&
-      !process->SetVisible(*request.is_visible)) {
-    return Unavailable("could not update WebView window visibility");
-  }
-  if (request.show_domain_as_title.has_value() &&
-      !process->SetShowDomainAsTitle(*request.show_domain_as_title)) {
-    return Unavailable("could not update WebView domain-title policy");
-  }
-  return Status::Ok();
-}
-
-Status RobloxExperienceComposition::DispatchWebViewClose(void* context) {
-  if (context == nullptr) {
-    return Invalid("WebView close context is null");
-  }
-  auto* composition = static_cast<RobloxExperienceComposition*>(context);
-  return composition->CloseWebSurface();
-}
-
-Status RobloxExperienceComposition::DispatchWebViewCookie(
-    void* context, std::string_view canonical_header) {
-  if (context == nullptr) {
-    return Invalid("WebView cookie dispatch context is null");
-  }
-  SecureRobloxCredential credential{std::string(canonical_header)};
-  WebViewRobloxCookieResult prepared = PrepareWebViewRobloxCookie(credential);
-  if (!prepared) {
-    return Invalid(prepared.error);
-  }
-  auto* composition = static_cast<RobloxExperienceComposition*>(context);
-  std::lock_guard<std::mutex> operation_lock(
-      composition->web_surface_operation_mutex_);
-  std::shared_ptr<WebViewHelperProcess> process;
-  SecureWebViewRobloxCookie cookie;
-  {
-    std::lock_guard<std::mutex> lock(composition->mutex_);
-    composition->web_view_cookie_ = std::move(prepared.cookie);
-    composition->web_view_cookie_synchronized_ = true;
-    composition->clear_persisted_web_view_cookie_ = false;
-    cookie = composition->web_view_cookie_.Clone();
-    process = composition->web_surface_process_;
-  }
-  if (process != nullptr && process->running() &&
-      !process->SetRobloxCookie(cookie.value())) {
-    return Unavailable("could not update WebView authentication");
-  }
-  return Status::Ok();
-}
-
-Status RobloxExperienceComposition::AcceptWebViewRobloxCookie(
-    std::string_view value) {
-  std::string canonical_header = ".ROBLOSECURITY=";
-  canonical_header.append(value);
-  SecureRobloxCredential credential{std::move(canonical_header)};
-  WebViewRobloxCookieResult prepared = PrepareWebViewRobloxCookie(credential);
-  if (!prepared) {
-    return Invalid(prepared.error);
-  }
-
-  jnivm::VM* vm = jnivm::VM::FromJavaVM(environment_.java_vm);
-  if (vm == nullptr) {
-    return FailedPrecondition("WebView login has no active VM");
-  }
-  const bool was_guest = vm->GetRobloxAuthIdentitySnapshot().user_id <= 0;
-  if (!vm->DispatchRobloxCredential(credential.c_str(), credential.size())) {
-    return Unavailable("could not store WebView login credential");
-  }
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    web_view_cookie_ = std::move(prepared.cookie);
-    web_view_cookie_synchronized_ = true;
-    clear_persisted_web_view_cookie_ = false;
-  }
-
-  if (was_guest && vm->GetRobloxAuthIdentitySnapshot().user_id > 0) {
-    const Status close_status = CloseWebSurface();
-    if (!close_status.ok()) {
-      std::fprintf(stderr,
-                   "  [auth] browser sign-in accepted; WebView close failed: "
-                   "%s\n",
-                   close_status.message().c_str());
-    } else {
-      std::fprintf(stderr,
-                   "  [auth] browser sign-in accepted into the running VM\n");
-    }
-  }
-  return Status::Ok();
-}
-
-Status RobloxExperienceComposition::DispatchBrowserServiceOpen(
-    void* context, const RobloxBrowserServiceOpenRequest& request,
-    WebViewHelperExitObserver exit_observer) {
-  if (context == nullptr) {
-    return Invalid("BrowserService dispatch context is null");
-  }
-  auto* composition = static_cast<RobloxExperienceComposition*>(context);
-  WebSurfacePresentation presentation;
-  presentation.title = request.title.value_or("Roblox");
-  presentation.visible = request.visible.value_or(true);
-  presentation.back_navigation_disabled =
-      request.back_navigation_disabled.value_or(false);
-  presentation.show_domain_as_title =
-      request.show_domain_as_title.value_or(false);
-  return composition->OpenWebSurface(request.url, "browser",
-                                     WebSurfaceRoute::kBrowserService,
-                                     std::move(exit_observer), presentation);
-}
-
-Status RobloxExperienceComposition::DispatchBrowserServiceClose(void* context) {
-  if (context == nullptr) {
-    return Invalid("BrowserService close context is null");
-  }
-  auto* composition = static_cast<RobloxExperienceComposition*>(context);
-  return composition->CloseWebSurface();
-}
-
-Status RobloxExperienceComposition::DispatchBrowserServiceConfig(
-    void* context, const RobloxBrowserServiceConfigRequest& request) {
-  if (context == nullptr) {
-    return Invalid("BrowserService config context is null");
-  }
-  auto* composition = static_cast<RobloxExperienceComposition*>(context);
-  std::lock_guard<std::mutex> operation_lock(
-      composition->web_surface_operation_mutex_);
-  std::shared_ptr<WebViewHelperProcess> process;
-  {
-    std::lock_guard<std::mutex> lock(composition->mutex_);
-    process = composition->web_surface_route_ != WebSurfaceRoute::kNone
-                  ? composition->web_surface_process_
-                  : nullptr;
-  }
-  if (process == nullptr || !process->running()) {
-    return FailedPrecondition("BrowserService window is not running");
-  }
-  if (request.title.has_value() && !process->SetTitle(*request.title)) {
-    return Unavailable("could not update BrowserService title");
-  }
-  if (request.visible.has_value() && !process->SetVisible(*request.visible)) {
-    return Unavailable("could not update BrowserService visibility");
-  }
-  if (request.back_navigation_disabled.has_value() &&
-      !process->SetBackNavigationDisabled(*request.back_navigation_disabled)) {
-    return Unavailable("could not update BrowserService back navigation");
-  }
-  return Status::Ok();
-}
-
-Status RobloxExperienceComposition::DispatchBrowserServiceExecute(
-    void* context, const RobloxBrowserServiceExecuteRequest& request) {
-  if (context == nullptr) {
-    return Invalid("BrowserService execute context is null");
-  }
-  auto* composition = static_cast<RobloxExperienceComposition*>(context);
-  std::lock_guard<std::mutex> operation_lock(
-      composition->web_surface_operation_mutex_);
-  std::shared_ptr<WebViewHelperProcess> process;
-  {
-    std::lock_guard<std::mutex> lock(composition->mutex_);
-    process = composition->web_surface_route_ != WebSurfaceRoute::kNone
-                  ? composition->web_surface_process_
-                  : nullptr;
-  }
-  if (process == nullptr || !process->running()) {
-    return FailedPrecondition("BrowserService window is not running");
-  }
-  return process->EvaluateJavaScript(request.source)
-             ? Status::Ok()
-             : Unavailable("could not execute BrowserService JavaScript");
-}
-
 Status RobloxExperienceComposition::DispatchLaunch(
     void* context, const RobloxExperienceLaunchRequest& request) {
   if (context == nullptr) {
@@ -925,111 +438,8 @@ Status RobloxExperienceComposition::DispatchLaunch(
   return static_cast<RobloxExperienceComposition*>(context)->Dispatch(request);
 }
 
-Status RobloxExperienceComposition::RouteWebSurfaceEvent(
-    WebSurfaceRoute route, const WebViewHelperEvent& event,
-    RobloxWebViewBridge* web_view_bridge) {
-  switch (event.type) {
-    case WebViewHelperEventType::kExecuteRoblox:
-      // WebViewProtocol listens on the shared gi.a fragment. Preserve the raw
-      // command, including RequestGameJob instance and attempt IDs.
-      if (route == WebSurfaceRoute::kNone) {
-        return FailedPrecondition(
-            "WebView helper event has no active logical route");
-      }
-      return web_view_bridge != nullptr
-                 ? web_view_bridge->SignalJavascriptCallback(event.payload)
-                 : FailedPrecondition("WebViewProtocol bridge is unavailable");
-    case WebViewHelperEventType::kRobloxWkHybrid:
-      if (route == WebSurfaceRoute::kNone) {
-        return FailedPrecondition(
-            "WebView helper event has no active logical route");
-      }
-      return web_view_bridge != nullptr
-                 ? web_view_bridge->SignalJavascriptCallback(event.payload)
-                 : FailedPrecondition("WebViewProtocol bridge is unavailable");
-    case WebViewHelperEventType::kReady:
-      return Status::Ok();
-    case WebViewHelperEventType::kRobloxCookie:
-      return FailedPrecondition(
-          "WebView cookie event requires the active composition");
-  }
-  return Status::Error(StatusCode::kUnsupported,
-                       "WebView helper event type is unsupported");
-}
-
-Status RobloxExperienceComposition::RouteCurrentWebSurfaceEvent(
-    const std::shared_ptr<WebViewHelperProcess>& source_process,
-    uint64_t process_generation, uint64_t logical_generation,
-    const WebViewHelperEvent& event) {
-  WebSurfaceRoute route = WebSurfaceRoute::kNone;
-  RobloxWebViewBridge* web_view_bridge = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (source_process != web_surface_process_ || process_generation == 0 ||
-        process_generation != web_surface_process_generation_ ||
-        logical_generation == 0 ||
-        logical_generation != web_surface_logical_generation_ ||
-        web_surface_route_ == WebSurfaceRoute::kNone) {
-      // Closing or replacing the helper invalidates buffered surface events.
-      return Status::Ok();
-    }
-    route = web_surface_route_;
-    web_view_bridge = web_view_bridge_.get();
-  }
-  return event.type == WebViewHelperEventType::kRobloxCookie
-             ? AcceptWebViewRobloxCookie(event.payload)
-             : RouteWebSurfaceEvent(route, event, web_view_bridge);
-}
-
 Status RobloxExperienceComposition::DrainPlatformEvents() {
-  RobloxWebViewBridge* web_view_bridge = nullptr;
-  RobloxBrowserServiceBridge* browser_service_bridge = nullptr;
-  std::shared_ptr<WebViewHelperProcess> web_surface_process;
-  uint64_t process_generation = 0;
-  uint64_t logical_generation = 0;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    web_view_bridge = web_view_bridge_.get();
-    browser_service_bridge = browser_service_bridge_.get();
-    web_surface_process = web_surface_process_;
-    process_generation = web_surface_process_generation_;
-    logical_generation = web_surface_logical_generation_;
-  }
-  const auto drain_helper =
-      [&](const std::shared_ptr<WebViewHelperProcess>& process,
-          uint64_t process_generation, uint64_t logical_generation) -> Status {
-    if (process == nullptr || !process->running()) {
-      return Status::Ok();
-    }
-    std::vector<WebViewHelperEvent> events;
-    if (!process->DrainEvents(&events)) {
-      return process->running()
-                 ? Unavailable("could not receive WebView helper events")
-                 : Status::Ok();
-    }
-    for (WebViewHelperEvent& event : events) {
-      const Status event_status = RouteCurrentWebSurfaceEvent(
-          process, process_generation, logical_generation, event);
-      SecurelyClearString(&event.payload);
-      if (!event_status.ok()) {
-        for (WebViewHelperEvent& remaining : events) {
-          SecurelyClearString(&remaining.payload);
-        }
-        return event_status;
-      }
-    }
-    return Status::Ok();
-  };
-  Status status = web_view_bridge != nullptr
-                      ? web_view_bridge->DrainHostWindowEvents()
-                      : Status::Ok();
-  if (status.ok()) {
-    status = drain_helper(web_surface_process, process_generation,
-                          logical_generation);
-  }
-  if (status.ok() && browser_service_bridge != nullptr) {
-    status = browser_service_bridge->DrainOutgoingEvents();
-  }
+  Status status = Status::Ok();
   if (status.ok()) {
     status = PromoteAuthenticatedSession();
   }
@@ -1571,19 +981,14 @@ GameSessionUpdateResult RobloxExperienceComposition::SurfaceDestroyed(
 Status RobloxExperienceComposition::Shutdown() {
   std::lock_guard<std::mutex> surface_operation_lock(surface_operation_mutex_);
   std::unique_ptr<RobloxExperienceLaunchBridge> bridge;
-  std::unique_ptr<RobloxWebViewBridge> web_view_bridge;
-  std::unique_ptr<RobloxBrowserServiceBridge> browser_service_bridge;
   std::unique_ptr<RobloxPermissionsBridge> permissions_bridge;
   std::unique_ptr<RobloxCallProtocolBridge> call_protocol_bridge;
-  std::shared_ptr<WebViewHelperProcess> web_surface_process;
   jnivm::VM* late_lifecycle_vm = nullptr;
   {
     std::lock_guard<std::mutex> target_lock(lifecycle_target_->mutex);
     lifecycle_target_->composition = nullptr;
   }
   {
-    std::lock_guard<std::mutex> target_lock(web_surface_exit_target_->mutex);
-    web_surface_exit_target_->composition = nullptr;
     std::lock_guard<std::mutex> lock(mutex_);
     subscribed_ = false;
     game_active_ = false;
@@ -1595,15 +1000,8 @@ Status RobloxExperienceComposition::Shutdown() {
     lua_app_surface_recreation_pending_ = false;
     pending_launch_requests_.clear();
     bridge = std::move(bridge_);
-    web_view_bridge = std::move(web_view_bridge_);
-    browser_service_bridge = std::move(browser_service_bridge_);
     permissions_bridge = std::move(permissions_bridge_);
     call_protocol_bridge = std::move(call_protocol_bridge_);
-    web_surface_process = std::move(web_surface_process_);
-    web_surface_logical_exit_observer_ = {};
-    web_surface_route_ = WebSurfaceRoute::kNone;
-    web_surface_process_generation_ = 0;
-    web_surface_logical_generation_ = 0;
     late_surface_tracking_ = false;
     late_surface_snapshot_ = {};
     late_lifecycle_vm = late_lifecycle_vm_;
@@ -1611,9 +1009,6 @@ Status RobloxExperienceComposition::Shutdown() {
   }
   if (late_lifecycle_vm != nullptr) {
     late_lifecycle_vm->ClearRobloxExperienceLifecycleCallbacks();
-  }
-  if (web_surface_process != nullptr) {
-    (void)web_surface_process->RequestClose();
   }
   Status status = call_protocol_bridge != nullptr
                       ? call_protocol_bridge->Shutdown()
@@ -1623,25 +1018,13 @@ Status RobloxExperienceComposition::Shutdown() {
                                         : Status::Ok();
   if (status.ok())
     status = permissions_status;
-  const Status browser_status = browser_service_bridge != nullptr
-                                    ? browser_service_bridge->Shutdown()
-                                    : Status::Ok();
-  if (status.ok())
-    status = browser_status;
-  const Status web_view_status =
-      web_view_bridge != nullptr ? web_view_bridge->Shutdown() : Status::Ok();
-  if (status.ok()) {
-    status = web_view_status;
-  }
   const Status bridge_status =
       bridge != nullptr ? bridge->Shutdown() : Status::Ok();
   if (status.ok()) {
     status = bridge_status;
   }
-  browser_service_bridge.reset();
   call_protocol_bridge.reset();
   permissions_bridge.reset();
-  web_view_bridge.reset();
   bridge.reset();
   if (launch_worker_.joinable()) {
     const OwnedPthreadWaitResult wait = launch_worker_.WaitFor(-1, 1);

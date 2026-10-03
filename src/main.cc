@@ -42,7 +42,6 @@
 #include "runtime/support_bundle.h"
 #include "runtime/system_proxy.h"
 #include "services/auth_service.h"
-#include "services/browser_tracker_service.h"
 #include "services/client_settings_service.h"
 #include "services/http_client.h"
 #include "window/window.h"
@@ -674,34 +673,6 @@ int main(int argc, char* argv[]) {
   mocktail::legacy::RuntimeDependencies dependencies;
   if (command_line.options.mode == mocktail::runtime::CommandMode::kRun) {
     auto http_client = std::make_shared<mocktail::services::CurlHttpClient>();
-    mocktail::services::BrowserTrackerService browser_tracker(*http_client);
-    std::filesystem::path tracker_cookie_file =
-        paths.data_root() / "browser_tracker.cookie";
-    bool tracker_cookie_owned = true;
-    if (environment.HasNonEmpty("MOCKTAIL_COOKIE_FILE")) {
-      tracker_cookie_file = environment.GetOr("MOCKTAIL_COOKIE_FILE", "");
-      tracker_cookie_owned = false;
-    } else if (mocktail::runtime::RuntimePaths::Exists(paths.cookie_file())) {
-      tracker_cookie_file = paths.cookie_file();
-    }
-    const mocktail::services::BrowserTrackerResult browser_tracker_result =
-        browser_tracker.EnsureInitialized(app_storage_file, tracker_cookie_file,
-                                          tracker_cookie_owned);
-    if (!browser_tracker_result) {
-      std::cerr << "  [runtime] BrowserTracker bootstrap skipped: "
-                << browser_tracker_result.error;
-      if (browser_tracker_result.http_status != 0) {
-        std::cerr << " (HTTP " << browser_tracker_result.http_status << ')';
-      }
-      std::cerr << '\n';
-    } else {
-      std::cout << "  [runtime] BrowserTracker identity "
-                << (browser_tracker_result.status ==
-                            mocktail::services::BrowserTrackerStatus::kCreated
-                        ? "initialized"
-                        : "loaded")
-                << " before engine startup\n";
-    }
     mocktail::services::AuthService auth_service(*http_client);
     mocktail::runtime::AuthRuntimeComposition composition =
         mocktail::runtime::ComposeAuthRuntime(environment, paths, auth_service,

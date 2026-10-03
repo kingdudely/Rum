@@ -150,13 +150,11 @@ add_library(mocktail_runtime STATIC
   src/runtime/platform_cache_migration.cc
   src/runtime/roblox_desktop_app_policy.cc
   src/runtime/roblox_app_lifecycle.cc
-  src/runtime/roblox_browser_service_bridge.cc
   src/runtime/roblox_capability_resolver.cc
   src/runtime/roblox_experience_launch_bridge.cc
   src/runtime/roblox_launch_uri.cc
   src/runtime/roblox_presence_resolver.cc
   src/runtime/roblox_game_session_native_adapter.cc
-  src/runtime/roblox_web_view_bridge.cc
   src/runtime/roblox_permissions_bridge.cc
   src/runtime/roblox_message_bus_request_bridge.cc
   src/runtime/roblox_call_protocol_bridge.cc
@@ -218,7 +216,6 @@ mocktail_apply_compile_options(mocktail_failure_dialog_runtime)
 add_library(mocktail_services STATIC
   src/services/http_client.cc
   src/services/auth_service.cc
-  src/services/browser_tracker_service.cc
   src/services/client_settings_service.cc
 )
 add_library(Mocktail::Services ALIAS mocktail_services)
@@ -230,26 +227,8 @@ target_link_libraries(mocktail_services PUBLIC
 )
 mocktail_apply_compile_options(mocktail_services)
 
-add_library(mocktail_webview_launcher STATIC
-  src/runtime/webview_helper_launcher.cc
-)
-add_library(Mocktail::WebViewLauncher ALIAS mocktail_webview_launcher)
-target_include_directories(mocktail_webview_launcher PUBLIC include)
-target_link_libraries(mocktail_webview_launcher PUBLIC CURL::libcurl)
-mocktail_apply_compile_options(mocktail_webview_launcher)
-
-add_executable(mocktail_webview_helper
-  src/webview/mocktail_webview_helper.cc
-)
-target_include_directories(mocktail_webview_helper PRIVATE include)
-target_link_libraries(mocktail_webview_helper PRIVATE
-  Mocktail::WebViewLauncher
-)
-mocktail_apply_compile_options(mocktail_webview_helper)
-
 add_library(mocktail_auth_runtime_composition STATIC
   src/runtime/auth_runtime_composition.cc
-  src/runtime/webview_roblox_cookie.cc
 )
 add_library(Mocktail::AuthRuntimeComposition ALIAS
   mocktail_auth_runtime_composition)
@@ -324,14 +303,13 @@ add_library(mocktail_experience_runtime STATIC
   src/runtime/jnivm_platform_web_callbacks.cc
   src/runtime/roblox_experience_composition.cc
   src/runtime/roblox_fresh_game_launch_controller.cc
-  src/runtime/roblox_platform_web_symbols.cc
+  src/runtime/roblox_platform_protocol_symbols.cc
 )
 add_library(Mocktail::ExperienceRuntime ALIAS mocktail_experience_runtime)
 target_include_directories(mocktail_experience_runtime PUBLIC include)
 target_include_directories(mocktail_experience_runtime PRIVATE src)
 target_link_libraries(mocktail_experience_runtime PUBLIC
   Mocktail::Runtime
-  Mocktail::WebViewLauncher
   PkgConfig::UTF8PROC
   PRIVATE
     Mocktail::AuthRuntimeComposition
@@ -513,7 +491,6 @@ install(TARGETS mocktail
 )
 install(TARGETS
     mocktail
-    mocktail_webview_helper
     mocktail_audio_sdl
     mocktail_opensles
     stub_sys_m
@@ -630,5 +607,4 @@ endif()
 include(CPack)
 
 add_dependencies(mocktail all_stubs)
-add_dependencies(mocktail mocktail_webview_helper)
 

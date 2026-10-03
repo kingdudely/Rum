@@ -64,7 +64,7 @@
 #include "runtime/platform_cache_migration.h"
 #include "runtime/roblox_app_lifecycle.h"
 #include "runtime/roblox_capability_resolver.h"
-#include "runtime/roblox_platform_web_symbols.h"
+#include "runtime/roblox_platform_protocol_symbols.h"
 #include "runtime/roblox_experience_composition.h"
 #include "runtime/roblox_game_session_native_adapter.h"
 #include "runtime/roblox_window_input_runtime.h"
@@ -1180,23 +1180,6 @@ jobject CreateMessageBusRequestHandler(void *context,
 void ClearMessageBusRequestHandler(void *context, jobject handler) {
   if (context != nullptr) {
     static_cast<jnivm::VM *>(context)->ClearMessageBusRequestHandler(handler);
-  }
-}
-
-jobject CreateBrowserServiceMemStorageCallback(
-    void *context, std::shared_ptr<void> callback_context,
-    void (*on_item_set)(void *, JNIEnv *, jstring)) {
-  if (context == nullptr || on_item_set == nullptr) {
-    return nullptr;
-  }
-  return static_cast<jnivm::VM *>(context)->CreateMemStorageCallback(
-      std::move(callback_context),
-      jnivm::MemStorageCallbackCallbacks{on_item_set});
-}
-
-void ClearBrowserServiceMemStorageCallback(void *context, jobject callback) {
-  if (context != nullptr) {
-    static_cast<jnivm::VM *>(context)->ClearMemStorageCallback(callback);
   }
 }
 
@@ -5864,12 +5847,8 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         std::cerr << "[FATAL] GAME protocol JNI environment unavailable\n";
         return EXIT_FAILURE;
       }
-      const auto symbols = mocktail::runtime::ResolveRobloxPlatformWebSymbols(
+      const auto symbols = mocktail::runtime::ResolveRobloxPlatformProtocolSymbols(
           roblox_handle,
-          reinterpret_cast<mocktail::runtime::SubscribeExperienceLaunchRawFn>(
-              linker::ResolveSymbol(roblox_handle,
-                                    "Java_com_roblox_universalapp_messagebus_"
-                                    "MessageBus_doSubscribeRaw")),
           reinterpret_cast<mocktail::runtime::DeleteMessageBusConnectionFn>(
               linker::ResolveSymbol(roblox_handle,
                                     "Java_com_roblox_universalapp_messagebus_"
@@ -5941,18 +5920,13 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                   roblox_handle,
                   "Java_com_roblox_universalapp_messagebus_Connection_"
                   "deleteSharedPtr"));
-      const mocktail::runtime::RobloxPlatformWebSymbols platform_web_symbols =
-          mocktail::runtime::ResolveRobloxPlatformWebSymbols(
-              roblox_handle, message_bus_symbols.subscribe_raw,
-              message_bus_symbols.delete_connection);
+      const mocktail::runtime::RobloxPlatformProtocolSymbols platform_protocol_symbols =
+          mocktail::runtime::ResolveRobloxPlatformProtocolSymbols(
+              roblox_handle, message_bus_symbols.delete_connection);
       mocktail::runtime::RobloxExperienceJniFactory jni_factory{
           jni_vm.get(),
           &CreateExperienceRawCallback,
           &ClearExperienceRawCallback,
-          &CreateMessageBusRequestHandler,
-          &ClearMessageBusRequestHandler,
-          &CreateBrowserServiceMemStorageCallback,
-          &ClearBrowserServiceMemStorageCallback,
           &mocktail::runtime::SetJnivmPlatformWebCallbacks,
           &mocktail::runtime::ClearJnivmPlatformWebCallbacks,
           &CreateAsyncMessageBusRequestHandler,
@@ -5971,14 +5945,13 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
           raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
       experience_composition =
           std::make_shared<mocktail::runtime::RobloxExperienceComposition>(
-              environment, message_bus_symbols, platform_web_symbols.web_view,
-              platform_web_symbols.browser_service,
-              platform_web_symbols.permissions, *experience_game_symbols,
-              jni_factory, present_boundary, std::move(surface_config),
-              &dependencies.roblox_credential(),
+              environment, message_bus_symbols,
+              platform_protocol_symbols.system_theme,
+              platform_protocol_symbols.permissions,
+              *experience_game_symbols, jni_factory, present_boundary,
+              std::move(surface_config),
               mocktail::runtime::RobloxExperienceSurfaceProvider{},
               mocktail::runtime::RobloxExperiencePresenceObserver{},
-              dependencies.clear_persisted_web_view_cookie(),
               runtime_config.microphone_enabled());
       const mocktail::Status platform_protocol_status =
           experience_composition->InitializePlatformProtocols();
@@ -5988,8 +5961,8 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         return EXIT_FAILURE;
       }
       std::cout
-          << "  [platform] WebView, BrowserService and Permissions protocols "
-             "initialized before native bootstrap\n"
+          << "  [platform] PermissionsProtocol and CallProtocol initialized "
+             "before native bootstrap\n"
           << std::flush;
     }
 
