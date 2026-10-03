@@ -5649,7 +5649,10 @@ std::shared_ptr<Class> VM::FindClass(const std::string& class_name) const {
   return it->second;
 }
 
-void VM::InitJNIFunctionTables() {
+// The JavaVM side of the interface: how a thread attaches to and detaches
+// from the pseudo-JVM, and how callers reach it. Installed before anything
+// can call back through JavaVM*.
+void VM::InitJavaVMInterface() {
   invoke_interface_.AttachCurrentThread =
       [](JavaVM* vm, void** env, void* args) -> jint {
     if (JniVmTraceEnabled()) {
@@ -5750,7 +5753,11 @@ void VM::InitJNIFunctionTables() {
 
   java_vm_storage_.functions = &invoke_interface_;
   java_vm_ = &java_vm_storage_;
+}
 
+// Version reporting plus the class and reflection lookups the engine uses
+// to resolve a jclass from a name.
+void VM::InitJNIEnvVersionAndClassInterface() {
   native_interface_.FindClass =
       [](JNIEnv* /*env*/, const char* name) -> jclass {
     if (JniVmTraceEnabled()) {
@@ -5769,34 +5776,36 @@ void VM::InitJNIFunctionTables() {
     return JNI_VERSION_1_6;
   };
 
-  native_interface_.NewStringUTF =
-      [](JNIEnv* /*env*/, const char* utf) -> jstring {
-    return MakeString(utf);
-  };
-
-  native_interface_.GetStringUTFLength =
-      [](JNIEnv* /*env*/, jstring str) -> jsize {
-    return StringModifiedUtf8Length(str);
-  };
-
-  native_interface_.GetStringUTFChars =
-      [](JNIEnv* /*env*/, jstring str, jboolean* isCopy) -> const char* {
-    if (isCopy) *isCopy = JNI_FALSE;
-    const char* result = StringChars(str);
-    if (StringTraceEnabled()) {
-      const std::size_t length =
-          static_cast<std::size_t>(StringModifiedUtf8Length(str));
-      fprintf(stderr,
-              "  [JNI] GetStringUTFChars str=%p chars=%p len=%zu\n",
-              static_cast<void*>(str), static_cast<const void*>(result),
-              length);
+  native_interface_.GetObjectClass =
+      [](JNIEnv* /*env*/, jobject obj) -> jclass {
+    Trace("GetObjectClass");
+    auto* pseudo_object = PseudoObjectFromRef(obj);
+    if (pseudo_object) {
+      return StoreClass(pseudo_object->GetClass());
     }
-    return result;
+    return StoreClass(FallbackClassForName("java/lang/Object"));
   };
 
-  native_interface_.ReleaseStringUTFChars =
-      [](JNIEnv* /*env*/, jstring /*str*/, const char* /*chars*/) {};
+  native_interface_.GetSuperclass =
+      [](JNIEnv* /*env*/, jclass /*sub*/) -> jclass {
+    return StoreClass(FallbackClassForName("java/lang/Object"));
+  };
 
+  native_interface_.IsAssignableFrom =
+      [](JNIEnv* /*env*/, jclass sub, jclass sup) -> jboolean {
+    return (sub == sup || sup == nullptr) ? JNI_TRUE : JNI_TRUE;
+  };
+
+  native_interface_.IsInstanceOf =
+      [](JNIEnv* /*env*/, jobject obj, jclass /*clazz*/) -> jboolean {
+    return obj ? JNI_TRUE : JNI_FALSE;
+  };
+
+}
+
+// Pending-exception state. Every other entry point checks this before
+// returning, so it has to be installed first.
+void VM::InitJNIEnvExceptionInterface() {
   native_interface_.ExceptionOccurred = [](JNIEnv* /*env*/) -> jthrowable {
     return nullptr;
   };
@@ -5826,6 +5835,11 @@ void VM::InitJNIFunctionTables() {
     std::abort();
   };
 
+}
+
+// Local, global and weak reference handling, plus the local-reference
+// frame and the object constructors.
+void VM::InitJNIEnvObjectReferenceInterface() {
   native_interface_.PushLocalFrame =
       [](JNIEnv* /*env*/, jint /*capacity*/) -> jint {
     PushLocalJniFrame();
@@ -5840,122 +5854,6 @@ void VM::InitJNIFunctionTables() {
   native_interface_.EnsureLocalCapacity =
       [](JNIEnv* /*env*/, jint /*capacity*/) -> jint {
     return JNI_OK;
-  };
-
-	  native_interface_.RegisterNatives =
-	      [](JNIEnv* /*env*/, jclass clazz, const JNINativeMethod* methods, jint nMethods) -> jint {
-	    auto cls = ClassFromJClass(clazz);
-	    if (methods == nullptr || nMethods <= 0) {
-	      return JNI_OK;
-	    }
-	    for (int i = 0; i < nMethods; ++i) {
-	      const char* name = methods[i].name;
-	      if (name == nullptr) {
-	        continue;
-	      }
-	      if (std::strcmp(name, "onStartNative") == 0) {
-	        mocktail_gameactivity_on_start_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onResumeNative") == 0) {
-	        mocktail_gameactivity_on_resume_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onSurfaceCreatedNative") == 0) {
-	        mocktail_gameactivity_on_surface_created_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onSurfaceChangedNative") == 0) {
-	        mocktail_gameactivity_on_surface_changed_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onSurfaceRedrawNeededNative") == 0) {
-	        mocktail_gameactivity_on_surface_redraw_needed_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onTrimMemoryNative") == 0) {
-	        mocktail_gameactivity_on_trim_memory_native = methods[i].fnPtr;
-	      }
-              if (cls != nullptr &&
-                  cls->GetName() ==
-                      "org/webrtc/voiceengine/WebRtcAudioManager") {
-                if (VM* vm = CurrentVM()) {
-                  vm->RegisterWebRtcAudioManagerNative(
-                      methods[i].name, methods[i].signature, methods[i].fnPtr);
-                }
-              }
-              if (cls != nullptr &&
-                  cls->GetName() ==
-                      "org/webrtc/voiceengine/WebRtcAudioRecord") {
-                VM *vm = CurrentVM();
-                if (vm != nullptr) {
-                  vm->RegisterWebRtcAudioRecordNative(
-                      methods[i].name, methods[i].signature, methods[i].fnPtr);
-                }
-              }
-              if (cls != nullptr &&
-                  cls->GetName() == "org/webrtc/voiceengine/WebRtcAudioTrack") {
-                VM *vm = CurrentVM();
-                if (vm != nullptr) {
-                  vm->RegisterWebRtcAudioTrackNative(
-                      methods[i].name, methods[i].signature, methods[i].fnPtr);
-                }
-              }
-            }
-	    if (TraceEnabled()) {
-	      std::cout << "  [JNI] RegisterNatives for class "
-	                << (cls ? cls->GetName() : "unknown") << " ("
-                << nMethods << " methods):\n";
-      for (int i = 0; i < nMethods; ++i) {
-        std::cout << "    " << methods[i].name << " "
-                  << methods[i].signature << " -> " << methods[i].fnPtr
-                  << '\n';
-      }
-    }
-    return JNI_OK;
-  };
-
-  native_interface_.UnregisterNatives =
-      [](JNIEnv* /*env*/, jclass /*clazz*/) -> jint {
-    return JNI_OK;
-  };
-
-  native_interface_.GetStaticMethodID =
-      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jmethodID {
-    auto cls = ClassFromJClass(clazz);
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] GetStaticMethodID for class "
-                << (cls ? cls->GetName() : "unknown") << ": "
-                << (name ? name : "null") << " " << (sig ? sig : "null")
-                << '\n';
-    }
-    return StoreMethodId(name, sig);
-  };
-
-  native_interface_.GetMethodID =
-      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jmethodID {
-    auto cls = ClassFromJClass(clazz);
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] GetMethodID for class "
-                << (cls ? cls->GetName() : "unknown") << ": "
-                << (name ? name : "null") << " " << (sig ? sig : "null")
-                << '\n';
-    }
-    return StoreMethodId(name, sig);
-  };
-
-  native_interface_.GetStaticFieldID =
-      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jfieldID {
-    auto cls = ClassFromJClass(clazz);
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] GetStaticFieldID for class "
-                << (cls ? cls->GetName() : "unknown") << ": "
-                << (name ? name : "null") << " " << (sig ? sig : "null")
-                << '\n';
-    }
-    return StoreFieldId(name);
-  };
-
-  native_interface_.GetFieldID =
-      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jfieldID {
-    auto cls = ClassFromJClass(clazz);
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] GetFieldID for class "
-                << (cls ? cls->GetName() : "unknown") << ": "
-                << (name ? name : "null") << " " << (sig ? sig : "null")
-                << '\n';
-    }
-    return StoreFieldId(name);
   };
 
   native_interface_.AllocObject =
@@ -5988,34 +5886,81 @@ void VM::InitJNIFunctionTables() {
     return ConstructObjectA(clazz, methodID, args);
   };
 
-  native_interface_.GetObjectClass =
-      [](JNIEnv* /*env*/, jobject obj) -> jclass {
-    Trace("GetObjectClass");
-    auto* pseudo_object = PseudoObjectFromRef(obj);
-    if (pseudo_object) {
-      return StoreClass(pseudo_object->GetClass());
-    }
-    return StoreClass(FallbackClassForName("java/lang/Object"));
-  };
-
-  native_interface_.GetSuperclass =
-      [](JNIEnv* /*env*/, jclass /*sub*/) -> jclass {
-    return StoreClass(FallbackClassForName("java/lang/Object"));
-  };
-
-  native_interface_.IsAssignableFrom =
-      [](JNIEnv* /*env*/, jclass sub, jclass sup) -> jboolean {
-    return (sub == sup || sup == nullptr) ? JNI_TRUE : JNI_TRUE;
-  };
-
-  native_interface_.IsInstanceOf =
-      [](JNIEnv* /*env*/, jobject obj, jclass /*clazz*/) -> jboolean {
-    return obj ? JNI_TRUE : JNI_FALSE;
-  };
-
   native_interface_.IsSameObject =
       [](JNIEnv* /*env*/, jobject obj1, jobject obj2) -> jboolean {
     return obj1 == obj2 ? JNI_TRUE : JNI_FALSE;
+  };
+
+  native_interface_.NewGlobalRef =
+      [](JNIEnv* /*env*/, jobject obj) -> jobject {
+    RetainJniReference(obj);
+    return obj;
+  };
+
+  native_interface_.DeleteGlobalRef =
+      [](JNIEnv* /*env*/, jobject obj) {
+    ReleaseJniReference(obj);
+  };
+
+  native_interface_.NewLocalRef =
+      [](JNIEnv* /*env*/, jobject obj) -> jobject {
+    if (obj != nullptr) {
+      RetainJniReference(obj);
+      RegisterLocalRef(obj);
+    }
+    return obj;
+  };
+
+  native_interface_.DeleteLocalRef =
+      [](JNIEnv* /*env*/, jobject obj) {
+    UnregisterLocalRef(obj);
+    ReleaseJniReference(obj);
+  };
+
+  native_interface_.NewWeakGlobalRef =
+      [](JNIEnv* /*env*/, jobject obj) -> jweak {
+    Trace("NewWeakGlobalRef");
+    RetainJniReference(obj);
+    return reinterpret_cast<jweak>(obj);
+  };
+
+  native_interface_.DeleteWeakGlobalRef =
+      [](JNIEnv* /*env*/, jweak ref) {
+    ReleaseJniReference(ref);
+  };
+
+  native_interface_.GetObjectRefType =
+      [](JNIEnv* /*env*/, jobject obj) -> jobjectRefType {
+    return obj ? JNILocalRefType : JNIInvalidRefType;
+  };
+
+}
+
+// Method invocation: the plain, static and non-virtual call families in
+// their fixed-width, va_list and jvalue-array forms.
+void VM::InitJNIEnvMethodInterface() {
+  native_interface_.GetStaticMethodID =
+      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jmethodID {
+    auto cls = ClassFromJClass(clazz);
+    if (TraceEnabled()) {
+      std::cout << "  [JNI] GetStaticMethodID for class "
+                << (cls ? cls->GetName() : "unknown") << ": "
+                << (name ? name : "null") << " " << (sig ? sig : "null")
+                << '\n';
+    }
+    return StoreMethodId(name, sig);
+  };
+
+  native_interface_.GetMethodID =
+      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jmethodID {
+    auto cls = ClassFromJClass(clazz);
+    if (TraceEnabled()) {
+      std::cout << "  [JNI] GetMethodID for class "
+                << (cls ? cls->GetName() : "unknown") << ": "
+                << (name ? name : "null") << " " << (sig ? sig : "null")
+                << '\n';
+    }
+    return StoreMethodId(name, sig);
   };
 
   native_interface_.FromReflectedMethod =
@@ -6023,21 +5968,10 @@ void VM::InitJNIFunctionTables() {
     return reinterpret_cast<jmethodID>(method);
   };
 
-  native_interface_.FromReflectedField =
-      [](JNIEnv* /*env*/, jobject field) -> jfieldID {
-    return reinterpret_cast<jfieldID>(field);
-  };
-
   native_interface_.ToReflectedMethod =
       [](JNIEnv* /*env*/, jclass /*cls*/, jmethodID methodID,
          jboolean /*isStatic*/) -> jobject {
     return reinterpret_cast<jobject>(methodID);
-  };
-
-  native_interface_.ToReflectedField =
-      [](JNIEnv* /*env*/, jclass /*cls*/, jfieldID fieldID,
-         jboolean /*isStatic*/) -> jobject {
-    return reinterpret_cast<jobject>(fieldID);
   };
 
   native_interface_.CallStaticVoidMethod = CallStaticVoidMethod;
@@ -6479,6 +6413,46 @@ void VM::InitJNIFunctionTables() {
       [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
          const jvalue* /*args*/) -> jdouble { return 0.0; };
 
+}
+
+// Field reads and writes, in the plain and static forms. Roblox resolves
+// some of these against synthetic field ids that carry the field name.
+void VM::InitJNIEnvFieldInterface() {
+  native_interface_.GetStaticFieldID =
+      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jfieldID {
+    auto cls = ClassFromJClass(clazz);
+    if (TraceEnabled()) {
+      std::cout << "  [JNI] GetStaticFieldID for class "
+                << (cls ? cls->GetName() : "unknown") << ": "
+                << (name ? name : "null") << " " << (sig ? sig : "null")
+                << '\n';
+    }
+    return StoreFieldId(name);
+  };
+
+  native_interface_.GetFieldID =
+      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jfieldID {
+    auto cls = ClassFromJClass(clazz);
+    if (TraceEnabled()) {
+      std::cout << "  [JNI] GetFieldID for class "
+                << (cls ? cls->GetName() : "unknown") << ": "
+                << (name ? name : "null") << " " << (sig ? sig : "null")
+                << '\n';
+    }
+    return StoreFieldId(name);
+  };
+
+  native_interface_.FromReflectedField =
+      [](JNIEnv* /*env*/, jobject field) -> jfieldID {
+    return reinterpret_cast<jfieldID>(field);
+  };
+
+  native_interface_.ToReflectedField =
+      [](JNIEnv* /*env*/, jclass /*cls*/, jfieldID fieldID,
+         jboolean /*isStatic*/) -> jobject {
+    return reinterpret_cast<jobject>(fieldID);
+  };
+
   native_interface_.GetStaticObjectField =
       [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID fieldID) -> jobject {
     if (TraceEnabled()) {
@@ -6636,48 +6610,37 @@ void VM::InitJNIFunctionTables() {
   native_interface_.SetDoubleField =
       [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/, jdouble /*val*/) {};
 
-  native_interface_.NewGlobalRef =
-      [](JNIEnv* /*env*/, jobject obj) -> jobject {
-    RetainJniReference(obj);
-    return obj;
+}
+
+// UTF-16 and modified-UTF-8 string construction, access and release.
+void VM::InitJNIEnvStringInterface() {
+  native_interface_.NewStringUTF =
+      [](JNIEnv* /*env*/, const char* utf) -> jstring {
+    return MakeString(utf);
   };
 
-  native_interface_.DeleteGlobalRef =
-      [](JNIEnv* /*env*/, jobject obj) {
-    ReleaseJniReference(obj);
+  native_interface_.GetStringUTFLength =
+      [](JNIEnv* /*env*/, jstring str) -> jsize {
+    return StringModifiedUtf8Length(str);
   };
 
-  native_interface_.NewLocalRef =
-      [](JNIEnv* /*env*/, jobject obj) -> jobject {
-    if (obj != nullptr) {
-      RetainJniReference(obj);
-      RegisterLocalRef(obj);
+  native_interface_.GetStringUTFChars =
+      [](JNIEnv* /*env*/, jstring str, jboolean* isCopy) -> const char* {
+    if (isCopy) *isCopy = JNI_FALSE;
+    const char* result = StringChars(str);
+    if (StringTraceEnabled()) {
+      const std::size_t length =
+          static_cast<std::size_t>(StringModifiedUtf8Length(str));
+      fprintf(stderr,
+              "  [JNI] GetStringUTFChars str=%p chars=%p len=%zu\n",
+              static_cast<void*>(str), static_cast<const void*>(result),
+              length);
     }
-    return obj;
+    return result;
   };
 
-  native_interface_.DeleteLocalRef =
-      [](JNIEnv* /*env*/, jobject obj) {
-    UnregisterLocalRef(obj);
-    ReleaseJniReference(obj);
-  };
-
-  native_interface_.NewWeakGlobalRef =
-      [](JNIEnv* /*env*/, jobject obj) -> jweak {
-    Trace("NewWeakGlobalRef");
-    RetainJniReference(obj);
-    return reinterpret_cast<jweak>(obj);
-  };
-
-  native_interface_.DeleteWeakGlobalRef =
-      [](JNIEnv* /*env*/, jweak ref) {
-    ReleaseJniReference(ref);
-  };
-
-  native_interface_.GetObjectRefType =
-      [](JNIEnv* /*env*/, jobject obj) -> jobjectRefType {
-    return obj ? JNILocalRefType : JNIInvalidRefType;
-  };
+  native_interface_.ReleaseStringUTFChars =
+      [](JNIEnv* /*env*/, jstring /*str*/, const char* /*chars*/) {};
 
   native_interface_.NewString =
       [](JNIEnv* /*env*/, const jchar* unicode, jsize len) -> jstring {
@@ -6708,6 +6671,11 @@ void VM::InitJNIFunctionTables() {
     CopyStringRegion(str, start, len, buf);
   };
 
+}
+
+// Array construction and access. Primitive arrays are backed by the
+// PseudoArray the engine handed us, not by guest memory.
+void VM::InitJNIEnvArrayInterface() {
   native_interface_.GetArrayLength =
       [](JNIEnv* /*env*/, jarray array) -> jsize {
     PseudoArray* pseudo_array = ArrayFromRef(array);
@@ -6864,6 +6832,79 @@ void VM::InitJNIFunctionTables() {
   native_interface_.ReleasePrimitiveArrayCritical =
       [](JNIEnv* /*env*/, jarray /*array*/, void* /*carray*/, jint /*mode*/) {};
 
+}
+
+// Native method registration, direct byte buffers, monitors, and the
+// back-pointer to the owning VM.
+void VM::InitJNIEnvMiscInterface() {
+	  native_interface_.RegisterNatives =
+	      [](JNIEnv* /*env*/, jclass clazz, const JNINativeMethod* methods, jint nMethods) -> jint {
+	    auto cls = ClassFromJClass(clazz);
+	    if (methods == nullptr || nMethods <= 0) {
+	      return JNI_OK;
+	    }
+	    for (int i = 0; i < nMethods; ++i) {
+	      const char* name = methods[i].name;
+	      if (name == nullptr) {
+	        continue;
+	      }
+	      if (std::strcmp(name, "onStartNative") == 0) {
+	        mocktail_gameactivity_on_start_native = methods[i].fnPtr;
+	      } else if (std::strcmp(name, "onResumeNative") == 0) {
+	        mocktail_gameactivity_on_resume_native = methods[i].fnPtr;
+	      } else if (std::strcmp(name, "onSurfaceCreatedNative") == 0) {
+	        mocktail_gameactivity_on_surface_created_native = methods[i].fnPtr;
+	      } else if (std::strcmp(name, "onSurfaceChangedNative") == 0) {
+	        mocktail_gameactivity_on_surface_changed_native = methods[i].fnPtr;
+	      } else if (std::strcmp(name, "onSurfaceRedrawNeededNative") == 0) {
+	        mocktail_gameactivity_on_surface_redraw_needed_native = methods[i].fnPtr;
+	      } else if (std::strcmp(name, "onTrimMemoryNative") == 0) {
+	        mocktail_gameactivity_on_trim_memory_native = methods[i].fnPtr;
+	      }
+              if (cls != nullptr &&
+                  cls->GetName() ==
+                      "org/webrtc/voiceengine/WebRtcAudioManager") {
+                if (VM* vm = CurrentVM()) {
+                  vm->RegisterWebRtcAudioManagerNative(
+                      methods[i].name, methods[i].signature, methods[i].fnPtr);
+                }
+              }
+              if (cls != nullptr &&
+                  cls->GetName() ==
+                      "org/webrtc/voiceengine/WebRtcAudioRecord") {
+                VM *vm = CurrentVM();
+                if (vm != nullptr) {
+                  vm->RegisterWebRtcAudioRecordNative(
+                      methods[i].name, methods[i].signature, methods[i].fnPtr);
+                }
+              }
+              if (cls != nullptr &&
+                  cls->GetName() == "org/webrtc/voiceengine/WebRtcAudioTrack") {
+                VM *vm = CurrentVM();
+                if (vm != nullptr) {
+                  vm->RegisterWebRtcAudioTrackNative(
+                      methods[i].name, methods[i].signature, methods[i].fnPtr);
+                }
+              }
+            }
+	    if (TraceEnabled()) {
+	      std::cout << "  [JNI] RegisterNatives for class "
+	                << (cls ? cls->GetName() : "unknown") << " ("
+                << nMethods << " methods):\n";
+      for (int i = 0; i < nMethods; ++i) {
+        std::cout << "    " << methods[i].name << " "
+                  << methods[i].signature << " -> " << methods[i].fnPtr
+                  << '\n';
+      }
+    }
+    return JNI_OK;
+  };
+
+  native_interface_.UnregisterNatives =
+      [](JNIEnv* /*env*/, jclass /*clazz*/) -> jint {
+    return JNI_OK;
+  };
+
   native_interface_.NewDirectByteBuffer = [](JNIEnv * /*env*/, void *address,
                                              jlong capacity) -> jobject {
     if (address == nullptr || capacity < 0) {
@@ -6910,6 +6951,21 @@ void VM::InitJNIFunctionTables() {
     }
     return JNI_OK;
   };
+
+}
+
+// Installs every JNI entry point the engine can reach, grouped by the
+// interface it belongs to, then points JNIEnv* at the assembled table.
+void VM::InitJNIFunctionTables() {
+  InitJavaVMInterface();
+  InitJNIEnvVersionAndClassInterface();
+  InitJNIEnvExceptionInterface();
+  InitJNIEnvObjectReferenceInterface();
+  InitJNIEnvMethodInterface();
+  InitJNIEnvFieldInterface();
+  InitJNIEnvStringInterface();
+  InitJNIEnvArrayInterface();
+  InitJNIEnvMiscInterface();
 
   jni_env_ = &jni_env_storage_;
   jni_env_->functions = &native_interface_;

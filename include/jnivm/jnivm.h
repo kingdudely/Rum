@@ -584,6 +584,15 @@ private:
       roblox_experience_lifecycle_binding_;
 
   void InitJNIFunctionTables();
+  void InitJavaVMInterface();
+  void InitJNIEnvVersionAndClassInterface();
+  void InitJNIEnvExceptionInterface();
+  void InitJNIEnvObjectReferenceInterface();
+  void InitJNIEnvMethodInterface();
+  void InitJNIEnvFieldInterface();
+  void InitJNIEnvStringInterface();
+  void InitJNIEnvArrayInterface();
+  void InitJNIEnvMiscInterface();
 };
 
 } // namespace jnivm
