@@ -3993,174 +3993,28 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
   return nullptr;
 }
 
-// Every symbol the guest linker expects the Android compatibility layer to
-// export. The list is this long because guest layouts such as pthread and FILE
-// have to come from the Bionic shims rather than from glibc. Run resolves each
-// name against the stubs, the host GL library and the window, then registers
-// whichever answer it got.
+// The names libroblox.so does not import dynamically, so they cannot come from
+// RegisterUndefinedElfImports and this table is the only thing that registers
+// them. That is the compatibility surface Mocktail exists to provide: guest
+// layouts such as pthread and FILE that have to come from the Bionic shims
+// rather than from glibc, plus the Android exports the synthetic libraries
+// publish. Run resolves each name against the stubs, the host GL library and
+// the window, then registers whichever answer it got.
+//
+// Every other name the guest needs is resolved from its own .dynsym, which is
+// why this list is short and cannot drift from the binary.
 constexpr const char* kSymbolsToRegister[] = {
     // Symbols exported by the Android compatibility stubs.
-    "AAsset_close",
-    "AAsset_getBuffer",
-    "AAsset_getLength",
     "AAsset_getLength64",
     "AAsset_getRemainingLength",
     "AAsset_getRemainingLength64",
-    "AAssetManager_fromJava",
-    "AAssetManager_open",
-    "AAsset_openFileDescriptor",
     "AAsset_openFileDescriptor64",
     "AAsset_read",
     "AAsset_seek",
     "AAsset_seek64",
-    "AConfiguration_delete",
-    "AConfiguration_fromAssetManager",
-    "AConfiguration_getCountry",
-    "AConfiguration_getLanguage",
-    "AConfiguration_getNavHidden",
-    "AConfiguration_getScreenHeightDp",
-    "AConfiguration_getScreenSize",
-    "AConfiguration_getScreenWidthDp",
-    "AConfiguration_new",
     "alCreateEngine",
-    "ALooper_acquire",
-    "ALooper_addFd",
-    "ALooper_forThread",
-    "ALooper_pollOnce",
-    "ALooper_prepare",
-    "ALooper_release",
-    "ALooper_removeFd",
-    "AMediaCodec_configure",
-    "AMediaCodec_createDecoderByType",
-    "AMediaCodec_createEncoderByType",
-    "AMediaCodec_delete",
-    "AMediaCodec_dequeueInputBuffer",
-    "AMediaCodec_dequeueOutputBuffer",
-    "AMediaCodec_flush",
-    "AMediaCodec_getInputBuffer",
-    "AMediaCodec_getOutputBuffer",
-    "AMediaCodec_getOutputFormat",
-    "AMediaCodec_queueInputBuffer",
-    "AMediaCodec_releaseOutputBuffer",
-    "AMediaCodec_start",
-    "AMediaCodec_stop",
-    "AMediaFormat_delete",
-    "AMediaFormat_getBuffer",
-    "AMediaFormat_getInt32",
-    "AMEDIAFORMAT_KEY_BIT_RATE",
-    "AMEDIAFORMAT_KEY_CHANNEL_COUNT",
-    "AMEDIAFORMAT_KEY_COLOR_FORMAT",
-    "AMEDIAFORMAT_KEY_FRAME_RATE",
-    "AMEDIAFORMAT_KEY_HEIGHT",
-    "AMEDIAFORMAT_KEY_I_FRAME_INTERVAL",
-    "AMEDIAFORMAT_KEY_MIME",
-    "AMEDIAFORMAT_KEY_SAMPLE_RATE",
-    "AMEDIAFORMAT_KEY_STRIDE",
-    "AMEDIAFORMAT_KEY_WIDTH",
-    "AMediaFormat_new",
-    "AMediaFormat_setBuffer",
-    "AMediaFormat_setFloat",
-    "AMediaFormat_setInt32",
-    "AMediaFormat_setString",
-    "AMediaFormat_toString",
-    "ANativeWindow_acquire",
-    "ANativeWindow_fromSurface",
-    "ANativeWindow_getHeight",
-    "ANativeWindow_getWidth",
-    "ANativeWindow_release",
     "eglBindAPI",
-    "eglChooseConfig",
-    "eglCreateContext",
-    "eglCreatePbufferSurface",
-    "eglCreateWindowSurface",
-    "eglDestroyContext",
-    "eglDestroySurface",
-    "eglGetConfigAttrib",
-    "eglGetCurrentContext",
-    "eglGetDisplay",
-    "eglGetError",
-    "eglGetProcAddress",
-    "eglInitialize",
-    "eglMakeCurrent",
     "eglQueryString",
-    "eglQuerySurface",
-    "eglSwapBuffers",
-    "eglSwapInterval",
-    "eglTerminate",
-    "glActiveTexture",
-    "glAttachShader",
-    "glBindAttribLocation",
-    "glBindBuffer",
-    "glBindFramebuffer",
-    "glBindRenderbuffer",
-    "glBindTexture",
-    "glBlendFunc",
-    "glBlendFuncSeparate",
-    "glBufferData",
-    "glBufferSubData",
-    "glCheckFramebufferStatus",
-    "glClear",
-    "glClearColor",
-    "glClearDepthf",
-    "glClearStencil",
-    "glColorMask",
-    "glCompileShader",
-    "glCompressedTexImage2D",
-    "glCompressedTexSubImage2D",
-    "glCopyTexSubImage2D",
-    "glCreateProgram",
-    "glCreateShader",
-    "glCullFace",
-    "glDeleteBuffers",
-    "glDeleteFramebuffers",
-    "glDeleteProgram",
-    "glDeleteRenderbuffers",
-    "glDeleteShader",
-    "glDeleteTextures",
-    "glDepthFunc",
-    "glDepthMask",
-    "glDisable",
-    "glDisableVertexAttribArray",
-    "glDrawArrays",
-    "glDrawElements",
-    "glEnable",
-    "glEnableVertexAttribArray",
-    "glFramebufferRenderbuffer",
-    "glFramebufferTexture2D",
-    "glGenBuffers",
-    "glGenFramebuffers",
-    "glGenRenderbuffers",
-    "glGenTextures",
-    "glGenerateMipmap",
-    "glGetActiveUniform",
-    "glGetError",
-    "glGetIntegerv",
-    "glGetProgramInfoLog",
-    "glGetProgramiv",
-    "glGetShaderInfoLog",
-    "glGetShaderiv",
-    "glGetString",
-    "glGetUniformLocation",
-    "glLinkProgram",
-    "glPixelStorei",
-    "glPolygonOffset",
-    "glReadPixels",
-    "glReleaseShaderCompiler",
-    "glRenderbufferStorage",
-    "glScissor",
-    "glShaderSource",
-    "glStencilFunc",
-    "glStencilMask",
-    "glStencilOp",
-    "glTexImage2D",
-    "glTexParameterf",
-    "glTexParameterfv",
-    "glTexParameteri",
-    "glTexSubImage2D",
-    "glUniform1i",
-    "glUseProgram",
-    "glVertexAttribPointer",
-    "glViewport",
     "vkCreateAndroidSurfaceKHR",
     "vkCreateInstance",
     "vkDestroySurfaceKHR",
@@ -4168,77 +4022,9 @@ constexpr const char* kSymbolsToRegister[] = {
     "vkEnumerateInstanceLayerProperties",
     "vkGetDeviceProcAddr",
     "vkGetInstanceProcAddr",
-    "__android_log_assert",
-    "__android_log_buf_write",
-    "__android_log_print",
-    "__android_log_write",
-    "__assert",
-    "__assert2",
-    "__ctype_get_mb_cur_max",
-    "__errno",
-    "__FD_CLR_chk",
-    "__FD_ISSET_chk",
-    "__FD_SET_chk",
-    "fread",
-    "__fread_chk",
-    "fwrite",
-    "__fwrite_chk",
-    "fflush",
-    "open",
-    "fopen",
-    "access",
-    "stat",
-    "lstat",
-    "statvfs",
     "statfs",
-    "mkdir",
-    "opendir",
-    "rename",
-    "unlink",
-    "rmdir",
-    "realpath",
-    "readlink",
-    "__gnu_strerror_r",
-    "__open_2",
     "__poll_chk",
-    "pthread_attr_destroy",
-    "pthread_attr_getstack",
-    "pthread_attr_init",
-    "pthread_attr_setdetachstate",
-    "pthread_attr_setschedparam",
-    "pthread_attr_setstacksize",
-    "pthread_condattr_destroy",
-    "pthread_condattr_init",
-    "pthread_condattr_setclock",
-    "pthread_cond_broadcast",
-    "pthread_cond_destroy",
-    "pthread_cond_init",
-    "pthread_cond_signal",
-    "pthread_cond_timedwait",
-    "pthread_cond_wait",
-    "pthread_create",
-    "pthread_getattr_np",
-    "pthread_mutexattr_destroy",
-    "pthread_mutexattr_init",
-    "pthread_mutexattr_settype",
-    "pthread_mutex_destroy",
-    "pthread_mutex_init",
-    "pthread_mutex_lock",
-    "pthread_mutex_trylock",
-    "pthread_mutex_unlock",
-    "pthread_rwlock_destroy",
-    "pthread_rwlock_init",
-    "pthread_rwlock_rdlock",
-    "pthread_rwlock_unlock",
-    "pthread_rwlock_wrlock",
-    "__read_chk",
-    "__readlink_chk",
-    "__sendto_chk",
-    "__sF",
     // stdio stream pointers — Bionic clients access these as FILE* globals
-    "stdin",
-    "stdout",
-    "stderr",
     "slCreateEngine",
     "SL_IID_ANDROIDCONFIGURATION",
     "SL_IID_ANDROIDSIMPLEBUFFERQUEUE",
@@ -4248,190 +4034,55 @@ constexpr const char* kSymbolsToRegister[] = {
     "SL_IID_RECORD",
     "SL_IID_VOLUME",
     "mocktail_recover_stack_chk_fail",
-    "__stack_chk_fail",
-    "__stack_chk_guard",
-    "__strchr_chk",
-    "__strlen_chk",
-    "__strncpy_chk2",
-    "sysconf",
-    "__system_property_get",
-    "__write_chk",
 
     // pthread functions whose host ABI is already compatible.
-    "pthread_once",
-    "pthread_self",
-    "pthread_equal",
-    "pthread_join",
-    "pthread_detach",
     "pthread_kill",
-    "pthread_exit",
-    "pthread_getschedparam",
-    "pthread_key_create",
-    "pthread_key_delete",
-    "pthread_getspecific",
-    "pthread_setspecific",
-    "pthread_sigmask",
-    "pthread_setname_np",
 
     // Standard C library functions resolved from host libc.
-    "strcmp",
-    "strncmp",
-    "strcpy",
-    "strncpy",
-    "strlen",
-    "strcat",
-    "strncat",
-    "strchr",
-    "strrchr",
-    "strstr",
-    "strtol",
-    "strtoul",
-    "strtod",
-    "strtof",
-    "atoi",
-    "atof",
-    "atol",
-    "memcpy",
-    "memmove",
-    "memset",
-    "memcmp",
-    "memchr",
     "malloc",
     "calloc",
     "realloc",
     "free",
-    "abort",
-    "exit",
-    "getenv",
     "setenv",
     "putenv",
     "sprintf",
-    "snprintf",
-    "sscanf",
-    "printf",
-    "fprintf",
     "vprintf",
-    "vfprintf",
     "vsprintf",
-    "vsnprintf",
-    "fclose",
-    "feof",
-    "ferror",
-    "fgets",
     "fgetc",
-    "fputc",
-    "fputs",
-    "fseek",
-    "ftell",
     "rewind",
-    "close",
-    "read",
-    "write",
-    "lseek",
     "lseek64",
-    "pread",
-    "pwrite",
-    "pread64",
     "pwrite64",
-    "getcwd",
     "chdir",
     "dup",
     "dup2",
-    "pipe",
-    "socket",
-    "connect",
-    "bind",
-    "listen",
-    "accept",
-    "setsockopt",
-    "getsockopt",
     "send",
     "recv",
-    "sendto",
-    "recvfrom",
-    "getaddrinfo",
-    "freeaddrinfo",
-    "getnameinfo",
-    "inet_ntop",
-    "inet_pton",
     "htons",
     "htonl",
     "ntohs",
     "ntohl",
-    "clock_gettime",
     "clock_getres",
-    "gettimeofday",
-    "nanosleep",
     "usleep",
     "sleep",
-    "time",
-    "localtime",
-    "gmtime",
-    "mktime",
-    "strftime",
-    "mmap",
-    "munmap",
-    "mprotect",
-    "msync",
-    "mlock",
     "munlock",
-    "madvise",
-    "sigaction",
-    "signal",
-    "raise",
     "kill",
-    "getpid",
-    "getuid",
-    "geteuid",
     "getgid",
     "getegid",
-    "waitpid",
-    "fork",
-    "execve",
-    "dlopen",
-    "dlclose",
-    "dlsym",
-    "dlerror",
-    "prctl",
-    "ioctl",
-    "fcntl",
     "isatty",
     "isalpha",
     "isdigit",
-    "isspace",
     "isupper",
     "islower",
     "toupper",
-    "tolower",
-    "rand",
-    "srand",
     "rand_r",
-    "qsort",
-    "bsearch",
     "abs",
     "labs",
     "llabs",
     "ceil",
     "floor",
-    "round",
     "fabs",
-    "pow",
     "sqrt",
-    "log",
-    "log2",
-    "log10",
-    "exp",
-    "sin",
-    "cos",
-    "tan",
-    "asin",
-    "acos",
-    "atan",
-    "atan2",
-    "strerror",
     "perror",
-    "readdir",
-    "closedir",
     "pthread_barrier_init",
     "pthread_barrier_destroy",
     "pthread_barrier_wait",
@@ -4441,6 +4092,7 @@ constexpr const char* kSymbolsToRegister[] = {
     "pthread_spin_trylock",
     "pthread_spin_unlock",
 };
+
 
 // The Vulkan entry points the adapter can stand in for. Only addresses the
 // adapter itself owns are registered, so anything that resolves into the
@@ -6220,7 +5872,48 @@ struct GlSymbolStats {
   int gl_from_stub = 0;
   int gl_from_host = 0;
   int gl_unresolved = 0;
+
+  // Folds another pass's GL breakdown in. registered/total_symbols stay
+  // per-pass, because each pass reports its own total on its own log line.
+  void MergeGlResolution(const GlSymbolStats& other) {
+    gl_symbol_count += other.gl_symbol_count;
+    gl_from_window += other.gl_from_window;
+    gl_from_real_gles += other.gl_from_real_gles;
+    gl_from_stub += other.gl_from_stub;
+    gl_from_host += other.gl_from_host;
+    gl_unresolved += other.gl_unresolved;
+  }
 };
+
+// One GL name's contribution to the audit. Shared by both resolution passes so
+// the totals mean the same thing whichever pass supplied the address.
+void TallyGlSymbol(const char* name, SymbolResolveSource source, void* address,
+                   GlSymbolStats* stats) {
+  if (!IsGlSymbol(name)) {
+    return;
+  }
+  ++stats->gl_symbol_count;
+  if (address == nullptr) {
+    ++stats->gl_unresolved;
+  }
+  switch (source) {
+    case SymbolResolveSource::kWindow:
+      ++stats->gl_from_window;
+      break;
+    case SymbolResolveSource::kRealGles:
+      ++stats->gl_from_real_gles;
+      break;
+    case SymbolResolveSource::kStub:
+      ++stats->gl_from_stub;
+      break;
+    case SymbolResolveSource::kHost:
+      ++stats->gl_from_host;
+      break;
+    case SymbolResolveSource::kMissing:
+    default:
+      break;
+  }
+}
 
 // Opens every Bionic library the guest can import from and keeps the
 // handles. EGL and Vulkan prefer our own adapter over whatever the host
@@ -6282,53 +5975,18 @@ BionicStubPreload PreloadBionicStubs(
 GlSymbolStats RegisterEngineSymbols(bool has_window,
                                      void* real_gles_handle,
                                      const std::vector<void*>& stub_handles) {
-  int registered = 0;
-  int total_symbols = 0;
-  int gl_symbol_count = 0;
-  int gl_from_window = 0;
-  int gl_from_real_gles = 0;
-  int gl_from_stub = 0;
-  int gl_from_host = 0;
-  int gl_unresolved = 0;
+  GlSymbolStats stats;
   for (const char* sym : kSymbolsToRegister) {
-    ++total_symbols;
+    ++stats.total_symbols;
     auto result = ResolveSymbolForBionic(sym, has_window, real_gles_handle,
                                          stub_handles);
-    void* addr = result.address;
-    const bool is_gl_symbol = IsGlSymbol(sym);
-    if (addr == nullptr && is_gl_symbol) {
-      ++gl_unresolved;
-    }
-    if (is_gl_symbol) {
-      ++gl_symbol_count;
-      switch (result.source) {
-        case SymbolResolveSource::kWindow:
-          ++gl_from_window;
-          break;
-        case SymbolResolveSource::kRealGles:
-          ++gl_from_real_gles;
-          break;
-        case SymbolResolveSource::kStub:
-          ++gl_from_stub;
-          break;
-        case SymbolResolveSource::kHost:
-          ++gl_from_host;
-          break;
-        case SymbolResolveSource::kMissing:
-        default:
-          break;
-      }
-    }
-
-    if (addr) {
-      linker::RegisterSymbol(sym, addr);
-      ++registered;
+    TallyGlSymbol(sym, result.source, result.address, &stats);
+    if (result.address != nullptr) {
+      linker::RegisterSymbol(sym, result.address);
+      ++stats.registered;
     }
   }
-  return GlSymbolStats{registered,     total_symbols,
-                       gl_symbol_count, gl_from_window,
-                       gl_from_real_gles, gl_from_stub,
-                       gl_from_host,  gl_unresolved};
+  return stats;
 }
 
 // The Vulkan adapter exposes the loader entry points under both
@@ -6358,9 +6016,13 @@ void RegisterVulkanAdapterExports(void* bionic_vulkan_adapter_handle) {
 // list that drifts, walk its .dynsym once and let the same resolver bind
 // anything it recognises. The file is mapped read-only and never run, and
 // the map is released before returning.
-void RegisterUndefinedElfImports(const std::string& library_path,
-                                 bool has_window, void* real_gles_handle,
-                                 const std::vector<void*>& stub_handles) {
+GlSymbolStats RegisterUndefinedElfImports(const std::string& library_path,
+                                          bool has_window,
+                                          void* real_gles_handle,
+                                          const std::vector<void*>& stub_handles) {
+  // The guest's GL imports arrive through this pass rather than the table, so
+  // they are counted here for the shared real-graphics audit.
+  GlSymbolStats stats;
   int fd = ::open(library_path.c_str(), O_RDONLY);
   if (fd >= 0) {
     struct stat st;
@@ -6393,6 +6055,7 @@ void RegisterUndefinedElfImports(const std::string& library_path,
             auto result = ResolveSymbolForBionic(name, has_window,
                                                  real_gles_handle,
                                                  stub_handles);
+            TallyGlSymbol(name, result.source, result.address, &stats);
             if (result.address != nullptr) {
               linker::RegisterSymbol(name, result.address);
               ++auto_registered;
@@ -6407,6 +6070,7 @@ void RegisterUndefinedElfImports(const std::string& library_path,
     }
     ::close(fd);
   }
+  return stats;
 }
 
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
@@ -6587,10 +6251,14 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     real_gles_handle = OpenRealGlesLibrary();
   }
 
-  const GlSymbolStats gl_stats = RegisterEngineSymbols(
+  GlSymbolStats gl_stats = RegisterEngineSymbols(
       has_window, real_gles_handle, stubs.handles);
   RegisterVulkanAdapterExports(stubs.vulkan_adapter);
   RegisterBionicNetworkAndPthreadSymbols();
+  // Runs before the audit below so the guest's own GL imports are counted in
+  // it. Registration order is unchanged: table, then Bionic, then ELF.
+  gl_stats.MergeGlResolution(RegisterUndefinedElfImports(
+      library_path, has_window, real_gles_handle, stubs.handles));
   std::cout << "  [linker] Registered " << gl_stats.registered << " / "
             << gl_stats.total_symbols << " known symbols.\n";
   std::cout << "  [linker] GL symbol resolution: total="
@@ -6622,9 +6290,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       return EXIT_FAILURE;
     }
   }
-
-  RegisterUndefinedElfImports(library_path, has_window, real_gles_handle,
-                             stubs.handles);
 
   // Load synthetic libraries only after the import map is complete.
   linker::RegisterBionicPthreadKeyRuntimeForLibc();
