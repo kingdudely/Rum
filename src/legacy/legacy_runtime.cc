@@ -4892,6 +4892,117 @@ bool InitializeHostWindow(
   return has_window;
 }
 
+// The readiness evidence Run accumulates while it runs, so the final verdict can be
+// stated without re-deriving anything. Each flag is cleared by the step that failed;
+// the ones with no failure path start out set.
+struct RunCompletionState {
+  bool real_frame_presented = false;
+  bool lifecycle_shutdown_completed = false;
+  bool game_surface_events_completed = true;
+  bool input_shutdown_completed = true;
+  bool resize_readiness_completed = true;
+};
+
+// Stops resize readiness and shuts audio down ahead of the SDL teardown, recording
+// whether both completed. Audio that refuses to release the device fails the run
+// rather than tearing SDL down underneath it.
+void FinishWindowShutdown(mocktail::legacy::RuntimeDependencies& dependencies,
+                          RunCompletionState* completion) {
+  const mocktail::Status resize_stop_status =
+      completion->lifecycle_shutdown_completed
+          ? mocktail::window::StopResizeReadiness()
+          : mocktail::window::ResizeReadinessCompletionStatus();
+  const mocktail::Status resize_completion_status =
+      mocktail::window::ResizeReadinessCompletionStatus();
+  completion->resize_readiness_completed =
+      resize_stop_status.ok() && resize_completion_status.ok();
+  if (!completion->resize_readiness_completed) {
+    const mocktail::Status& failure =
+        resize_stop_status.ok() ? resize_completion_status
+                                : resize_stop_status;
+    std::cerr << "[FATAL] Real resize readiness failed: "
+              << failure.message() << '\n';
+  }
+  const mocktail::Status audio_shutdown_status =
+      dependencies.ShutdownBeforePlatform();
+  if (!audio_shutdown_status.ok()) {
+    std::cerr << "  [main] audio shutdown blocked SDL teardown: "
+              << audio_shutdown_status.message() << '\n';
+    completion->lifecycle_shutdown_completed = false;
+  } else {
+    mocktail::window::Shutdown();
+  }
+}
+
+// Holds a headless run open for MOCKTAIL_KEEPALIVE_MS, or indefinitely under
+// MOCKTAIL_KEEPALIVE, so the engine can be inspected without a window. Under
+// MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP or MOCKTAIL_HEADLESS_KEEPALIVE_PUMP the wait is
+// chunked, so main-thread work still runs while it drains.
+void RunHeadlessKeepalive() {
+  int keepalive_ms = GetEnvInt("MOCKTAIL_KEEPALIVE_MS", 0);
+  if (keepalive_ms > 0) {
+    std::cout << "  [main] headless keepalive: " << keepalive_ms << " ms\n"
+              << std::flush;
+    if (IsEnabled("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP") ||
+        IsEnabled("MOCKTAIL_HEADLESS_KEEPALIVE_PUMP")) {
+      int waited_ms = 0;
+      constexpr int kHeadlessKeepalivePumpIntervalMs = 10;
+      while (waited_ms < keepalive_ms) {
+        RunPendingMainThreadTaskSchedulerForeground();
+        PumpRobloxMainThreadMessagesOnce();
+        const int chunk_ms = std::min(kHeadlessKeepalivePumpIntervalMs,
+                                      keepalive_ms - waited_ms);
+        usleep(static_cast<useconds_t>(chunk_ms) * 1000);
+        waited_ms += chunk_ms;
+      }
+    } else {
+      usleep(static_cast<useconds_t>(keepalive_ms) * 1000);
+    }
+    std::cout << "  [main] headless keepalive returned\n" << std::flush;
+  } else if (IsEnabled("MOCKTAIL_KEEPALIVE")) {
+    std::cout << "  [main] headless keepalive: forever\n" << std::flush;
+    while (true) {
+      pause();
+    }
+  }
+}
+
+// Reports whether the run reached what it claims to have reached: a real presented
+// frame, a completed Roblox lifecycle shutdown, and no rejected surface, input or
+// resize step. Reports the first failure and returns false.
+bool ValidateRunCompletion(bool is_headless, const RunCompletionState& completion) {
+  if (is_headless) {
+    std::cerr << "[FATAL] Headless LuaApp readiness evidence is not wired into "
+                 "the supported runtime yet.\n";
+    return false;
+  }
+  if (!completion.real_frame_presented) {
+    std::cerr << "[FATAL] Windowed runtime exited without a real presented "
+                 "frame.\n";
+    return false;
+  }
+  if (!completion.lifecycle_shutdown_completed) {
+    std::cerr << "[FATAL] Windowed runtime exited without completing the "
+                 "Roblox lifecycle shutdown.\n";
+    return false;
+  }
+  if (!completion.game_surface_events_completed) {
+    std::cerr << "[FATAL] Windowed runtime rejected a typed GAME surface "
+                 "lifecycle event.\n";
+    return false;
+  }
+  if (!completion.input_shutdown_completed) {
+    std::cerr << "[FATAL] Windowed runtime exited without completing typed input shutdown.\n";
+    return false;
+  }
+  if (!completion.resize_readiness_completed) {
+    std::cerr << "[FATAL] Windowed runtime exited without completing the real "
+                 "resize/rebind readiness sequence.\n";
+    return false;
+  }
+  return true;
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -6566,24 +6677,22 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
             << "  Bootstrap sequence returned; validating readiness.\n"
             << "======================================================\n";
 
-  bool real_frame_presented = false;
-  bool lifecycle_shutdown_completed = false;
-  bool game_surface_events_completed = true;
-  bool input_shutdown_completed = window_input_runtime == nullptr;
-  bool resize_readiness_completed = true;
+  RunCompletionState completion;
+  completion.input_shutdown_completed = window_input_runtime == nullptr;
   if (mocktail::window::IsInitialised()) {
     std::cout << "  [main] entering SDL event loop (close the window to quit)\n"
               << std::flush;
-    RunMainLoop(&game_surface_events_completed, game_session_runtime.get(),
+    RunMainLoop(&completion.game_surface_events_completed, game_session_runtime.get(),
                 experience_composition.get());
     std::cout << "  [main] window closed, shutting down\n" << std::flush;
-    real_frame_presented = mocktail::window::HasPresentedFrame();
+    completion.real_frame_presented = mocktail::window::HasPresentedFrame();
     if (text_input_bridge != nullptr) {
-      input_shutdown_completed = text_input_bridge->Shutdown().ok();
+      completion.input_shutdown_completed = text_input_bridge->Shutdown().ok();
     }
     if (window_input_runtime != nullptr) {
-      input_shutdown_completed = window_input_runtime->Shutdown().ok() &&
-                                 input_shutdown_completed;
+      completion.input_shutdown_completed =
+          window_input_runtime->Shutdown().ok() &&
+          completion.input_shutdown_completed;
     }
     if (eager_call_protocol_bridge != nullptr) {
       (void)eager_call_protocol_bridge->Shutdown();
@@ -6605,7 +6714,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       const mocktail::Status experience_shutdown =
           experience_composition->Shutdown();
       if (experience_destroyed_app) {
-        lifecycle_shutdown_completed = experience_shutdown.ok();
+        completion.lifecycle_shutdown_completed = experience_shutdown.ok();
       }
       if (!experience_shutdown.ok()) {
         std::cerr << "  [main] ExperienceProtocol shutdown failed: "
@@ -6615,7 +6724,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     if (game_session_runtime != nullptr) {
       const mocktail::runtime::GameSessionUpdateResult shutdown_result =
           game_session_runtime->Shutdown();
-      lifecycle_shutdown_completed =
+      completion.lifecycle_shutdown_completed =
           shutdown_result.ok() &&
           shutdown_result.state == mocktail::runtime::GameSessionState::kStopped;
       std::cout << "  [main] Roblox lifecycle shutdown: "
@@ -6637,7 +6746,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         const mocktail::runtime::RobloxAppShutdownResult shutdown_result =
             lifecycle.Shutdown(shutdown_env,
                                g_native_gl_class_for_main_thread);
-        lifecycle_shutdown_completed = shutdown_result.ok();
+        completion.lifecycle_shutdown_completed = shutdown_result.ok();
         std::cout << "  [main] Roblox lifecycle shutdown: "
                   << mocktail::runtime::RobloxAppShutdownStatusName(
                          shutdown_result.status)
@@ -6651,88 +6760,13 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                   << std::flush;
       }
     }
-    const mocktail::Status resize_stop_status =
-        lifecycle_shutdown_completed
-            ? mocktail::window::StopResizeReadiness()
-            : mocktail::window::ResizeReadinessCompletionStatus();
-    const mocktail::Status resize_completion_status =
-        mocktail::window::ResizeReadinessCompletionStatus();
-    resize_readiness_completed =
-        resize_stop_status.ok() && resize_completion_status.ok();
-    if (!resize_readiness_completed) {
-      const mocktail::Status& failure =
-          resize_stop_status.ok() ? resize_completion_status
-                                  : resize_stop_status;
-      std::cerr << "[FATAL] Real resize readiness failed: "
-                << failure.message() << '\n';
-    }
-    const mocktail::Status audio_shutdown_status =
-        dependencies.ShutdownBeforePlatform();
-    if (!audio_shutdown_status.ok()) {
-      std::cerr << "  [main] audio shutdown blocked SDL teardown: "
-                << audio_shutdown_status.message() << '\n';
-      lifecycle_shutdown_completed = false;
-    } else {
-      mocktail::window::Shutdown();
-    }
+    FinishWindowShutdown(dependencies, &completion);
   } else {
-    int keepalive_ms = GetEnvInt("MOCKTAIL_KEEPALIVE_MS", 0);
-    if (keepalive_ms > 0) {
-      std::cout << "  [main] headless keepalive: " << keepalive_ms << " ms\n"
-                << std::flush;
-      if (IsEnabled("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP") ||
-          IsEnabled("MOCKTAIL_HEADLESS_KEEPALIVE_PUMP")) {
-        int waited_ms = 0;
-        constexpr int kHeadlessKeepalivePumpIntervalMs = 10;
-        while (waited_ms < keepalive_ms) {
-          RunPendingMainThreadTaskSchedulerForeground();
-          PumpRobloxMainThreadMessagesOnce();
-          const int chunk_ms = std::min(kHeadlessKeepalivePumpIntervalMs,
-                                        keepalive_ms - waited_ms);
-          usleep(static_cast<useconds_t>(chunk_ms) * 1000);
-          waited_ms += chunk_ms;
-        }
-      } else {
-        usleep(static_cast<useconds_t>(keepalive_ms) * 1000);
-      }
-      std::cout << "  [main] headless keepalive returned\n" << std::flush;
-    } else if (IsEnabled("MOCKTAIL_KEEPALIVE")) {
-      std::cout << "  [main] headless keepalive: forever\n" << std::flush;
-      while (true) {
-        pause();
-      }
-    }
+    RunHeadlessKeepalive();
   }
 
-  if (is_headless) {
-    std::cerr << "[FATAL] Headless LuaApp readiness evidence is not wired into "
-                 "the supported runtime yet.\n";
+  if (!ValidateRunCompletion(is_headless, completion)) {
     return EXIT_FAILURE;
   }
-  if (!real_frame_presented) {
-    std::cerr << "[FATAL] Windowed runtime exited without a real presented "
-                 "frame.\n";
-    return EXIT_FAILURE;
-  }
-  if (!lifecycle_shutdown_completed) {
-    std::cerr << "[FATAL] Windowed runtime exited without completing the "
-                 "Roblox lifecycle shutdown.\n";
-    return EXIT_FAILURE;
-  }
-  if (!game_surface_events_completed) {
-    std::cerr << "[FATAL] Windowed runtime rejected a typed GAME surface "
-                 "lifecycle event.\n";
-    return EXIT_FAILURE;
-  }
-  if (!input_shutdown_completed) {
-    std::cerr << "[FATAL] Windowed runtime exited without completing typed input shutdown.\n";
-    return EXIT_FAILURE;
-  }
-  if (!resize_readiness_completed) {
-    std::cerr << "[FATAL] Windowed runtime exited without completing the real "
-                 "resize/rebind readiness sequence.\n";
-    return EXIT_FAILURE;
-  }
-
   return EXIT_SUCCESS;
 }
