@@ -5003,6 +5003,184 @@ bool ValidateRunCompletion(bool is_headless, const RunCompletionState& completio
   return true;
 }
 
+// Assembles the context the engine startup thread runs against: the engine
+// handles, the launch inputs, and each startup-step decision paired with the
+// entry point it drives. Field order has to match EngineStartupContext.
+EngineStartupContext BuildEngineStartupContext(
+    jnivm::VM* vm,
+    JavaVM* java_vm,
+    const mocktail::runtime::CommandLineOptions& options,
+    const mocktail::legacy::RuntimeDependencies& dependencies,
+    mocktail::runtime::RobloxGameSessionRuntime* game_session_runtime,
+    const StartupDecisions& decisions,
+    const RobloxEngineSymbols& symbols) {
+  return EngineStartupContext{
+    vm,
+    java_vm,
+    &options.engine_launch_uri,
+    dependencies.account_identity(),
+    &dependencies.roblox_credential(),
+    game_session_runtime,
+    decisions.run_prepare_jni,
+    decisions.run_set_asset_path,
+    decisions.call_real_set_asset_path,
+    decisions.run_global_init,
+    decisions.run_init_client_settings,
+    decisions.run_post_client_settings,
+    decisions.run_app_bridge_app_start,
+    decisions.run_native_settings,
+    decisions.run_set_init_params,
+    decisions.run_init_with_params,
+    decisions.call_real_init_with_params,
+    decisions.run_update_screen_orientation,
+    decisions.run_update_surface_app,
+    decisions.call_real_update_surface_app,
+    decisions.run_start_app_with_params,
+    decisions.call_real_start_app_with_params,
+    decisions.run_activity_lifecycle,
+    decisions.run_game_activity_init,
+    decisions.run_game_activity_surface,
+    decisions.run_app_lifecycle_active,
+    decisions.run_native_fragment_start,
+    decisions.run_display_refresh_rate,
+    decisions.run_start_lua_app_dm,
+    symbols.global_init,
+    symbols.init_client_settings,
+    symbols.init_client_settings_signed,
+    symbols.init_client_settings_cached,
+    symbols.init_client_settings_cached_compressed,
+    symbols.post_client_settings,
+    symbols.initialize_native_flags,
+    symbols.app_bridge_app_start,
+    symbols.set_is_first_install,
+    symbols.set_base_url,
+    symbols.set_device_info,
+    symbols.base_url_protocol_init,
+    symbols.web_login_protocol_init,
+    symbols.web_login_cold_start,
+    symbols.set_roblox_channel,
+    symbols.override_channel_platform_name,
+    symbols.set_roblox_version,
+    symbols.set_exception_reason_filename,
+    symbols.set_base_data_directories,
+    symbols.set_cache_directory,
+    symbols.set_files_directory,
+    symbols.set_external_directory,
+    symbols.set_preferences_file,
+    symbols.set_default_app_policy_file,
+    symbols.set_http_client_proxy,
+    symbols.init_fast_log,
+    symbols.set_multiple_cookies,
+    symbols.cookie_manager_set_cookie,
+    symbols.set_platform_headers_with_idfa,
+    symbols.set_user_id,
+    symbols.init_asset_manager,
+    symbols.init_storage_manager,
+    symbols.local_storage_set_platform_impl,
+    symbols.set_init_params,
+    symbols.retry_init,
+    symbols.init_with_params,
+    symbols.update_adapter_init,
+    symbols.update_screen_orientation,
+    symbols.update_app_ui_sizes,
+    symbols.set_task_scheduler_background_mode,
+    symbols.update_surface_app,
+    symbols.start_app_with_params,
+    symbols.send_app_ready,
+    symbols.send_game_loaded,
+    symbols.set_asset_path,
+    symbols.activity_lifecycle,
+    symbols.game_activity_init,
+    symbols.app_lifecycle_set_active,
+    symbols.on_fragment_start,
+    symbols.pass_supported_refresh_rates,
+    symbols.pass_current_display_refresh_rate,
+    symbols.start_lua_app_dm};
+}
+
+// Runs the engine startup sequence, returning only once it has completed. The
+// default path puts it on a pthread so the main thread keeps pumping;
+// MOCKTAIL_ENGINE_INLINE calls it directly. MOCKTAIL_ENGINE_DETACH is refused
+// because a worker whose runtime ownership cannot be proven cannot be unwound.
+int RunEngineStartup(EngineStartupContext* startup_context) {
+  if (IsEnabled("MOCKTAIL_ENGINE_DETACH")) {
+    std::cerr << "[FATAL] Detached startup workers are unsupported because "
+                 "their runtime ownership cannot be proven\n";
+    return EXIT_FAILURE;
+  }
+  if (IsEnabled("MOCKTAIL_ENGINE_INLINE")) {
+    std::cout << "  [engine] starting inline startup path\n" << std::flush;
+    EngineStartupThread(startup_context);
+  } else {
+    std::cout << "  [engine] starting pthread startup path\n" << std::flush;
+    std::cout << "  [engine] creating startup thread\n" << std::flush;
+    mocktail::runtime::OwnedPthread startup_thread;
+    const int create_result = startup_thread.Start(
+        &EngineStartupThread, startup_context, GetEngineStackSize());
+    std::cout << "  [engine] startup thread create result=" << create_result
+              << '\n' << std::flush;
+    if (create_result != 0) {
+      std::cerr << "\n[FATAL] Could not create engine startup thread: "
+                << create_result << '\n';
+      return EXIT_FAILURE;
+    }
+
+    const int startup_timeout_ms =
+        GetEnvInt("MOCKTAIL_STARTUP_THREAD_TIMEOUT_MS", 0);
+    if (startup_timeout_ms <= 0) {
+      std::cout << "  [engine] joining startup thread\n" << std::flush;
+    } else {
+      std::cout << "  [engine] joining startup thread with timeout "
+                << startup_timeout_ms << "ms\n"
+                << std::flush;
+    }
+
+    const mocktail::runtime::OwnedPthreadWaitResult wait_result =
+        startup_thread.WaitFor(startup_timeout_ms > 0 ? startup_timeout_ms
+                                                      : -1,
+                               10, &PumpStartupOwnerThread);
+    if (!wait_result.joined()) {
+      if (wait_result.status ==
+          mocktail::runtime::OwnedPthreadWaitStatus::kTimedOut) {
+        std::cerr << "  [engine] startup thread timed out after "
+                  << startup_timeout_ms
+                  << "ms, cancelling and requiring a physical join\n"
+                  << std::flush;
+        for (int dump_index = 0; dump_index < 3; ++dump_index) {
+          startup_thread.Signal(SIGUSR1);
+          usleep(100 * 1000);
+        }
+      } else {
+        std::cerr << "  [engine] startup thread join failed: "
+                  << wait_result.platform_error << '\n'
+                  << std::flush;
+      }
+
+      const int cancel_join_grace_ms = std::clamp(
+          GetEnvInt("MOCKTAIL_STARTUP_CANCEL_JOIN_GRACE_MS", 5000), 100,
+          60000);
+      const mocktail::runtime::OwnedPthreadCancelResult cancel_result =
+          startup_thread.CancelAndJoinFor(
+              cancel_join_grace_ms, 10, &PumpStartupOwnerThread);
+      if (cancel_result.cancel_error != 0) {
+        std::cerr << "  [engine] startup thread cancel failed: "
+                  << cancel_result.cancel_error << '\n'
+                  << std::flush;
+      }
+      std::cerr << "[FATAL] Startup worker did not complete normally; "
+                << cancel_join_grace_ms << "ms cancel/join grace result: "
+                << mocktail::runtime::OwnedPthreadWaitStatusName(
+                       cancel_result.wait.status)
+                << " error=" << cancel_result.wait.platform_error
+                << ". Native rollback is unproven even after a physical "
+                   "join; terminating without RAII unwind\n"
+                << std::flush;
+      std::_Exit(EXIT_FAILURE);
+    }
+  }
+  return EXIT_SUCCESS;
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -6437,88 +6615,10 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
           << std::flush;
     }
 
-    EngineStartupContext startup_context_value = {
-        jni_vm.get(),
-        raw_vm,
-        &options.engine_launch_uri,
-        dependencies.account_identity(),
-        &dependencies.roblox_credential(),
-        game_session_runtime.get(),
-        decisions.run_prepare_jni,
-        decisions.run_set_asset_path,
-        decisions.call_real_set_asset_path,
-        decisions.run_global_init,
-        decisions.run_init_client_settings,
-        decisions.run_post_client_settings,
-        decisions.run_app_bridge_app_start,
-        decisions.run_native_settings,
-        decisions.run_set_init_params,
-        decisions.run_init_with_params,
-        decisions.call_real_init_with_params,
-        decisions.run_update_screen_orientation,
-        decisions.run_update_surface_app,
-        decisions.call_real_update_surface_app,
-        decisions.run_start_app_with_params,
-        decisions.call_real_start_app_with_params,
-        decisions.run_activity_lifecycle,
-        decisions.run_game_activity_init,
-        decisions.run_game_activity_surface,
-        decisions.run_app_lifecycle_active,
-        decisions.run_native_fragment_start,
-        decisions.run_display_refresh_rate,
-        decisions.run_start_lua_app_dm,
-        symbols.global_init,
-        symbols.init_client_settings,
-        symbols.init_client_settings_signed,
-        symbols.init_client_settings_cached,
-        symbols.init_client_settings_cached_compressed,
-        symbols.post_client_settings,
-        symbols.initialize_native_flags,
-        symbols.app_bridge_app_start,
-        symbols.set_is_first_install,
-        symbols.set_base_url,
-        symbols.set_device_info,
-        symbols.base_url_protocol_init,
-        symbols.web_login_protocol_init,
-        symbols.web_login_cold_start,
-        symbols.set_roblox_channel,
-        symbols.override_channel_platform_name,
-        symbols.set_roblox_version,
-        symbols.set_exception_reason_filename,
-        symbols.set_base_data_directories,
-        symbols.set_cache_directory,
-        symbols.set_files_directory,
-        symbols.set_external_directory,
-        symbols.set_preferences_file,
-        symbols.set_default_app_policy_file,
-        symbols.set_http_client_proxy,
-        symbols.init_fast_log,
-        symbols.set_multiple_cookies,
-        symbols.cookie_manager_set_cookie,
-        symbols.set_platform_headers_with_idfa,
-        symbols.set_user_id,
-        symbols.init_asset_manager,
-        symbols.init_storage_manager,
-        symbols.local_storage_set_platform_impl,
-        symbols.set_init_params,
-        symbols.retry_init,
-        symbols.init_with_params,
-        symbols.update_adapter_init,
-        symbols.update_screen_orientation,
-        symbols.update_app_ui_sizes,
-        symbols.set_task_scheduler_background_mode,
-        symbols.update_surface_app,
-        symbols.start_app_with_params,
-        symbols.send_app_ready,
-        symbols.send_game_loaded,
-        symbols.set_asset_path,
-        symbols.activity_lifecycle,
-        symbols.game_activity_init,
-        symbols.app_lifecycle_set_active,
-        symbols.on_fragment_start,
-        symbols.pass_supported_refresh_rates,
-        symbols.pass_current_display_refresh_rate,
-        symbols.start_lua_app_dm};
+    EngineStartupContext startup_context_value =
+        BuildEngineStartupContext(jni_vm.get(), raw_vm, options, dependencies,
+                                    game_session_runtime.get(), decisions,
+                                    symbols);
     if (game_session_runtime != nullptr) {
       if (!game_present_observer.Register(
               &mocktail::runtime::RobloxGameSessionRuntime::
@@ -6531,82 +6631,9 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       std::cout << "  [game-session] host present observer registered\n"
                 << std::flush;
     }
-    if (IsEnabled("MOCKTAIL_ENGINE_DETACH")) {
-      std::cerr << "[FATAL] Detached startup workers are unsupported because "
-                   "their runtime ownership cannot be proven\n";
-      return EXIT_FAILURE;
-    }
-    EngineStartupContext* startup_context = &startup_context_value;
-
-    if (IsEnabled("MOCKTAIL_ENGINE_INLINE")) {
-      std::cout << "  [engine] starting inline startup path\n" << std::flush;
-      EngineStartupThread(startup_context);
-    } else {
-      std::cout << "  [engine] starting pthread startup path\n" << std::flush;
-      std::cout << "  [engine] creating startup thread\n" << std::flush;
-      mocktail::runtime::OwnedPthread startup_thread;
-      const int create_result = startup_thread.Start(
-          &EngineStartupThread, startup_context, GetEngineStackSize());
-      std::cout << "  [engine] startup thread create result=" << create_result
-                << '\n' << std::flush;
-      if (create_result != 0) {
-        std::cerr << "\n[FATAL] Could not create engine startup thread: "
-                  << create_result << '\n';
-        return EXIT_FAILURE;
-      }
-
-      const int startup_timeout_ms =
-          GetEnvInt("MOCKTAIL_STARTUP_THREAD_TIMEOUT_MS", 0);
-      if (startup_timeout_ms <= 0) {
-        std::cout << "  [engine] joining startup thread\n" << std::flush;
-      } else {
-        std::cout << "  [engine] joining startup thread with timeout "
-                  << startup_timeout_ms << "ms\n"
-                  << std::flush;
-      }
-
-      const mocktail::runtime::OwnedPthreadWaitResult wait_result =
-          startup_thread.WaitFor(startup_timeout_ms > 0 ? startup_timeout_ms
-                                                        : -1,
-                                 10, &PumpStartupOwnerThread);
-      if (!wait_result.joined()) {
-        if (wait_result.status ==
-            mocktail::runtime::OwnedPthreadWaitStatus::kTimedOut) {
-          std::cerr << "  [engine] startup thread timed out after "
-                    << startup_timeout_ms
-                    << "ms, cancelling and requiring a physical join\n"
-                    << std::flush;
-          for (int dump_index = 0; dump_index < 3; ++dump_index) {
-            startup_thread.Signal(SIGUSR1);
-            usleep(100 * 1000);
-          }
-        } else {
-          std::cerr << "  [engine] startup thread join failed: "
-                    << wait_result.platform_error << '\n'
-                    << std::flush;
-        }
-
-        const int cancel_join_grace_ms = std::clamp(
-            GetEnvInt("MOCKTAIL_STARTUP_CANCEL_JOIN_GRACE_MS", 5000), 100,
-            60000);
-        const mocktail::runtime::OwnedPthreadCancelResult cancel_result =
-            startup_thread.CancelAndJoinFor(
-                cancel_join_grace_ms, 10, &PumpStartupOwnerThread);
-        if (cancel_result.cancel_error != 0) {
-          std::cerr << "  [engine] startup thread cancel failed: "
-                    << cancel_result.cancel_error << '\n'
-                    << std::flush;
-        }
-        std::cerr << "[FATAL] Startup worker did not complete normally; "
-                  << cancel_join_grace_ms << "ms cancel/join grace result: "
-                  << mocktail::runtime::OwnedPthreadWaitStatusName(
-                         cancel_result.wait.status)
-                  << " error=" << cancel_result.wait.platform_error
-                  << ". Native rollback is unproven even after a physical "
-                     "join; terminating without RAII unwind\n"
-                  << std::flush;
-        std::_Exit(EXIT_FAILURE);
-      }
+    const int engine_startup_result = RunEngineStartup(&startup_context_value);
+    if (engine_startup_result != EXIT_SUCCESS) {
+      return engine_startup_result;
     }
     if (game_session_runtime != nullptr &&
         !game_session_runtime->startup_status().ok()) {
