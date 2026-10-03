@@ -4746,6 +4746,152 @@ void ReportResolvedEngineSymbols(const RobloxEngineSymbols& symbols) {
             << std::flush;
 }
 
+// Creates the host window unless running headless, exports the display and
+// viewport sizes the engine reads through the environment, resolves the
+// theme, and auto-enables the startup steps that only make sense with a
+// window. Returns whether a usable window exists.
+bool InitializeHostWindow(
+    bool is_headless, const mocktail::runtime::RuntimeConfig& runtime_config,
+    const mocktail::legacy::RuntimeDependencies& dependencies,
+    bool user_overrode_main_thread_message_pump,
+    bool user_overrode_call_update_surface,
+    bool user_overrode_call_start_app) {
+  // Create SDL/EGL before loading Android stubs so SDL binds the host graphics
+  // backend. The window stays hidden until the first real frame.
+  bool window_initialised = false;
+  if (!is_headless) {
+    const int win_w = runtime_config.window().width;
+    const int win_h = runtime_config.window().height;
+    const char* win_title = runtime_config.window().title.c_str();
+    std::cout << "  [window] Creating " << win_w << "x" << win_h
+              << " window...\n"
+              << std::flush;
+    window_initialised = mocktail::window::Init(win_w, win_h, win_title);
+    if (!window_initialised) {
+      if (IsEnabled("MOCKTAIL_SOBER_MODE")) {
+        std::cerr << "  [window] FATAL: Sober-style startup requires a "
+                  << "working SDL video device. Check DISPLAY/WAYLAND_DISPLAY "
+                  << "and SDL3.\n"
+                  << std::flush;
+        return EXIT_FAILURE;
+      }
+      std::cerr
+          << "  [window] WARNING: window init failed, continuing headless\n"
+          << std::flush;
+    } else {
+      std::cout << "  [window] Window ready; waiting for Roblox frames\n"
+                << std::flush;
+    }
+  }
+  if (window_initialised) {
+    auto* sdl_window =
+        static_cast<SDL_Window*>(mocktail::window::GetBackendWindow());
+    const SDL_DisplayID display =
+        sdl_window != nullptr ? SDL_GetDisplayForWindow(sdl_window) : 0;
+    const SDL_DisplayMode* mode =
+        display != 0 ? SDL_GetCurrentDisplayMode(display) : nullptr;
+    if (mode != nullptr && mode->w > 0 && mode->h > 0) {
+      // SDL mode dimensions need pixel_density to become physical pixels.
+      const float density = mode->pixel_density > 0.0f ? mode->pixel_density
+                                                       : 1.0f;
+      const std::string display_size =
+          std::to_string(std::lround(mode->w * density)) + "x" +
+          std::to_string(std::lround(mode->h * density));
+      setenv(mocktail::runtime::kDisplaySizeEnvironment, display_size.c_str(),
+             1);
+      std::cout << "  [window] host display " << display_size << " pixels\n"
+                << std::flush;
+    }
+  }
+  if (window_initialised) {
+    const mocktail::window::WindowViewportSnapshot viewport =
+        mocktail::window::GetWindowViewportSnapshot();
+    if (viewport.valid()) {
+      const std::string window_size = std::to_string(viewport.pixel_width) +
+                                      "x" +
+                                      std::to_string(viewport.pixel_height);
+      setenv(mocktail::runtime::kWindowSizeEnvironment, window_size.c_str(),
+             1);
+    }
+  }
+  const SDL_SystemTheme system_theme =
+      window_initialised ? SDL_GetSystemTheme() : SDL_SYSTEM_THEME_UNKNOWN;
+  const bool system_dark_theme = system_theme == SDL_SYSTEM_THEME_DARK;
+  const char* app_storage_file =
+      std::getenv("MOCKTAIL_APP_STORAGE_FILE_INTERNAL");
+  bool dark_theme = runtime_config.theme_mode() != "light";
+  bool roblox_theme_found = false;
+  if (runtime_config.theme_mode() == "system") {
+    dark_theme = system_dark_theme;
+  } else if (runtime_config.theme_mode() == "roblox" &&
+             app_storage_file != nullptr) {
+    const mocktail::runtime::RobloxThemeCacheResult saved_theme =
+        mocktail::runtime::ReadRobloxThemeCache(
+            app_storage_file, dependencies.account_identity().user_id);
+    if (!saved_theme) {
+      std::cerr << "[FATAL] Cannot read Roblox theme cache: "
+                << saved_theme.error << '\n';
+      return EXIT_FAILURE;
+    }
+    if (saved_theme.dark_theme.has_value()) {
+      dark_theme = *saved_theme.dark_theme;
+      roblox_theme_found = true;
+    }
+  }
+  setenv("MOCKTAIL_RESOLVED_THEME_INTERNAL", dark_theme ? "Dark" : "Light", 1);
+  if (runtime_config.theme_mode() == "roblox") {
+    std::cout << "  [theme] "
+              << (roblox_theme_found ? "Roblox saved theme="
+                                     : "Roblox theme missing; default=")
+              << (dark_theme ? "dark" : "light") << '\n'
+              << std::flush;
+  } else if (app_storage_file != nullptr) {
+    std::string theme_error;
+    if (!mocktail::runtime::ApplyRobloxThemeCacheOverride(
+            app_storage_file, dependencies.account_identity().user_id,
+            dark_theme, &theme_error)) {
+      std::cerr << "[FATAL] Roblox theme cache override failed: " << theme_error
+                << '\n';
+      return EXIT_FAILURE;
+    }
+    std::cout << "  [theme] Roblox local theme="
+              << (dark_theme ? "dark" : "light") << '\n'
+              << std::flush;
+  }
+  const bool has_window = window_initialised;
+  if (!has_window) {
+    std::cout << "  [window] GUI-bound startup steps disabled (no SDL window)\n"
+              << std::flush;
+  } else {
+    if (!HasEnvValue("MOCKTAIL_APP_LIFECYCLE_ACTIVE") &&
+        !HasEnvValue("MOCKTAIL_STEP_APP_LIFECYCLE_ACTIVE")) {
+      setenv("MOCKTAIL_APP_LIFECYCLE_ACTIVE", "1", 1);
+      std::cout << "  [window] windowed startup: auto-enabled "
+                << "AppLifecycleNativeAdapter.setActive\n"
+                << std::flush;
+    }
+    if (!user_overrode_main_thread_message_pump) {
+      setenv("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "1", 1);
+      std::cout << "  [window] windowed startup: auto-enabled main-thread "
+                << "message pump\n"
+                << std::flush;
+    }
+    if (!user_overrode_call_update_surface) {
+      std::cout << "  [window] windowed startup: leaving real UpdateSurfaceAppWithPlatformParams opt-in\n"
+                << std::flush;
+    }
+    if (!user_overrode_call_start_app &&
+        IsEnabled("MOCKTAIL_STEP_START_APP_WITH_PARAMS")) {
+      setenv("MOCKTAIL_CALL_REAL_APP_BRIDGE_START", "1", 1);
+      std::cout << "  [window] windowed startup: auto-enabled real "
+                << "StartAppWithParams when auth allows it\n"
+                << std::flush;
+    }
+  }
+
+  return has_window;
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -4958,139 +5104,10 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   std::cout << "  Registered " << jni_vm->GetClassCount()
             << " JNI class(es)\n";
 
-  // Create SDL/EGL before loading Android stubs so SDL binds the host graphics
-  // backend. The window stays hidden until the first real frame.
-  bool window_initialised = false;
-  if (!is_headless) {
-    const int win_w = runtime_config.window().width;
-    const int win_h = runtime_config.window().height;
-    const char* win_title = runtime_config.window().title.c_str();
-    std::cout << "  [window] Creating " << win_w << "x" << win_h
-              << " window...\n"
-              << std::flush;
-    window_initialised = mocktail::window::Init(win_w, win_h, win_title);
-    if (!window_initialised) {
-      if (IsEnabled("MOCKTAIL_SOBER_MODE")) {
-        std::cerr << "  [window] FATAL: Sober-style startup requires a "
-                  << "working SDL video device. Check DISPLAY/WAYLAND_DISPLAY "
-                  << "and SDL3.\n"
-                  << std::flush;
-        return EXIT_FAILURE;
-      }
-      std::cerr
-          << "  [window] WARNING: window init failed, continuing headless\n"
-          << std::flush;
-    } else {
-      std::cout << "  [window] Window ready; waiting for Roblox frames\n"
-                << std::flush;
-    }
-  }
-  if (window_initialised) {
-    auto* sdl_window =
-        static_cast<SDL_Window*>(mocktail::window::GetBackendWindow());
-    const SDL_DisplayID display =
-        sdl_window != nullptr ? SDL_GetDisplayForWindow(sdl_window) : 0;
-    const SDL_DisplayMode* mode =
-        display != 0 ? SDL_GetCurrentDisplayMode(display) : nullptr;
-    if (mode != nullptr && mode->w > 0 && mode->h > 0) {
-      // SDL mode dimensions need pixel_density to become physical pixels.
-      const float density = mode->pixel_density > 0.0f ? mode->pixel_density
-                                                       : 1.0f;
-      const std::string display_size =
-          std::to_string(std::lround(mode->w * density)) + "x" +
-          std::to_string(std::lround(mode->h * density));
-      setenv(mocktail::runtime::kDisplaySizeEnvironment, display_size.c_str(),
-             1);
-      std::cout << "  [window] host display " << display_size << " pixels\n"
-                << std::flush;
-    }
-  }
-  if (window_initialised) {
-    const mocktail::window::WindowViewportSnapshot viewport =
-        mocktail::window::GetWindowViewportSnapshot();
-    if (viewport.valid()) {
-      const std::string window_size = std::to_string(viewport.pixel_width) +
-                                      "x" +
-                                      std::to_string(viewport.pixel_height);
-      setenv(mocktail::runtime::kWindowSizeEnvironment, window_size.c_str(),
-             1);
-    }
-  }
-  const SDL_SystemTheme system_theme =
-      window_initialised ? SDL_GetSystemTheme() : SDL_SYSTEM_THEME_UNKNOWN;
-  const bool system_dark_theme = system_theme == SDL_SYSTEM_THEME_DARK;
-  const char* app_storage_file =
-      std::getenv("MOCKTAIL_APP_STORAGE_FILE_INTERNAL");
-  bool dark_theme = runtime_config.theme_mode() != "light";
-  bool roblox_theme_found = false;
-  if (runtime_config.theme_mode() == "system") {
-    dark_theme = system_dark_theme;
-  } else if (runtime_config.theme_mode() == "roblox" &&
-             app_storage_file != nullptr) {
-    const mocktail::runtime::RobloxThemeCacheResult saved_theme =
-        mocktail::runtime::ReadRobloxThemeCache(
-            app_storage_file, dependencies.account_identity().user_id);
-    if (!saved_theme) {
-      std::cerr << "[FATAL] Cannot read Roblox theme cache: "
-                << saved_theme.error << '\n';
-      return EXIT_FAILURE;
-    }
-    if (saved_theme.dark_theme.has_value()) {
-      dark_theme = *saved_theme.dark_theme;
-      roblox_theme_found = true;
-    }
-  }
-  setenv("MOCKTAIL_RESOLVED_THEME_INTERNAL", dark_theme ? "Dark" : "Light", 1);
-  if (runtime_config.theme_mode() == "roblox") {
-    std::cout << "  [theme] "
-              << (roblox_theme_found ? "Roblox saved theme="
-                                     : "Roblox theme missing; default=")
-              << (dark_theme ? "dark" : "light") << '\n'
-              << std::flush;
-  } else if (app_storage_file != nullptr) {
-    std::string theme_error;
-    if (!mocktail::runtime::ApplyRobloxThemeCacheOverride(
-            app_storage_file, dependencies.account_identity().user_id,
-            dark_theme, &theme_error)) {
-      std::cerr << "[FATAL] Roblox theme cache override failed: " << theme_error
-                << '\n';
-      return EXIT_FAILURE;
-    }
-    std::cout << "  [theme] Roblox local theme="
-              << (dark_theme ? "dark" : "light") << '\n'
-              << std::flush;
-  }
-  const bool has_window = window_initialised;
-  if (!has_window) {
-    std::cout << "  [window] GUI-bound startup steps disabled (no SDL window)\n"
-              << std::flush;
-  } else {
-    if (!HasEnvValue("MOCKTAIL_APP_LIFECYCLE_ACTIVE") &&
-        !HasEnvValue("MOCKTAIL_STEP_APP_LIFECYCLE_ACTIVE")) {
-      setenv("MOCKTAIL_APP_LIFECYCLE_ACTIVE", "1", 1);
-      std::cout << "  [window] windowed startup: auto-enabled "
-                << "AppLifecycleNativeAdapter.setActive\n"
-                << std::flush;
-    }
-    if (!user_overrode_main_thread_message_pump) {
-      setenv("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "1", 1);
-      std::cout << "  [window] windowed startup: auto-enabled main-thread "
-                << "message pump\n"
-                << std::flush;
-    }
-    if (!user_overrode_call_update_surface) {
-      std::cout << "  [window] windowed startup: leaving real UpdateSurfaceAppWithPlatformParams opt-in\n"
-                << std::flush;
-    }
-    if (!user_overrode_call_start_app &&
-        IsEnabled("MOCKTAIL_STEP_START_APP_WITH_PARAMS")) {
-      setenv("MOCKTAIL_CALL_REAL_APP_BRIDGE_START", "1", 1);
-      std::cout << "  [window] windowed startup: auto-enabled real "
-                << "StartAppWithParams when auth allows it\n"
-                << std::flush;
-    }
-  }
-
+  const bool has_window = InitializeHostWindow(
+      is_headless, runtime_config, dependencies,
+      user_overrode_main_thread_message_pump,
+      user_overrode_call_update_surface, user_overrode_call_start_app);
   PrintStage(3, "Building Bionic symbol table from stubs");
 
   libc_shim::Install();
