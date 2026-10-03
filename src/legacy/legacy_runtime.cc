@@ -82,11 +82,6 @@
 #include <mcpelauncher/linker.h>
 #endif
 
-#ifndef MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST
-#define MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST \
-  "config/roblox_compatibility.json"
-#endif
-
 // Private implementation helpers for the legacy runtime. Named rather than
 // anonymous because the startup/window/protocol translation units in this
 // directory call into it; see legacy_runtime_internal.h for the subset each
