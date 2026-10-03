@@ -6113,6 +6113,72 @@ void RegisterBionicNetworkAndPthreadSymbols() {
   linker::RegisterSymbol("__stack_chk_fail", reinterpret_cast<void*>(mocktail_recover_stack_chk_fail));
 }
 
+// True when at least one symbol Stage 6 needs is still null. Checked as a
+// single predicate so the required-symbol list reads as one list instead of
+// burying the real failure handling under 28 lines of pointer comparisons.
+bool StartupSymbolsMissing(const RobloxEngineSymbols& symbols,
+                           void* message_bus_publish_response_raw) {
+  return ((symbols.init_client_settings == nullptr &&
+         symbols.init_client_settings_signed == nullptr &&
+         symbols.init_client_settings_cached == nullptr &&
+         symbols.init_client_settings_cached_compressed == nullptr) ||
+        symbols.post_client_settings == nullptr ||
+        symbols.set_base_url == nullptr || symbols.set_device_info == nullptr ||
+        symbols.set_roblox_channel == nullptr ||
+        symbols.set_exception_reason_filename == nullptr ||
+        symbols.set_base_data_directories == nullptr ||
+        symbols.set_cache_directory == nullptr ||
+        symbols.set_files_directory == nullptr ||
+        symbols.set_external_directory == nullptr ||
+        symbols.set_preferences_file == nullptr ||
+        symbols.set_default_app_policy_file == nullptr ||
+        symbols.set_http_client_proxy == nullptr ||
+        symbols.init_fast_log == nullptr ||
+        symbols.set_multiple_cookies == nullptr ||
+        symbols.set_platform_headers_with_idfa == nullptr ||
+        symbols.init_storage_manager == nullptr ||
+        symbols.set_init_params == nullptr || symbols.set_asset_path == nullptr ||
+        symbols.activity_lifecycle.on_created == nullptr ||
+        symbols.activity_lifecycle.on_started == nullptr ||
+        symbols.activity_lifecycle.on_resumed == nullptr ||
+        message_bus_publish_response_raw == nullptr);
+}
+
+// Brings up the typed production-input runtime and the text-input bridge over
+// it. A headless run has no host window and therefore no input, which is not
+// a failure. Returns false only after reporting which stage refused to start.
+bool InitializeTypedInput(
+    JavaVM* raw_vm, const std::shared_ptr<jnivm::VM>& jni_vm,
+    const mocktail::runtime::RobloxInputSymbols& input_symbols,
+    std::shared_ptr<mocktail::runtime::RobloxWindowInputRuntime>&
+        window_input_runtime,
+    std::unique_ptr<mocktail::runtime::RobloxTextInputJniBridge>&
+        text_input_bridge) {
+  if (!mocktail::window::IsInitialised()) {
+    return true;
+  }
+  mocktail::runtime::JniEnvironmentProvider input_environment{
+      raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
+  window_input_runtime =
+      std::make_shared<mocktail::runtime::RobloxWindowInputRuntime>(
+          input_environment, input_symbols);
+  const mocktail::Status input_status = window_input_runtime->Initialize();
+  if (!input_status.ok()) {
+    std::cerr << "[FATAL] Typed production input did not initialize: "
+              << input_status.message() << '\n';
+    return EXIT_FAILURE;
+  }
+  const mocktail::Status text_input_status =
+      mocktail::runtime::RobloxTextInputJniBridge::Create(
+          jni_vm.get(), window_input_runtime, &text_input_bridge);
+  if (!text_input_status.ok()) {
+    std::cerr << "[FATAL] Typed Roblox text input did not initialize: "
+              << text_input_status.message() << '\n';
+    return EXIT_FAILURE;
+  }
+  return true;
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -6727,9 +6793,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         roblox_handle, startup_symbols, jni_vm.get());
     g_native_call_messages_from_main_thread =
         symbols.call_messages_from_main_thread;
-
-    g_native_call_messages_from_main_thread =
-        symbols.call_messages_from_main_thread;
     std::cout << "  [engine] Stage6 symbol resolve done" << std::endl;
     ReportResolvedEngineSymbols(symbols);
     void* message_bus_publish_response_raw = linker::ResolveSymbol(
@@ -6737,30 +6800,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         "Java_com_roblox_universalapp_messagebus_MessageBus_"
         "publishProtocolMethodResponseRaw");
 
-    if ((symbols.init_client_settings == nullptr &&
-         symbols.init_client_settings_signed == nullptr &&
-         symbols.init_client_settings_cached == nullptr &&
-         symbols.init_client_settings_cached_compressed == nullptr) ||
-        symbols.post_client_settings == nullptr ||
-        symbols.set_base_url == nullptr || symbols.set_device_info == nullptr ||
-        symbols.set_roblox_channel == nullptr ||
-        symbols.set_exception_reason_filename == nullptr ||
-        symbols.set_base_data_directories == nullptr ||
-        symbols.set_cache_directory == nullptr ||
-        symbols.set_files_directory == nullptr ||
-        symbols.set_external_directory == nullptr ||
-        symbols.set_preferences_file == nullptr ||
-        symbols.set_default_app_policy_file == nullptr ||
-        symbols.set_http_client_proxy == nullptr ||
-        symbols.init_fast_log == nullptr ||
-        symbols.set_multiple_cookies == nullptr ||
-        symbols.set_platform_headers_with_idfa == nullptr ||
-        symbols.init_storage_manager == nullptr ||
-        symbols.set_init_params == nullptr || symbols.set_asset_path == nullptr ||
-        symbols.activity_lifecycle.on_created == nullptr ||
-        symbols.activity_lifecycle.on_started == nullptr ||
-        symbols.activity_lifecycle.on_resumed == nullptr ||
-        message_bus_publish_response_raw == nullptr) {
+    if (StartupSymbolsMissing(symbols, message_bus_publish_response_raw)) {
       std::cerr << "\n[FATAL] One or more NativeGL startup symbols were not "
                 << "found.\n";
       return EXIT_FAILURE;
@@ -6849,26 +6889,11 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                    "authenticated identity\n"
                 << std::flush;
     }
-    if (mocktail::window::IsInitialised()) {
-      mocktail::runtime::JniEnvironmentProvider input_environment{
-          raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
-      window_input_runtime =
-          std::make_shared<mocktail::runtime::RobloxWindowInputRuntime>(
-              input_environment, roblox_capabilities.input);
-      const mocktail::Status input_status = window_input_runtime->Initialize();
-      if (!input_status.ok()) {
-        std::cerr << "[FATAL] Typed production input did not initialize: "
-                  << input_status.message() << '\n';
-        return EXIT_FAILURE;
-      }
-      const mocktail::Status text_input_status =
-          mocktail::runtime::RobloxTextInputJniBridge::Create(
-              jni_vm.get(), window_input_runtime, &text_input_bridge);
-      if (!text_input_status.ok()) {
-        std::cerr << "[FATAL] Typed Roblox text input did not initialize: "
-                  << text_input_status.message() << '\n';
-        return EXIT_FAILURE;
-      }
+    if (!InitializeTypedInput(raw_vm, jni_vm,
+                              roblox_capabilities.input,
+                              window_input_runtime,
+                              text_input_bridge)) {
+      return EXIT_FAILURE;
     }
     std::cout << "  [engine] legacy startup call sequence returned\n"
               << std::flush;
