@@ -6360,6 +6360,62 @@ void RegisterVulkanAdapterExports(void* bionic_vulkan_adapter_handle) {
   }
 }
 
+// libroblox.so declares several hundred imports, far more than the
+// kSymbolsToRegister table lists by hand. Rather than maintain a second
+// list that drifts, walk its .dynsym once and let the same resolver bind
+// anything it recognises. The file is mapped read-only and never run, and
+// the map is released before returning.
+void RegisterUndefinedElfImports(const std::string& library_path,
+                                 bool has_window, void* real_gles_handle,
+                                 const std::vector<void*>& stub_handles) {
+  int fd = ::open(library_path.c_str(), O_RDONLY);
+  if (fd >= 0) {
+    struct stat st;
+    if (::fstat(fd, &st) == 0) {
+      void* map = ::mmap(nullptr, static_cast<size_t>(st.st_size),
+                         PROT_READ, MAP_PRIVATE, fd, 0);
+      if (map != MAP_FAILED) {
+        auto* ehdr = reinterpret_cast<Elf64_Ehdr*>(map);
+        auto* shdr = reinterpret_cast<Elf64_Shdr*>(
+            reinterpret_cast<char*>(map) + ehdr->e_shoff);
+        Elf64_Shdr* dynsym_hdr = nullptr;
+        Elf64_Shdr* dynstr_hdr = nullptr;
+        for (int si = 0; si < ehdr->e_shnum; ++si) {
+          if (shdr[si].sh_type == SHT_DYNSYM) dynsym_hdr = &shdr[si];
+          else if (shdr[si].sh_type == SHT_STRTAB && si != ehdr->e_shstrndx)
+            dynstr_hdr = &shdr[si];
+        }
+        if (dynsym_hdr && dynstr_hdr) {
+          auto* syms = reinterpret_cast<Elf64_Sym*>(
+              reinterpret_cast<char*>(map) + dynsym_hdr->sh_offset);
+          const char* strtab = reinterpret_cast<const char*>(map)
+                               + dynstr_hdr->sh_offset;
+          size_t num_syms = dynsym_hdr->sh_size / sizeof(Elf64_Sym);
+          int auto_registered = 0;
+          for (size_t si = 0; si < num_syms; ++si) {
+            if (syms[si].st_shndx != SHN_UNDEF) continue;
+            const char* name = strtab + syms[si].st_name;
+            if (!name || name[0] == '\0') continue;
+            if (linker::GetBionicSymbols().count(name)) continue;
+            auto result = ResolveSymbolForBionic(name, has_window,
+                                                 real_gles_handle,
+                                                 stub_handles);
+            if (result.address != nullptr) {
+              linker::RegisterSymbol(name, result.address);
+              ++auto_registered;
+            }
+          }
+          std::cout << "  [linker] Auto-registered " << auto_registered
+                    << " additional ELF symbols from " << library_path
+                    << '\n';
+        }
+        ::munmap(map, static_cast<size_t>(st.st_size));
+      }
+    }
+    ::close(fd);
+  }
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -6572,55 +6628,8 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     }
   }
 
-  // Register imports before loading synthetic SONAMEs.
-  {
-    int fd = ::open(library_path.c_str(), O_RDONLY);
-    if (fd >= 0) {
-      struct stat st;
-      if (::fstat(fd, &st) == 0) {
-        void* map = ::mmap(nullptr, static_cast<size_t>(st.st_size),
-                           PROT_READ, MAP_PRIVATE, fd, 0);
-        if (map != MAP_FAILED) {
-          auto* ehdr = reinterpret_cast<Elf64_Ehdr*>(map);
-          auto* shdr = reinterpret_cast<Elf64_Shdr*>(
-              reinterpret_cast<char*>(map) + ehdr->e_shoff);
-          Elf64_Shdr* dynsym_hdr = nullptr;
-          Elf64_Shdr* dynstr_hdr = nullptr;
-          for (int si = 0; si < ehdr->e_shnum; ++si) {
-            if (shdr[si].sh_type == SHT_DYNSYM) dynsym_hdr = &shdr[si];
-            else if (shdr[si].sh_type == SHT_STRTAB && si != ehdr->e_shstrndx)
-              dynstr_hdr = &shdr[si];
-          }
-          if (dynsym_hdr && dynstr_hdr) {
-            auto* syms = reinterpret_cast<Elf64_Sym*>(
-                reinterpret_cast<char*>(map) + dynsym_hdr->sh_offset);
-            const char* strtab = reinterpret_cast<const char*>(map)
-                                 + dynstr_hdr->sh_offset;
-            size_t num_syms = dynsym_hdr->sh_size / sizeof(Elf64_Sym);
-            int auto_registered = 0;
-            for (size_t si = 0; si < num_syms; ++si) {
-              if (syms[si].st_shndx != SHN_UNDEF) continue;
-              const char* name = strtab + syms[si].st_name;
-              if (!name || name[0] == '\0') continue;
-              if (linker::GetBionicSymbols().count(name)) continue;
-              auto result = ResolveSymbolForBionic(name, has_window,
-                                                  real_gles_handle,
-                                                  stubs.handles);
-              if (result.address != nullptr) {
-                linker::RegisterSymbol(name, result.address);
-                ++auto_registered;
-              }
-            }
-            std::cout << "  [linker] Auto-registered " << auto_registered
-                      << " additional ELF symbols from " << library_path
-                      << '\n';
-          }
-          ::munmap(map, static_cast<size_t>(st.st_size));
-        }
-      }
-      ::close(fd);
-    }
-  }
+  RegisterUndefinedElfImports(library_path, has_window, real_gles_handle,
+                             stubs.handles);
 
   // Load synthetic libraries only after the import map is complete.
   linker::RegisterBionicPthreadKeyRuntimeForLibc();
