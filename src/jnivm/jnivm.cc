@@ -3345,6 +3345,37 @@ void DispatchDataModelNotification(JNIEnv* env, jstring type, jstring data) {
   DeleteLocalJniReference(callback);
 }
 
+// The engine's own WebLoginProtocol writes the session through
+// com/roblox/universalapp/cookie/CookieProtocol.setCookie(name, value) once
+// JNIWebLoginProtocol_init has bound it. That is the whole native sign-in path
+// on a runner with no WebView: the engine redeems the ticket and hands us the
+// resulting .ROBLOSECURITY. Route it into the same credential provider the
+// cookie-paste fallback already uses.
+bool IsRobloxCookieProtocolSetCookie(const std::shared_ptr<Class>& method_class,
+                                     jmethodID method_id) {
+  return method_class != nullptr && method_id != nullptr &&
+         method_class->GetName() ==
+             "com/roblox/universalapp/cookie/CookieProtocol" &&
+         std::strcmp(MethodName(method_id), "setCookie") == 0 &&
+         std::strcmp(MethodSignature(method_id),
+                     "(Ljava/lang/String;Ljava/lang/String;)V") == 0;
+}
+
+void HandleRobloxCookieProtocolSetCookie(JNIEnv* env, jstring name,
+                                         jstring value) {
+  const std::string cookie_name = StringFromJString(name);
+  const std::string cookie_value = StringFromJString(value);
+  if (cookie_name.empty() || cookie_value.empty()) {
+    return;
+  }
+  if (TraceEnabled()) {
+    std::cout << "  [auth] WebLoginProtocol set cookie " << cookie_name
+              << " (value elided)\n";
+  }
+  StoreCookieHeader(cookie_name + "=" + cookie_value);
+  (void)env;
+}
+
 void HandleStaticVoidMethodV(JNIEnv *env, jclass clazz, jmethodID methodID,
                              va_list args) {
   if (HandleRobloxTextInputStaticVoidMethodV(clazz, methodID, args)) {
@@ -3358,6 +3389,11 @@ void HandleStaticVoidMethodV(JNIEnv *env, jclass clazz, jmethodID methodID,
     return;
   }
   const std::shared_ptr<Class> method_class = ClassFromJClass(clazz);
+  if (IsRobloxCookieProtocolSetCookie(method_class, methodID)) {
+    HandleRobloxCookieProtocolSetCookie(env, va_arg(args, jstring),
+                                        va_arg(args, jstring));
+    return;
+  }
   if (std::strcmp(name, "openNativeOverlay") == 0 &&
       std::strcmp(MethodSignature(methodID),
                   "(Ljava/lang/String;Ljava/lang/String;)V") == 0 &&
@@ -3439,6 +3475,13 @@ void HandleStaticVoidMethodA(JNIEnv *env, jclass clazz, jmethodID methodID,
     return;
   }
   if (HandleRobloxExperienceLifecycleStaticVoidMethod(clazz, methodID)) {
+    return;
+  }
+  if (IsRobloxCookieProtocolSetCookie(ClassFromJClass(clazz), methodID) &&
+      args != nullptr) {
+    HandleRobloxCookieProtocolSetCookie(
+        env, static_cast<jstring>(args[0].l),
+        static_cast<jstring>(args[1].l));
     return;
   }
   const char *name = MethodName(methodID);

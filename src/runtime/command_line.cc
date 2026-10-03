@@ -45,6 +45,26 @@ void SecureErase(char* data, std::size_t size) {
 
 }  // namespace
 
+namespace {
+
+// The engine decides for itself what a roblox:// argument means; Mocktail only
+// needs to know whether the argument is addressed to Roblox at all. Anything
+// Roblox-addressed that is not a place or user launch is a web-login ticket,
+// which the engine's WebLoginProtocol redeems during native settings startup.
+bool IsRobloxAddressedLaunchUri(std::string_view uri) {
+  const std::size_t colon = uri.find(':');
+  if (colon == std::string::npos || colon == 0) {
+    return false;
+  }
+  std::string scheme(uri.substr(0, colon));
+  for (char& c : scheme) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  return scheme == "roblox" || scheme == "roblox-player";
+}
+
+}  // namespace
+
 CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
   CommandLineParseResult result;
   if (argc > 0 && argv != nullptr && argv[0] != nullptr && argv[0][0] != '\0') {
@@ -95,6 +115,13 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
       const Status launch_status = ParseRobloxLaunchUri(
           result.options.raw_launch_argument, &launch_request);
       if (!launch_status.ok()) {
+        if (IsRobloxAddressedLaunchUri(result.options.raw_launch_argument)) {
+          result.options.engine_launch_uri =
+              std::move(result.options.raw_launch_argument);
+          result.options.launch_argument_index = index;
+          ++index;
+          continue;
+        }
         result.options.raw_launch_argument.clear();
         result.error = "invalid Roblox launch URI: " + launch_status.message();
         return result;
@@ -127,6 +154,12 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
       const Status launch_status =
           ParseRobloxLaunchUri(argument, &launch_request);
       if (!launch_status.ok()) {
+        if (IsRobloxAddressedLaunchUri(argument)) {
+          result.options.engine_launch_uri = argument;
+          result.options.launch_argument_index = index;
+          ++index;
+          continue;
+        }
         result.error = "unknown argument";
         return result;
       }
@@ -153,6 +186,9 @@ bool BuildCommandLineReexecArguments(const CommandLineOptions& options,
   }
   arguments->clear();
   arguments->reserve(static_cast<std::size_t>(argc) + 1);
+  // engine_launch_uri is deliberately left alone: it is a bearer value, so it
+  // must never be rewritten into a command line. A re-exec (currently
+  // disabled) drops it, which only costs a cold-start sign-in.
   const bool replace_raw_launch = !options.raw_launch_argument.empty();
   if (replace_raw_launch &&
       (options.launch_request_json.empty() ||
@@ -194,13 +230,31 @@ bool BuildCommandLineReexecArguments(const CommandLineOptions& options,
   return true;
 }
 
+void ScrubEngineLaunchUri(CommandLineOptions* options) {
+  if (options == nullptr || options->engine_launch_uri.empty()) return;
+  SecureErase(options->engine_launch_uri.data(),
+              options->engine_launch_uri.size());
+  options->engine_launch_uri.clear();
+}
+
 void ScrubCommandLineLaunchArguments(CommandLineOptions* options, int argc,
                                      char* argv[]) {
-  if (options == nullptr || options->raw_launch_argument.empty()) return;
+  if (options == nullptr) return;
+  if (options->raw_launch_argument.empty() && options->engine_launch_uri.empty()) {
+    return;
+  }
   const int argument_index = options->launch_argument_index;
+  const std::size_t length = options->raw_launch_argument.empty()
+                                 ? options->engine_launch_uri.size()
+                                 : options->raw_launch_argument.size();
   if (argv != nullptr && argument_index > 0 && argument_index < argc &&
       argv[argument_index] != nullptr) {
-    SecureErase(argv[argument_index], options->raw_launch_argument.size());
+    SecureErase(argv[argument_index], length);
+  }
+  if (options->raw_launch_argument.empty()) {
+    // A web-login ticket: argv is erased now, but the copy the engine consumes
+    // survives until ScrubEngineLaunchUri runs after native startup.
+    return;
   }
   SecureErase(options->raw_launch_argument.data(),
               options->raw_launch_argument.size());
@@ -248,7 +302,8 @@ std::string CommandLineUsage(const std::string& program_name) {
       << "  --windowed             Force windowed startup (default)\n"
       << "  --graphics <backend>   direct-vulkan | opengl | system | "
          "angle-vulkan (default: direct-vulkan)\n"
-      << "  --launch-uri <uri>     Join from a roblox:// website link\n"
+      << "  --launch-uri <uri>     A roblox:// website link: placeId=... to join,\n"
+         "                           or single-sign-on/login?auth=... to sign in\n"
       << "  --help, -h             Show this help\n\n"
       << "Auth:\n"
       << "  With no saved session, paste your .ROBLOSECURITY cookie at the\n"

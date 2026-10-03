@@ -832,6 +832,9 @@ int main(int argc, char* argv[]) {
   }
   int runtime_status =
       mocktail::legacy::Run(command_line.options, std::move(dependencies));
+  // The engine has had its chance at the web-login ticket; it is a bearer
+  // value, so it does not outlive native startup.
+  mocktail::runtime::ScrubEngineLaunchUri(&command_line.options);
   if (command_line.options.mode == mocktail::runtime::CommandMode::kRun) {
     mocktail::runtime::LogProcessDiagnostics(
         mocktail::runtime::ProcessDiagnosticStage::kShutdown);

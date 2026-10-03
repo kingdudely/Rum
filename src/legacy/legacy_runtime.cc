@@ -203,6 +203,9 @@ using NativeSetBaseUrlFn = void (*)(JNIEnv*, jclass, jstring, jstring);
 using NativeSetTaskSchedulerBackgroundModeFn = void (*)(JNIEnv*, jclass,
                                                         jboolean, jstring);
 using NativeObjectInitFn = void (*)(JNIEnv*, jclass, jobject);
+// The engine's WebLoginProtocol cold-start entry: handed the raw launch URI,
+// returns non-zero when it consumed a web-login ticket.
+using NativeColdStartUriFn = jboolean (*)(JNIEnv*, jclass, jstring);
 using NativeSetTwoStringParamsFn = void (*)(JNIEnv*, jclass, jstring, jstring);
 using NativeSetThreeStringParamsFn = void (*)(JNIEnv*, jclass, jstring,
                                               jstring, jstring);
@@ -287,6 +290,9 @@ void* RunJniOnLoadWorker(void* arg) {
 struct EngineStartupContext {
   jnivm::VM* vm;
   JavaVM* java_vm;
+  // Raw roblox:// argument the engine's own protocols may consume (web-login
+  // tickets). Empty when the launch was already normalized to a place.
+  const std::string* raw_launch_uri;
   jnivm::RobloxAuthIdentity account_identity;
   const mocktail::runtime::SecureRobloxCredential* roblox_credential;
   mocktail::runtime::RobloxGameSessionRuntime* game_session_runtime;
@@ -326,6 +332,8 @@ struct EngineStartupContext {
   NativeSetBaseUrlFn native_set_base_url;
   NativeObjectInitFn native_set_device_info;
   NativeObjectInitFn native_base_url_protocol_init;
+  NativeObjectInitFn native_web_login_protocol_init;
+  NativeColdStartUriFn native_web_login_cold_start;
   NativeSetStringParamFn native_set_roblox_channel;
   NativeSetStringParamFn native_override_channel_platform_name;
   NativeSetStringParamFn native_set_roblox_version;
@@ -3058,6 +3066,38 @@ void* EngineStartupThread(void* arg) {
       std::cout << "  [engine] JNIBaseUrlProtocol.init returned\n"
                 << std::flush;
     }
+    if (context->native_web_login_protocol_init != nullptr) {
+      // Binds CookieProtocol so the engine can write .ROBLOSECURITY itself.
+      // This is the whole native sign-in path: no WebView is involved.
+      jclass web_login_protocol_class =
+          env->FindClass("com/roblox/universalapp/linking/JNIWebLoginProtocol");
+      std::cout << "  [engine] JNIWebLoginProtocol.init\n" << std::flush;
+      context->native_web_login_protocol_init(env, web_login_protocol_class,
+                                              game_activity);
+      std::cout << "  [engine] JNIWebLoginProtocol.init returned\n"
+                << std::flush;
+      // On Android the launch Intent reaches WebLoginProtocol through the
+      // Java linking layer. There is none here, so hand the raw roblox://
+      // argument straight to the engine, which decides for itself whether it
+      // carries a web-login ticket.
+      if (context->native_web_login_cold_start != nullptr &&
+          context->raw_launch_uri != nullptr &&
+          !context->raw_launch_uri->empty()) {
+        jstring launch_uri = env->NewStringUTF(context->raw_launch_uri->c_str());
+        const jboolean consumed = launch_uri != nullptr
+                                      ? context->native_web_login_cold_start(
+                                            env, web_login_protocol_class,
+                                            launch_uri)
+                                      : JNI_FALSE;
+        if (launch_uri != nullptr) {
+          env->DeleteLocalRef(launch_uri);
+        }
+        std::cout << "  [engine] WebLoginProtocol cold start "
+                  << (consumed == JNI_TRUE ? "consumed" : "not a login link")
+                  << "\n"
+                  << std::flush;
+      }
+    }
     std::cout << "  [engine] NativeSettings directories returned\n"
               << std::flush;
   }
@@ -4030,6 +4070,9 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   jni_vm->RegisterClass("com/roblox/universalapp/messagebus/Connection");
   jni_vm->RegisterClass(
       "com/roblox/universalapp/systemtheme/SystemThemeProtocol");
+  jni_vm->RegisterClass("com/roblox/universalapp/cookie/CookieProtocol");
+  jni_vm->RegisterClass(
+      "com/roblox/universalapp/linking/JNIWebLoginProtocol");
   jni_vm->RegisterClass("com/roblox/universalapp/cookie/JNICookieManager");
   jni_vm->RegisterClass("com/roblox/universalapp/cookie/JNICookieProtocol");
   jni_vm->RegisterClass(
@@ -5322,6 +5365,15 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
             roblox_handle,
             "Java_com_roblox_universalapp_linking_JNIBaseUrlProtocol_init"));
+    auto* native_web_login_protocol_init =
+        reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
+            roblox_handle,
+            "Java_com_roblox_universalapp_linking_JNIWebLoginProtocol_init"));
+    auto* native_web_login_cold_start =
+        reinterpret_cast<NativeColdStartUriFn>(linker::ResolveSymbol(
+            roblox_handle,
+            "Java_com_roblox_universalapp_linking_"
+            "JNIWebLoginProtocol_maybeHandleColdStartProtocolLaunch"));
     auto* native_set_roblox_channel =
         reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
             roblox_handle,
@@ -5969,6 +6021,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     EngineStartupContext startup_context_value = {
         jni_vm.get(),
         raw_vm,
+        &options.engine_launch_uri,
         dependencies.account_identity(),
         &dependencies.roblox_credential(),
         game_session_runtime.get(),
@@ -6007,6 +6060,8 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         native_set_base_url,
         native_set_device_info,
         native_base_url_protocol_init,
+        native_web_login_protocol_init,
+        native_web_login_cold_start,
         native_set_roblox_channel,
         native_override_channel_platform_name,
         native_set_roblox_version,

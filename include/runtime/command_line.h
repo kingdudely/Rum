@@ -30,6 +30,11 @@ struct CommandLineOptions {
   std::string raw_launch_argument;
   std::string launch_request_json;
   int launch_argument_index = -1;
+  // A roblox:// argument that is not a place launch: a web-login ticket for
+  // the engine's own linking protocols to redeem. Deliberately kept out of
+  // raw_launch_argument, the re-exec argv and the environment, because it is
+  // a bearer value. Cleared once the engine has consumed it.
+  std::string engine_launch_uri;
 };
 
 struct CommandLineParseResult {
@@ -51,6 +56,8 @@ bool BuildCommandLineReexecArguments(const CommandLineOptions& options,
 // after the request and sanitized re-exec argv have been created.
 void ScrubCommandLineLaunchArguments(CommandLineOptions* options, int argc,
                                      char* argv[]);
+// Erases the web-login bearer value once the engine has consumed it.
+void ScrubEngineLaunchUri(CommandLineOptions* options);
 bool ApplyCommandLineEnvironment(const CommandLineOptions& options,
                                  std::string* error);
 std::string CommandLineUsage(const std::string& program_name);
