@@ -2303,12 +2303,42 @@ jobject BuildConfiguration(JNIEnv* env) {
   return jnivm::CreateAndroidConfiguration(env);
 }
 
-void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
-                             const EngineStartupContext* context) {
-  if (!env || !settings_class || !context) {
-    return;
-  }
+// Every path, URL and identity value ConfigureNativeSettings hands to the
+// engine. Each one comes from the environment with an Android-shaped
+// default, so they are resolved together up front and then passed around as
+// a single value instead of thirty separate locals.
+struct NativeSettingsValues {
+  std::string data_dir;
+  std::string files_dir;
+  std::string settings_cache_dir;
+  std::string cache_dir;
+  std::string external_base;
+  std::string external_dir;
+  std::string preferences_file;
+  std::string default_policy_file;
+  std::string base_url;
+  std::string api_url;
+  std::string roblox_channel;
+  std::string channel_platform_name;
+  std::string roblox_version;
+  std::string exception_reason_filename;
+  std::string http_proxy_host;
+  jlong http_proxy_port = 0;
+  std::string cookie_base_url;
+  std::string cookie_domain;
+  const mocktail::runtime::SecureRobloxCredential* credential = nullptr;
+  std::string_view roblox_cookies;
+  std::string cookie_manager_cookies;
+  std::string android_id;
+  std::string advertising_id;
+  std::string account_user_id;
+};
 
+// Resolves those values, and says once, up front, whether a Roblox
+// credential was found -- so the caller can tell a signed-in cold start from
+// an anonymous one before it starts calling into the engine.
+NativeSettingsValues ResolveNativeSettingsValues(
+    const EngineStartupContext* context) {
   const std::string sober_data_root = SoberDataRoot();
   const std::string sober_cache_root = SoberCacheRoot();
   std::string data_dir = GetEnvStringDefaultPath(
@@ -2389,53 +2419,91 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
       context->account_identity;
   std::string account_user_id = std::to_string(account_identity.user_id);
 
-  EnsureAndroidDirectory(data_dir);
-  EnsureAndroidDirectory(files_dir);
-  EnsureAndroidDirectory(settings_cache_dir);
-  EnsureAndroidDirectory(cache_dir);
-  EnsureAndroidDirectory(external_base);
-  EnsureAndroidDirectory(external_dir);
-  EnsureAndroidDirectory(data_dir + "/rbx-storage");
-  EnsureAndroidDirectory(data_dir + "/appData");
-  EnsureAndroidDirectory(data_dir + "/appData/LocalStorage");
-  EnsureAndroidDirectory(data_dir + "/appData/rbx-storage");
-  EnsureAndroidDirectory(files_dir + "/rbx-storage");
-  EnsureAndroidDirectory(files_dir + "/appData");
-  EnsureAndroidDirectory(files_dir + "/appData/LocalStorage");
-  EnsureAndroidDirectory(files_dir + "/appData/OTAPatchBackups");
-  EnsureAndroidDirectory(files_dir + "/appData/rbx-storage");
-  EnsureAndroidDirectory(cache_dir + "/ContentProvider_2");
-  EnsureAndroidDirectory(cache_dir + "/rbx-storage");
-  EnsureAndroidDirectory(cache_dir + "/sounds");
+  NativeSettingsValues values;
+  values.data_dir = data_dir;
+  values.files_dir = files_dir;
+  values.settings_cache_dir = settings_cache_dir;
+  values.cache_dir = cache_dir;
+  values.external_base = external_base;
+  values.external_dir = external_dir;
+  values.preferences_file = preferences_file;
+  values.default_policy_file = default_policy_file;
+  values.base_url = base_url;
+  values.api_url = api_url;
+  values.roblox_channel = roblox_channel;
+  values.channel_platform_name = channel_platform_name;
+  values.roblox_version = roblox_version;
+  values.exception_reason_filename = exception_reason_filename;
+  values.http_proxy_host = http_proxy_host;
+  values.http_proxy_port = http_proxy_port;
+  values.cookie_base_url = cookie_base_url;
+  values.cookie_domain = cookie_domain;
+  values.credential = credential;
+  values.roblox_cookies = roblox_cookies;
+  values.cookie_manager_cookies = cookie_manager_cookies;
+  values.android_id = android_id;
+  values.advertising_id = advertising_id;
+  values.account_user_id = account_user_id;
+  return values;
+}
 
-  jstring data_dir_string = env->NewStringUTF(data_dir.c_str());
-  jstring files_dir_string = env->NewStringUTF(files_dir.c_str());
+void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
+                             const EngineStartupContext* context) {
+  if (!env || !settings_class || !context) {
+    return;
+  }
+
+  // Deliberately not const: the cookie copy is wiped from memory by
+  // SecurelyClearString before this function returns.
+  NativeSettingsValues values = ResolveNativeSettingsValues(context);
+
+  EnsureAndroidDirectory(values.data_dir);
+  EnsureAndroidDirectory(values.files_dir);
+  EnsureAndroidDirectory(values.settings_cache_dir);
+  EnsureAndroidDirectory(values.cache_dir);
+  EnsureAndroidDirectory(values.external_base);
+  EnsureAndroidDirectory(values.external_dir);
+  EnsureAndroidDirectory(values.data_dir + "/rbx-storage");
+  EnsureAndroidDirectory(values.data_dir + "/appData");
+  EnsureAndroidDirectory(values.data_dir + "/appData/LocalStorage");
+  EnsureAndroidDirectory(values.data_dir + "/appData/rbx-storage");
+  EnsureAndroidDirectory(values.files_dir + "/rbx-storage");
+  EnsureAndroidDirectory(values.files_dir + "/appData");
+  EnsureAndroidDirectory(values.files_dir + "/appData/LocalStorage");
+  EnsureAndroidDirectory(values.files_dir + "/appData/OTAPatchBackups");
+  EnsureAndroidDirectory(values.files_dir + "/appData/rbx-storage");
+  EnsureAndroidDirectory(values.cache_dir + "/ContentProvider_2");
+  EnsureAndroidDirectory(values.cache_dir + "/rbx-storage");
+  EnsureAndroidDirectory(values.cache_dir + "/sounds");
+
+  jstring data_dir_string = env->NewStringUTF(values.data_dir.c_str());
+  jstring files_dir_string = env->NewStringUTF(values.files_dir.c_str());
   jstring settings_cache_dir_string =
-      env->NewStringUTF(settings_cache_dir.c_str());
-  jstring external_base_string = env->NewStringUTF(external_base.c_str());
-  jstring external_dir_string = env->NewStringUTF(external_dir.c_str());
-  jstring preferences_file_string = env->NewStringUTF(preferences_file.c_str());
+      env->NewStringUTF(values.settings_cache_dir.c_str());
+  jstring external_base_string = env->NewStringUTF(values.external_base.c_str());
+  jstring external_dir_string = env->NewStringUTF(values.external_dir.c_str());
+  jstring preferences_file_string = env->NewStringUTF(values.preferences_file.c_str());
   jstring default_policy_file_string =
-      env->NewStringUTF(default_policy_file.c_str());
-  jstring base_url_string = env->NewStringUTF(base_url.c_str());
-  jstring api_url_string = env->NewStringUTF(api_url.c_str());
-  jstring roblox_channel_string = env->NewStringUTF(roblox_channel.c_str());
+      env->NewStringUTF(values.default_policy_file.c_str());
+  jstring base_url_string = env->NewStringUTF(values.base_url.c_str());
+  jstring api_url_string = env->NewStringUTF(values.api_url.c_str());
+  jstring roblox_channel_string = env->NewStringUTF(values.roblox_channel.c_str());
   jstring channel_platform_name_string =
-      env->NewStringUTF(channel_platform_name.c_str());
-  jstring roblox_version_string = env->NewStringUTF(roblox_version.c_str());
+      env->NewStringUTF(values.channel_platform_name.c_str());
+  jstring roblox_version_string = env->NewStringUTF(values.roblox_version.c_str());
   jstring exception_reason_filename_string =
-      env->NewStringUTF(exception_reason_filename.c_str());
-  jstring http_proxy_host_string = env->NewStringUTF(http_proxy_host.c_str());
-  jstring cookie_base_url_string = env->NewStringUTF(cookie_base_url.c_str());
-  jstring cookie_domain_string = env->NewStringUTF(cookie_domain.c_str());
+      env->NewStringUTF(values.exception_reason_filename.c_str());
+  jstring http_proxy_host_string = env->NewStringUTF(values.http_proxy_host.c_str());
+  jstring cookie_base_url_string = env->NewStringUTF(values.cookie_base_url.c_str());
+  jstring cookie_domain_string = env->NewStringUTF(values.cookie_domain.c_str());
   jstring roblox_cookies_string = env->NewStringUTF(
-      credential != nullptr ? credential->c_str() : "");
+      values.credential != nullptr ? values.credential->c_str() : "");
   jstring cookie_manager_cookies_string =
-      env->NewStringUTF(cookie_manager_cookies.c_str());
-  jstring android_id_string = env->NewStringUTF(android_id.c_str());
-  jstring advertising_id_string = env->NewStringUTF(advertising_id.c_str());
+      env->NewStringUTF(values.cookie_manager_cookies.c_str());
+  jstring android_id_string = env->NewStringUTF(values.android_id.c_str());
+  jstring advertising_id_string = env->NewStringUTF(values.advertising_id.c_str());
   jstring googleplay_string = env->NewStringUTF("googleplay");
-  jstring user_id_string = env->NewStringUTF(account_user_id.c_str());
+  jstring user_id_string = env->NewStringUTF(values.account_user_id.c_str());
   auto run_native_setting = [](const char* name, auto call) -> bool {
     if (sigsetjmp(g_native_settings_jmp_buf, 1) == 0) {
       g_native_settings_recovery_name = name;
@@ -2456,19 +2524,19 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   if (context->native_set_http_client_proxy &&
       ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_HTTP_CLIENT_PROXY", false)) {
     std::cout << "  [engine] NativeSettings httpClientProxy host="
-              << http_proxy_host << " port=" << http_proxy_port << '\n'
+              << values.http_proxy_host << " port=" << values.http_proxy_port << '\n'
               << std::flush;
     run_native_setting("httpClientProxy", [&]() {
       context->native_set_http_client_proxy(env, settings_class,
                                             http_proxy_host_string,
-                                            http_proxy_port);
+                                            values.http_proxy_port);
     });
   }
   if (context->native_set_exception_reason_filename &&
       ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_EXCEPTION_REASON_FILENAME",
                            true)) {
     std::cout << "  [engine] NativeSettings exceptionReasonFilename="
-              << exception_reason_filename << '\n'
+              << values.exception_reason_filename << '\n'
               << std::flush;
     run_native_setting("exceptionReasonFilename", [&]() {
       context->native_set_exception_reason_filename(
@@ -2477,8 +2545,8 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   }
   if (context->native_set_base_url &&
       ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_BASE_URL", true)) {
-    std::cout << "  [engine] NativeSettings baseUrl=" << base_url
-              << " apiUrl=" << api_url << '\n' << std::flush;
+    std::cout << "  [engine] NativeSettings baseUrl=" << values.base_url
+              << " apiUrl=" << values.api_url << '\n' << std::flush;
     run_native_setting("baseUrl", [&]() {
       context->native_set_base_url(env, settings_class, base_url_string,
                                    api_url_string);
@@ -2486,7 +2554,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   }
   if (context->native_set_roblox_channel &&
       ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_ROBLOX_CHANNEL", true)) {
-    std::cout << "  [engine] NativeSettings robloxChannel=" << roblox_channel
+    std::cout << "  [engine] NativeSettings robloxChannel=" << values.roblox_channel
               << '\n'
               << std::flush;
     run_native_setting("robloxChannel", [&]() {
@@ -2498,7 +2566,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
       ShouldRunStartupStep("MOCKTAIL_NATIVE_OVERRIDE_CHANNEL_PLATFORM_NAME",
                            true)) {
     std::cout << "  [engine] NativeSettings channelPlatformName="
-              << channel_platform_name << '\n' << std::flush;
+              << values.channel_platform_name << '\n' << std::flush;
     run_native_setting("channelPlatformName", [&]() {
       context->native_override_channel_platform_name(
           env, settings_class, channel_platform_name_string);
@@ -2506,7 +2574,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   }
   if (context->native_set_roblox_version &&
       ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_ROBLOX_VERSION", true)) {
-    std::cout << "  [engine] NativeSettings robloxVersion=" << roblox_version
+    std::cout << "  [engine] NativeSettings robloxVersion=" << values.roblox_version
               << '\n' << std::flush;
     run_native_setting("robloxVersion", [&]() {
       context->native_set_roblox_version(env, settings_class,
@@ -2576,14 +2644,14 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
     return cookie_manager_class;
   };
   if (context->native_cookie_manager_set_cookie &&
-      !cookie_manager_cookies.empty() &&
+      !values.cookie_manager_cookies.empty() &&
       // This native path expects Roblox's full cookie backend singleton. In
       // Mocktail it currently reaches heap function pointers, so keep it opt-in.
       ShouldRunStartupStep("MOCKTAIL_JNI_COOKIE_MANAGER_SET_COOKIE", false)) {
     jclass cls = find_cookie_manager_class();
     if (cls != nullptr) {
       std::cout << "  [engine] JNICookieManager.setCookie domain="
-                << cookie_domain << " bytes=" << cookie_manager_cookies.size()
+                << values.cookie_domain << " bytes=" << values.cookie_manager_cookies.size()
                 << '\n' << std::flush;
       if (IsEnabled("MOCKTAIL_UNSAFE_NATIVE_COOKIE_SETTER")) {
         if (sigsetjmp(g_cookie_setter_jmp_buf, 1) == 0) {
@@ -2606,21 +2674,21 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
                   << std::flush;
       }
     }
-  } else if (!cookie_manager_cookies.empty() &&
+  } else if (!values.cookie_manager_cookies.empty() &&
              context->native_cookie_manager_set_cookie != nullptr) {
     std::cout << "  [engine] JNICookieManager.setCookie skipped; set "
               << "MOCKTAIL_JNI_COOKIE_MANAGER_SET_COOKIE=1 to force\n"
               << std::flush;
-  } else if (!cookie_manager_cookies.empty() &&
+  } else if (!values.cookie_manager_cookies.empty() &&
              context->native_cookie_manager_set_cookie == nullptr) {
     std::cout << "  [engine] WARNING: JNICookieManager.setCookie unavailable\n"
               << std::flush;
   }
 
-  if (context->native_set_multiple_cookies && !roblox_cookies.empty() &&
+  if (context->native_set_multiple_cookies && !values.roblox_cookies.empty() &&
       ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_MULTIPLE_COOKIES", true)) {
     std::cout << "  [engine] NativeSettings multipleCookies base="
-              << cookie_base_url << " bytes=" << roblox_cookies.size() << '\n'
+              << values.cookie_base_url << " bytes=" << values.roblox_cookies.size() << '\n'
               << std::flush;
     run_native_setting("multipleCookies", [&]() {
       context->native_set_multiple_cookies(env, settings_class,
@@ -2633,7 +2701,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   if (context->native_set_platform_headers_with_idfa &&
       ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_PLATFORM_HEADERS", false)) {
     std::cout << "  [engine] NativeSettings platformHeaders androidId="
-              << android_id << '\n'
+              << values.android_id << '\n'
               << std::flush;
     run_native_setting("platformHeaders", [&]() {
       context->native_set_platform_headers_with_idfa(
@@ -2643,13 +2711,13 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   }
   if (context->native_set_user_id &&
       ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_USER_ID", false)) {
-    std::cout << "  [engine] NativeSettings userId=" << account_user_id << '\n'
+    std::cout << "  [engine] NativeSettings userId=" << values.account_user_id << '\n'
               << std::flush;
     run_native_setting("userId", [&]() {
       context->native_set_user_id(env, settings_class, user_id_string);
     });
   }
-  mocktail::runtime::SecurelyClearString(&cookie_manager_cookies);
+  mocktail::runtime::SecurelyClearString(&values.cookie_manager_cookies);
 }
 
 void ConfigureLocalStorage(JNIEnv* env, const EngineStartupContext* context) {
