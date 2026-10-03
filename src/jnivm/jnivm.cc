@@ -5938,7 +5938,9 @@ void VM::InitJNIEnvObjectReferenceInterface() {
 
 // Method invocation: the plain, static and non-virtual call families in
 // their fixed-width, va_list and jvalue-array forms.
-void VM::InitJNIEnvMethodInterface() {
+// Method-id lookup and reflection. Roblox resolves some method ids
+// against synthetic values that carry the method name and signature.
+void VM::InitJNIEnvMethodIdInterface() {
   native_interface_.GetStaticMethodID =
       [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jmethodID {
     auto cls = ClassFromJClass(clazz);
@@ -5974,6 +5976,11 @@ void VM::InitJNIEnvMethodInterface() {
     return reinterpret_cast<jobject>(methodID);
   };
 
+}
+
+// Static method invocation, in the fixed-width, va_list and
+// jvalue-array forms of each return type.
+void VM::InitJNIEnvStaticMethodInterface() {
   native_interface_.CallStaticVoidMethod = CallStaticVoidMethod;
 
   native_interface_.CallStaticVoidMethodV =
@@ -6146,6 +6153,10 @@ void VM::InitJNIEnvMethodInterface() {
       [](JNIEnv * /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
          const jvalue * /*args*/) -> jdouble { return 0.0; };
 
+}
+
+// Instance method invocation, in the same three forms.
+void VM::InitJNIEnvInstanceMethodInterface() {
   native_interface_.CallVoidMethod = CallVoidMethod;
 
   native_interface_.CallVoidMethodV = [](JNIEnv * /*env*/, jobject obj,
@@ -6415,9 +6426,17 @@ void VM::InitJNIEnvMethodInterface() {
 
 }
 
+// Method calls, split by how the method is reached.
+void VM::InitJNIEnvMethodInterface() {
+  InitJNIEnvMethodIdInterface();
+  InitJNIEnvStaticMethodInterface();
+  InitJNIEnvInstanceMethodInterface();
+}
+
 // Field reads and writes, in the plain and static forms. Roblox resolves
 // some of these against synthetic field ids that carry the field name.
-void VM::InitJNIEnvFieldInterface() {
+// Field-id lookup and reflection.
+void VM::InitJNIEnvFieldIdInterface() {
   native_interface_.GetStaticFieldID =
       [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jfieldID {
     auto cls = ClassFromJClass(clazz);
@@ -6453,6 +6472,10 @@ void VM::InitJNIEnvFieldInterface() {
     return reinterpret_cast<jobject>(fieldID);
   };
 
+}
+
+// Static field reads and writes for every type.
+void VM::InitJNIEnvStaticFieldInterface() {
   native_interface_.GetStaticObjectField =
       [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID fieldID) -> jobject {
     if (TraceEnabled()) {
@@ -6536,6 +6559,10 @@ void VM::InitJNIEnvFieldInterface() {
       [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
          jdouble /*value*/) {};
 
+}
+
+// Instance field reads and writes for every type.
+void VM::InitJNIEnvInstanceFieldInterface() {
   native_interface_.GetObjectField =
       [](JNIEnv* env, jobject obj, jfieldID fieldID) -> jobject {
     auto* name = reinterpret_cast<const char*>(fieldID);
@@ -6610,6 +6637,13 @@ void VM::InitJNIEnvFieldInterface() {
   native_interface_.SetDoubleField =
       [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/, jdouble /*val*/) {};
 
+}
+
+// Field access, split by how the field is reached.
+void VM::InitJNIEnvFieldInterface() {
+  InitJNIEnvFieldIdInterface();
+  InitJNIEnvStaticFieldInterface();
+  InitJNIEnvInstanceFieldInterface();
 }
 
 // UTF-16 and modified-UTF-8 string construction, access and release.

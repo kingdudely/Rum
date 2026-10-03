@@ -589,7 +589,13 @@ private:
   void InitJNIEnvExceptionInterface();
   void InitJNIEnvObjectReferenceInterface();
   void InitJNIEnvMethodInterface();
+  void InitJNIEnvMethodIdInterface();
+  void InitJNIEnvStaticMethodInterface();
+  void InitJNIEnvInstanceMethodInterface();
   void InitJNIEnvFieldInterface();
+  void InitJNIEnvFieldIdInterface();
+  void InitJNIEnvStaticFieldInterface();
+  void InitJNIEnvInstanceFieldInterface();
   void InitJNIEnvStringInterface();
   void InitJNIEnvArrayInterface();
   void InitJNIEnvMiscInterface();
