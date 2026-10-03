@@ -6207,6 +6207,159 @@ bool InitializeTypedInput(
   return true;
 }
 
+// What the stub preload produced. The handle list feeds symbol resolution;
+// the name list and the Vulkan adapter handle are both needed again later,
+// when the synthetic SONAMEs get loaded.
+struct BionicStubPreload {
+  std::vector<const char*> names;
+  std::vector<void*> handles;
+  void* vulkan_adapter = nullptr;
+};
+
+// One pass over kSymbolsToRegister, summarised so the caller can report
+// where each GL symbol came from.
+struct GlSymbolStats {
+  int registered = 0;
+  int total_symbols = 0;
+  int gl_symbol_count = 0;
+  int gl_from_window = 0;
+  int gl_from_real_gles = 0;
+  int gl_from_stub = 0;
+  int gl_from_host = 0;
+  int gl_unresolved = 0;
+};
+
+// Opens every Bionic library the guest can import from and keeps the
+// handles. EGL and Vulkan prefer our own adapter over whatever the host
+// happens to have, since the guest resolves those two by SONAME.
+BionicStubPreload PreloadBionicStubs(
+    const mocktail::graphics::BionicEglBridge& bionic_egl_bridge) {
+  std::vector<const char*> stub_names = {
+      "libc.so", "libdl.so", "libm.so", "libz.so",
+      "libandroid.so", "liblog.so", "libmediandk.so",
+      "libOpenSLES.so", "libOpenMAXAL.so",
+      "libEGL.so", "libGLESv2.so",
+  };
+  if (IsEnabled("MOCKTAIL_PRELOAD_VULKAN_SHIM")) {
+    stub_names.push_back("libvulkan.so");
+  }
+
+  std::vector<void*> stub_handles;
+  void* bionic_vulkan_adapter_handle = nullptr;
+  for (const char* name : stub_names) {
+    void* h = nullptr;
+    bool exact_adapter = false;
+    if (std::strcmp(name, "libEGL.so") == 0 &&
+        bionic_egl_bridge.IsLoaded()) {
+      h = bionic_egl_bridge.handle();
+      exact_adapter = true;
+    } else {
+      const std::string adapter = RuntimeBionicAdapterPath(name);
+      if (!adapter.empty()) {
+        h = ::dlopen(adapter.c_str(), RTLD_LAZY | RTLD_GLOBAL);
+        exact_adapter = h != nullptr;
+      }
+    }
+    if (h == nullptr) {
+      h = ::dlopen(name, RTLD_LAZY | RTLD_GLOBAL | RTLD_NOLOAD);
+      if (!h) h = ::dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
+    }
+    if (h) {
+      std::cout << "  [stubs] Preloaded " << name;
+      if (exact_adapter) {
+        std::cout << " via exact host adapter";
+      }
+      std::cout << '\n';
+      stub_handles.push_back(h);
+      if (std::strcmp(name, "libvulkan.so") == 0) {
+        bionic_vulkan_adapter_handle = h;
+      }
+    } else {
+      std::cerr << "  [warn]  Could not preload " << name
+                << ": " << ::dlerror() << '\n';
+    }
+  }
+  return BionicStubPreload{stub_names, stub_handles,
+                         bionic_vulkan_adapter_handle};
+}
+
+// Walks kSymbolsToRegister and binds each name to whatever can satisfy it:
+// for GL, the real GLES library first and then our stubs; otherwise the
+// host. Anything still unresolved is counted, not registered as null.
+GlSymbolStats RegisterEngineSymbols(bool has_window,
+                                     void* real_gles_handle,
+                                     const std::vector<void*>& stub_handles) {
+  int registered = 0;
+  int total_symbols = 0;
+  int gl_symbol_count = 0;
+  int gl_from_window = 0;
+  int gl_from_real_gles = 0;
+  int gl_from_stub = 0;
+  int gl_from_host = 0;
+  int gl_unresolved = 0;
+  for (const char* sym : kSymbolsToRegister) {
+    ++total_symbols;
+    auto result = ResolveSymbolForBionic(sym, has_window, real_gles_handle,
+                                         stub_handles);
+    void* addr = result.address;
+    const bool is_gl_symbol = IsGlSymbol(sym);
+    if (addr == nullptr && is_gl_symbol) {
+      ++gl_unresolved;
+    }
+    if (is_gl_symbol) {
+      ++gl_symbol_count;
+      switch (result.source) {
+        case SymbolResolveSource::kWindow:
+          ++gl_from_window;
+          break;
+        case SymbolResolveSource::kRealGles:
+          ++gl_from_real_gles;
+          break;
+        case SymbolResolveSource::kStub:
+          ++gl_from_stub;
+          break;
+        case SymbolResolveSource::kHost:
+          ++gl_from_host;
+          break;
+        case SymbolResolveSource::kMissing:
+        default:
+          break;
+      }
+    }
+
+    if (addr) {
+      linker::RegisterSymbol(sym, addr);
+      ++registered;
+    }
+  }
+  return GlSymbolStats{registered,     total_symbols,
+                       gl_symbol_count, gl_from_window,
+                       gl_from_real_gles, gl_from_stub,
+                       gl_from_host,  gl_unresolved};
+}
+
+// The Vulkan adapter exposes the loader entry points under both
+// libvulkan.so and libvulkan.so.1, so the guest resolves them whichever
+// SONAME it happens to import.
+void RegisterVulkanAdapterExports(void* bionic_vulkan_adapter_handle) {
+  if (bionic_vulkan_adapter_handle != nullptr) {
+    size_t vulkan_exports = 0;
+    for (const char* name : kVulkanAdapterExports) {
+      void* address = ::dlsym(bionic_vulkan_adapter_handle, name);
+      if (address == nullptr ||
+          !StubOwnsSymbolAddress(bionic_vulkan_adapter_handle, address)) {
+        continue;
+      }
+      linker::RegisterSyntheticSymbol("libvulkan.so", name, address);
+      linker::RegisterSyntheticSymbol("libvulkan.so.1", name, address);
+      linker::RegisterSymbol(name, address);
+      ++vulkan_exports;
+    }
+    std::cout << "  [vulkan] registered exact Android loader adapter exports: "
+              << vulkan_exports << '\n';
+  }
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -6376,131 +6529,37 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     }
   }
 
-  std::vector<const char*> stub_names = {
-      "libc.so", "libdl.so", "libm.so", "libz.so",
-      "libandroid.so", "liblog.so", "libmediandk.so",
-      "libOpenSLES.so", "libOpenMAXAL.so",
-      "libEGL.so", "libGLESv2.so",
-  };
-  if (IsEnabled("MOCKTAIL_PRELOAD_VULKAN_SHIM")) {
-    stub_names.push_back("libvulkan.so");
-  }
-
-  std::vector<void*> stub_handles;
-  void* bionic_vulkan_adapter_handle = nullptr;
-  for (const char* name : stub_names) {
-    void* h = nullptr;
-    bool exact_adapter = false;
-    if (std::strcmp(name, "libEGL.so") == 0 &&
-        bionic_egl_bridge.IsLoaded()) {
-      h = bionic_egl_bridge.handle();
-      exact_adapter = true;
-    } else {
-      const std::string adapter = RuntimeBionicAdapterPath(name);
-      if (!adapter.empty()) {
-        h = ::dlopen(adapter.c_str(), RTLD_LAZY | RTLD_GLOBAL);
-        exact_adapter = h != nullptr;
-      }
-    }
-    if (h == nullptr) {
-      h = ::dlopen(name, RTLD_LAZY | RTLD_GLOBAL | RTLD_NOLOAD);
-      if (!h) h = ::dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
-    }
-    if (h) {
-      std::cout << "  [stubs] Preloaded " << name;
-      if (exact_adapter) {
-        std::cout << " via exact host adapter";
-      }
-      std::cout << '\n';
-      stub_handles.push_back(h);
-      if (std::strcmp(name, "libvulkan.so") == 0) {
-        bionic_vulkan_adapter_handle = h;
-      }
-    } else {
-      std::cerr << "  [warn]  Could not preload " << name
-                << ": " << ::dlerror() << '\n';
-    }
-  }
+  const BionicStubPreload stubs = PreloadBionicStubs(bionic_egl_bridge);
   void* real_gles_handle = nullptr;
   if (has_window && !IsEnabled("MOCKTAIL_GLES_FORCE_STUB") &&
       !IsEnabled("MOCKTAIL_GLES_NOOP_DRAW_CALLS")) {
     real_gles_handle = OpenRealGlesLibrary();
   }
 
-  int registered = 0;
-  int total_symbols = 0;
-  int gl_symbol_count = 0;
-  int gl_from_window = 0;
-  int gl_from_real_gles = 0;
-  int gl_from_stub = 0;
-  int gl_from_host = 0;
-  int gl_unresolved = 0;
-  for (const char* sym : kSymbolsToRegister) {
-    ++total_symbols;
-    auto result = ResolveSymbolForBionic(sym, has_window, real_gles_handle,
-                                         stub_handles);
-    void* addr = result.address;
-    const bool is_gl_symbol = IsGlSymbol(sym);
-    if (addr == nullptr && is_gl_symbol) {
-      ++gl_unresolved;
-    }
-    if (is_gl_symbol) {
-      ++gl_symbol_count;
-      switch (result.source) {
-        case SymbolResolveSource::kWindow:
-          ++gl_from_window;
-          break;
-        case SymbolResolveSource::kRealGles:
-          ++gl_from_real_gles;
-          break;
-        case SymbolResolveSource::kStub:
-          ++gl_from_stub;
-          break;
-        case SymbolResolveSource::kHost:
-          ++gl_from_host;
-          break;
-        case SymbolResolveSource::kMissing:
-        default:
-          break;
-      }
-    }
-
-    if (addr) {
-      linker::RegisterSymbol(sym, addr);
-      ++registered;
-    }
-  }
-  if (bionic_vulkan_adapter_handle != nullptr) {
-    size_t vulkan_exports = 0;
-    for (const char* name : kVulkanAdapterExports) {
-      void* address = ::dlsym(bionic_vulkan_adapter_handle, name);
-      if (address == nullptr ||
-          !StubOwnsSymbolAddress(bionic_vulkan_adapter_handle, address)) {
-        continue;
-      }
-      linker::RegisterSyntheticSymbol("libvulkan.so", name, address);
-      linker::RegisterSyntheticSymbol("libvulkan.so.1", name, address);
-      linker::RegisterSymbol(name, address);
-      ++vulkan_exports;
-    }
-    std::cout << "  [vulkan] registered exact Android loader adapter exports: "
-              << vulkan_exports << '\n';
-  }
+  const GlSymbolStats gl_stats = RegisterEngineSymbols(
+      has_window, real_gles_handle, stubs.handles);
+  RegisterVulkanAdapterExports(stubs.vulkan_adapter);
   RegisterBionicNetworkAndPthreadSymbols();
-  (void)registered;
-  std::cout << "  [linker] Registered " << registered << " / " << total_symbols
-            << " known symbols.\n";
-  std::cout << "  [linker] GL symbol resolution: total=" << gl_symbol_count
-            << ", window=" << gl_from_window
-            << ", real_gles=" << gl_from_real_gles
-            << ", stub=" << gl_from_stub << ", host=" << gl_from_host
-            << ", unresolved=" << gl_unresolved << '\n';
+  std::cout << "  [linker] Registered " << gl_stats.registered << " / "
+            << gl_stats.total_symbols << " known symbols.\n";
+  std::cout << "  [linker] GL symbol resolution: total="
+            << gl_stats.gl_symbol_count
+            << ", window=" << gl_stats.gl_from_window
+            << ", real_gles=" << gl_stats.gl_from_real_gles
+            << ", stub=" << gl_stats.gl_from_stub
+            << ", host=" << gl_stats.gl_from_host
+            << ", unresolved=" << gl_stats.gl_unresolved << '\n';
   if (IsEnabled("MOCKTAIL_REQUIRE_REAL_GRAPHICS") && has_window &&
       !IsEnabled("MOCKTAIL_GLES_FORCE_STUB") &&
       !IsEnabled("MOCKTAIL_GLES_NOOP_DRAW_CALLS")) {
-    if (gl_from_stub > 0 || gl_unresolved > 0 || (gl_from_window == 0 &&
-                                                  gl_from_real_gles == 0 &&
-                                                  gl_from_host == 0)) {
+    // Real graphics means no GL symbol came from a stub, none failed to
+    // resolve, and at least one came from a real source.
+    const bool gl_never_really_resolved =
+        gl_stats.gl_from_stub > 0 || gl_stats.gl_unresolved > 0;
+    const bool gl_from_no_real_source =
+        gl_stats.gl_from_window == 0 &&
+        gl_stats.gl_from_real_gles == 0 && gl_stats.gl_from_host == 0;
+    if (gl_never_really_resolved || gl_from_no_real_source) {
       std::cerr << "[FATAL] Cannot guarantee real GL symbols for "
                    "windowed mode.\n"
                 << "  Set MOCKTAIL_GLES_FORCE_STUB=1 or "
@@ -6546,7 +6605,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
               if (linker::GetBionicSymbols().count(name)) continue;
               auto result = ResolveSymbolForBionic(name, has_window,
                                                   real_gles_handle,
-                                                  stub_handles);
+                                                  stubs.handles);
               if (result.address != nullptr) {
                 linker::RegisterSymbol(name, result.address);
                 ++auto_registered;
@@ -6574,10 +6633,10 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   std::cout << "  [linker] dl_iterate_phdr routed to Bionic linker before "
                "SONAME snapshots\n"
             << std::flush;
-  for (const char* name : stub_names) {
+  for (const char* name : stubs.names) {
     linker::LoadLibrary(name, name);
   }
-  if (bionic_vulkan_adapter_handle != nullptr) {
+  if (stubs.vulkan_adapter != nullptr) {
     linker::LoadLibrary("libvulkan.so.1", "libvulkan.so.1");
   }
   PreloadPthreadSymbols();
