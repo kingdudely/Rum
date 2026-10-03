@@ -23,6 +23,12 @@ constexpr int kSchemaVersion = 1;
 constexpr std::uintmax_t kMaximumStateBytes = 32U * 1024U;
 constexpr int kMaximumExtent = 16384;
 constexpr int kMaximumCoordinateMagnitude = 131072;
+// Smallest geometry worth remembering across runs. The surface-lifecycle
+// minimum (kMinimumWindowWidth/Height) only answers "is this a real surface?",
+// so it is far too permissive to keep: a transient sub-minimum configure during
+// startup would be persisted and then restored as a sliver every launch.
+constexpr int kMinimumPersistedWidth = 320;
+constexpr int kMinimumPersistedHeight = 240;
 
 using platform::MakeTemporaryPath;
 using platform::ScopedFileDescriptor;
@@ -37,9 +43,9 @@ Status PlatformError(std::string message) {
 }
 
 bool IsValidState(const PersistedWindowState& state) {
-  return state.width >= kMinimumWindowWidth &&
+  return state.width >= kMinimumPersistedWidth &&
          state.width <= kMaximumExtent &&
-         state.height >= kMinimumWindowHeight &&
+         state.height >= kMinimumPersistedHeight &&
          state.height <= kMaximumExtent &&
          (!state.has_position || (state.x >= -kMaximumCoordinateMagnitude &&
                                   state.x <= kMaximumCoordinateMagnitude &&

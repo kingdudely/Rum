@@ -694,5 +694,32 @@ std::filesystem::path DefaultRobloxAssetPath() {
              : (directory / "assets" / "content").lexically_normal();
 }
 
+std::filesystem::path NormalizeRobloxAssetPath(
+    const std::filesystem::path& path) {
+  if (path.empty()) {
+    return path;
+  }
+  std::filesystem::path normalized = path.lexically_normal();
+  if (normalized.filename() == "content") {
+    normalized = normalized.parent_path();
+  }
+  return (normalized / "content").lexically_normal();
+}
+
+bool LooksLikeRobloxContentDirectory(
+    const std::filesystem::path& content_root) {
+  std::error_code error;
+  if (!std::filesystem::is_directory(content_root, error)) {
+    return false;
+  }
+  for (const char* marker : {"configs", "guac", "localization", "fonts",
+                             "textures"}) {
+    if (std::filesystem::is_directory(content_root / marker, error)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace runtime
 }  // namespace mocktail

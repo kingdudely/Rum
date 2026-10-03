@@ -1,5 +1,7 @@
 #include "libc_shim/libc_shim.h"
 
+#include "runtime/runtime_paths.h"
+
 #include <array>
 #include <atomic>
 #include <cerrno>
@@ -270,22 +272,16 @@ void Install() {
         "/data/data/com.roblox.client/shadercachevk.bin",
         shader_cache_path);
   }
-  const char* asset_content_root = GetEnvNonEmpty("MOCKTAIL_ASSET_PATH");
-  if (asset_content_root != nullptr) {
-    std::string content_root(asset_content_root);
-    while (content_root.size() > 1 && content_root.back() == '/') {
-      content_root.pop_back();
-    }
-    const std::string content_suffix = "/content";
-    if (content_root.size() > content_suffix.size() &&
-        content_root.compare(content_root.size() - content_suffix.size(),
-                             content_suffix.size(), content_suffix) == 0) {
-      const std::string assets_root = content_root.substr(
-          0, content_root.size() - content_suffix.size());
-      RegisterPathMapping("content", content_root);
-      RegisterPathMapping("rbx_bin/assets/content", content_root);
-      RegisterPathMapping("rbx_bin/assets", assets_root);
-    }
+  // Accepts either <assets> or <assets/content>; both resolve to the same
+  // three mappings rather than silently registering nothing.
+  const char* asset_root = GetEnvNonEmpty("MOCKTAIL_ASSET_PATH");
+  if (asset_root != nullptr) {
+    const std::filesystem::path content_root =
+        mocktail::runtime::NormalizeRobloxAssetPath(asset_root);
+    const std::filesystem::path assets_root = content_root.parent_path();
+    RegisterPathMapping("content", content_root.string());
+    RegisterPathMapping("rbx_bin/assets/content", content_root.string());
+    RegisterPathMapping("rbx_bin/assets", assets_root.string());
   }
   RegisterPathMapping("/sdcard/Android/data/com.roblox.client",
                       data_root + "/sdcard/Android/data/com.roblox.client");

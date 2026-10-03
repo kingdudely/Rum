@@ -6411,6 +6411,8 @@ void RegisterUndefinedElfImports(const std::string& library_path,
 
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
+  // Captured before anything can scrub the bearer value out of options.
+  const bool started_with_launch_uri = !options.engine_launch_uri.empty();
   const bool user_overrode_start_lua_app_dm =
       HasEnvValue("MOCKTAIL_START_LUA_APP_DM");
   const bool user_overrode_start_lua_step =
@@ -6995,6 +6997,15 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   RunCompletionState completion;
   completion.input_shutdown_completed = window_input_runtime == nullptr;
   if (mocktail::window::IsInitialised()) {
+    if (!started_with_launch_uri) {
+      std::cout
+          << "  [main] note: no --launch-uri was given, so the engine has no\n"
+             "         place to render and the window will stay blank. A\n"
+             "         roblox:// link forwarded from another invocation still\n"
+             "         works; otherwise start with a place, e.g.\n"
+             "           --launch-uri roblox://placeId=1818\n"
+          << std::flush;
+    }
     std::cout << "  [main] entering SDL event loop (close the window to quit)\n"
               << std::flush;
     RunMainLoop(&completion.game_surface_events_completed, game_session_runtime.get(),

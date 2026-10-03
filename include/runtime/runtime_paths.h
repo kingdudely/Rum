@@ -123,6 +123,18 @@ std::filesystem::path ExecutableDirectory();
 std::filesystem::path DefaultRobloxLibraryPath();
 std::filesystem::path DefaultRobloxAssetPath();
 
+// Accepts either the assets root or its content/ subdirectory and always
+// returns the content root, which is the form every consumer expects.
+// Idempotent, so normalising an already-normalised path changes nothing.
+std::filesystem::path NormalizeRobloxAssetPath(
+    const std::filesystem::path& path);
+
+// True when `content_root` looks like a Roblox content directory rather than
+// an arbitrary folder. Accepts any one of the long-standing marker
+// subdirectories, so a content reorganisation cannot hard-fail startup.
+bool LooksLikeRobloxContentDirectory(
+    const std::filesystem::path& content_root);
+
 }  // namespace runtime
 }  // namespace mocktail
 

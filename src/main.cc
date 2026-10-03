@@ -504,26 +504,40 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
                  "or pass --roblox-lib <path>\n";
     return StepResult::kExitFailure;
   }
-  // Everything downstream reads MOCKTAIL_ASSET_PATH, so an explicit --assets
-  // is folded into the environment here.
-  if (!options.assets_path.empty() &&
-      !environment.HasNonEmpty("MOCKTAIL_ASSET_PATH") &&
-      setenv("MOCKTAIL_ASSET_PATH", options.assets_path.c_str(), 1) != 0) {
-    std::cerr << "[FATAL] Cannot apply --assets\n";
-    return StepResult::kExitFailure;
-  }
-  if (!environment.HasNonEmpty("MOCKTAIL_ASSET_PATH")) {
-    const std::filesystem::path default_assets =
-        mocktail::runtime::DefaultRobloxAssetPath();
-    if (default_assets.empty() ||
-        setenv("MOCKTAIL_ASSET_PATH", default_assets.c_str(), 1) != 0) {
+  // Everything downstream reads MOCKTAIL_ASSET_PATH, so the asset location is
+  // resolved once here and normalised to the content root. An explicit
+  // --assets wins over the environment: silently discarding the flag the user
+  // just typed is worse than overriding a stale variable.
+  std::filesystem::path asset_root;
+  const std::string asset_env = environment.GetOr("MOCKTAIL_ASSET_PATH", "");
+  if (!options.assets_path.empty()) {
+    asset_root = options.assets_path;
+  } else if (!asset_env.empty()) {
+    asset_root = asset_env;
+  } else {
+    asset_root = mocktail::runtime::DefaultRobloxAssetPath();
+    if (asset_root.empty()) {
       std::cerr << "[FATAL] No assets directory. Place it at "
                    "<exe dir>/assets/content, or pass --assets <path>\n";
       return StepResult::kExitFailure;
     }
-    std::cout << "  [runtime] using executable-relative assets: "
-              << default_assets << '\n';
   }
+  const std::filesystem::path content_root =
+      mocktail::runtime::NormalizeRobloxAssetPath(asset_root);
+  if (!mocktail::runtime::LooksLikeRobloxContentDirectory(content_root)) {
+    std::cerr << "[FATAL] Assets path does not contain Roblox content: "
+              << content_root
+              << "\n        Expected an existing directory holding the content "
+                 "tree (one of\n        configs/, guac/, localization/, fonts/, "
+                 "textures/).\n        Both <assets> and <assets/content> are "
+                 "accepted.\n";
+    return StepResult::kExitFailure;
+  }
+  if (setenv("MOCKTAIL_ASSET_PATH", content_root.c_str(), 1) != 0) {
+    std::cerr << "[FATAL] Cannot apply the assets path\n";
+    return StepResult::kExitFailure;
+  }
+  std::cout << "  [runtime] assets content root: " << content_root << '\n';
   if (!mocktail::runtime::ExportRuntimePathEnvironment(paths, error)) {
     std::cerr << "[FATAL] " << *error << '\n';
     return StepResult::kExitFailure;
