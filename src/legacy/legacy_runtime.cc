@@ -87,7 +87,11 @@
   "config/roblox_compatibility.json"
 #endif
 
-namespace {
+// Private implementation helpers for the legacy runtime. Named rather than
+// anonymous because the startup/window/protocol translation units in this
+// directory call into it; see legacy_runtime_internal.h for the subset each
+// one is allowed to see. Nothing outside src/legacy should include that header.
+namespace legacy_internal {
 
 void* ResolveRobloxCapabilitySymbol(void* context, const char* symbol_name) {
   if (context == nullptr || symbol_name == nullptr) {
@@ -3910,7 +3914,11 @@ constexpr const char* kVulkanAdapterExports[] = {
     "vkQueuePresentKHR",
 };
 
-}  // namespace
+}  // namespace legacy_internal
+
+// The startup code below is one step of one orchestrator and reads these names
+// hundreds of times; qualifying each one would bury the logic.
+using namespace legacy_internal;
 
 // Every engine entry point the startup sequence can call, resolved once up
 // front. Keeping them in one struct means the startup context is wired by
