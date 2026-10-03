@@ -2447,16 +2447,11 @@ NativeSettingsValues ResolveNativeSettingsValues(
   return values;
 }
 
-void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
-                             const EngineStartupContext* context) {
-  if (!env || !settings_class || !context) {
-    return;
-  }
-
-  // Deliberately not const: the cookie copy is wiped from memory by
-  // SecurelyClearString before this function returns.
-  NativeSettingsValues values = ResolveNativeSettingsValues(context);
-
+// Lay down every directory the engine expects to already exist. It creates
+// some of them itself but not all, and a missing parent makes its own
+// boost::filesystem::create_directory fail rather than create, so this has
+// to happen before the first native call.
+void EnsureNativeSettingsDirectories(const NativeSettingsValues& values) {
   EnsureAndroidDirectory(values.data_dir);
   EnsureAndroidDirectory(values.files_dir);
   EnsureAndroidDirectory(values.settings_cache_dir);
@@ -2475,6 +2470,19 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   EnsureAndroidDirectory(values.cache_dir + "/ContentProvider_2");
   EnsureAndroidDirectory(values.cache_dir + "/rbx-storage");
   EnsureAndroidDirectory(values.cache_dir + "/sounds");
+}
+
+void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
+                             const EngineStartupContext* context) {
+  if (!env || !settings_class || !context) {
+    return;
+  }
+
+  // Deliberately not const: the cookie copy is wiped from memory by
+  // SecurelyClearString before this function returns.
+  NativeSettingsValues values = ResolveNativeSettingsValues(context);
+
+  EnsureNativeSettingsDirectories(values);
 
   jstring data_dir_string = env->NewStringUTF(values.data_dir.c_str());
   jstring files_dir_string = env->NewStringUTF(values.files_dir.c_str());
