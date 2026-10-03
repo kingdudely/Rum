@@ -151,7 +151,8 @@ const char* RobloxAndroidId() {
     if (seed.empty()) {
       seed = "roblox-linux-default-device";
     }
-    seed += "\x1fcom.roblox.client";
+    seed += "\x1f"
+            "com.roblox.client";
 
     std::uint64_t hash = 1469598103934665603ULL;
     for (const char c : seed) {
@@ -297,6 +298,16 @@ jmethodID StoreMethodId(const char* name, const char* sig) {
       reinterpret_cast<jmethodID>(&g_method_descriptors.back());
   g_method_ids[key] = method_id;
   return method_id;
+}
+
+void CollectRequestedMethods(std::vector<ProbeMethod>* out) {
+  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
+  out->reserve(g_method_descriptors.size());
+  for (const auto& descriptor : g_method_descriptors) {
+    out->push_back({descriptor.name != nullptr ? descriptor.name : "",
+                    descriptor.signature != nullptr ? descriptor.signature : "",
+                    descriptor.tag != JniMethodTag::kUnknown});
+  }
 }
 
 jobject ObjectResultForMethod(jmethodID method_id);
