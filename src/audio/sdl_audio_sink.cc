@@ -15,9 +15,8 @@
 #include <utility>
 #include <vector>
 
-#if !SDL_VERSION_ATLEAST(3, 4, 0)
-#error "Mocktail borrowed audio buffers require SDL 3.4 or newer"
-#endif
+// SDL 3.4 added borrowed audio buffers. Older SDL copies instead; the caller
+// still releases its buffer immediately because the copy already owns the data.
 
 namespace mocktail::audio {
 namespace {
@@ -113,6 +112,7 @@ SDL_AudioFormat ToSdlFormat(PcmSampleFormat format) {
   return SDL_AUDIO_UNKNOWN;
 }
 
+#if SDL_VERSION_ATLEAST(3, 4, 0)
 struct SdlReleaseContext {
   AudioBufferReleaseCallback callback = nullptr;
   void* callback_context = nullptr;
@@ -129,6 +129,7 @@ void SDLCALL OnSdlBufferReleased(void* userdata, const void* data, int size) {
   }
   delete release;
 }
+#endif  // SDL_VERSION_ATLEAST(3, 4, 0)
 
 class SdlAudioSink final : public AudioSink {
  public:
@@ -172,6 +173,7 @@ class SdlAudioSink final : public AudioSink {
     }
 
     bool queued = false;
+#if SDL_VERSION_ATLEAST(3, 4, 0)
     if (buffer.release_callback == nullptr) {
       queued = SDL_PutAudioStreamData(stream, buffer.data,
                                       static_cast<int>(buffer.size_bytes));
@@ -190,6 +192,16 @@ class SdlAudioSink final : public AudioSink {
         delete release;
       }
     }
+#else
+    // Without borrowed buffers the sink copies the PCM data, so the producer
+    // can release its buffer as soon as the copy is queued.
+    queued = SDL_PutAudioStreamData(stream, buffer.data,
+                                    static_cast<int>(buffer.size_bytes));
+    if (buffer.release_callback != nullptr) {
+      buffer.release_callback(buffer.release_context, buffer.data,
+                              buffer.size_bytes);
+    }
+#endif  // SDL_VERSION_ATLEAST(3, 4, 0)
     const Status status = queued
                               ? Status::Ok()
                               : SdlError(buffer.release_callback == nullptr

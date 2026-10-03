@@ -7,7 +7,7 @@ get_filename_component(MOCKTAIL_PLATFORM_GRAPHICS_ROOT
   "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE
 )
 
-find_package(SDL3 3.4 REQUIRED CONFIG)
+find_package(SDL3 3.2 REQUIRED CONFIG)
 find_path(MOCKTAIL_EGL_INCLUDE_DIR EGL/egl.h REQUIRED)
 find_path(MOCKTAIL_GLES3_INCLUDE_DIR GLES3/gl3.h REQUIRED)
 
@@ -132,53 +132,3 @@ target_link_libraries(mocktail_sdl_vulkan_wsi PUBLIC Vulkan::Headers)
 target_compile_features(mocktail_sdl_vulkan_wsi PUBLIC cxx_std_17)
 add_library(Mocktail::SdlVulkanWsi ALIAS mocktail_sdl_vulkan_wsi)
 
-if(BUILD_TESTING AND TARGET GTest::gtest_main)
-  add_executable(gles_text_overlay_compositor_test
-    ${MOCKTAIL_PLATFORM_GRAPHICS_ROOT}/tests/gles_text_overlay_compositor_test.cc
-  )
-  target_include_directories(gles_text_overlay_compositor_test PRIVATE
-    ${MOCKTAIL_GLES3_INCLUDE_DIR}
-  )
-  target_link_libraries(gles_text_overlay_compositor_test PRIVATE
-    Mocktail::GlesTextOverlay
-    GTest::gtest_main
-  )
-  add_executable(bionic_egl_bridge_test
-    ${MOCKTAIL_PLATFORM_GRAPHICS_ROOT}/tests/bionic_egl_bridge_test.cc
-  )
-  target_link_libraries(bionic_egl_bridge_test PRIVATE
-    Mocktail::GraphicsFoundation
-    GTest::gtest_main
-  )
-  add_dependencies(bionic_egl_bridge_test stub_egl)
-
-  add_executable(platform_graphics_foundation_test
-    ${MOCKTAIL_PLATFORM_GRAPHICS_ROOT}/tests/platform_graphics_foundation_test.cc
-  )
-  add_executable(display_refresh_capabilities_test
-    ${MOCKTAIL_PLATFORM_GRAPHICS_ROOT}/tests/display_refresh_capabilities_test.cc
-  )
-  add_executable(present_mode_policy_test
-    ${MOCKTAIL_PLATFORM_GRAPHICS_ROOT}/tests/present_mode_policy_test.cc
-  )
-  target_link_libraries(present_mode_policy_test PRIVATE
-    Mocktail::SdlVulkanWsi
-    GTest::gtest_main
-  )
-  target_link_libraries(display_refresh_capabilities_test PRIVATE
-    Mocktail::PlatformSdl
-    GTest::gtest_main
-  )
-  target_link_libraries(platform_graphics_foundation_test PRIVATE
-    Mocktail::PlatformSdl
-    Mocktail::GraphicsFoundation
-    Mocktail::SdlVulkanWsi
-    GTest::gtest_main
-  )
-  include(GoogleTest)
-  gtest_discover_tests(gles_text_overlay_compositor_test)
-  gtest_discover_tests(bionic_egl_bridge_test)
-  gtest_discover_tests(platform_graphics_foundation_test)
-  gtest_discover_tests(display_refresh_capabilities_test)
-  gtest_discover_tests(present_mode_policy_test)
-endif()

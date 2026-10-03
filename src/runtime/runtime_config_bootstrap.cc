@@ -92,42 +92,6 @@ audio:
   # between boots; prefer the exact device name when it is unique.
   input_device: default
 
-integrations:
-  fleasion:
-    # Boolean (default: false): trust Fleasion's CA without editing Roblox files.
-    enabled: false
-    # String: match Fleasion's routing mode: env or hosts.
-    proxy_mode: env
-    # Integer: Fleasion's local HTTP proxy port in env mode.
-    proxy_port: 58443
-    # Optional absolute public CA path. Default: $XDG_CONFIG_HOME/Fleasion/proxy_ca/ca.crt
-    # or ~/.config/Fleasion/proxy_ca/ca.crt. Never select ca.key.
-    # ca_certificate: /home/user/.config/Fleasion/proxy_ca/ca.crt
-  discord_rpc:
-    # Boolean (default: false): publish Mocktail activity to Discord Desktop.
-    # This never signs in to Discord and never reads an account token.
-    enabled: false
-    # Boolean (default: true): show the current Roblox experience name.
-    show_place_name: true
-    # Boolean (default: true): show how long the current session has run.
-    show_elapsed_time: true
-    join:
-      # Boolean (default: true): let friends open the current experience. When
-      # Roblox provides a public server ID, the button targets that server.
-      enabled: true
-      # Boolean (default: true): never expose private or reserved joins.
-      public_servers_only: true
-      # button_label: Join Server
-    # English defaults. Uncomment only the lines you want to customize.
-    # text:
-    #   browsing: Browsing experiences
-    #   joining: Joining an experience
-    #   playing: "{place_name}"
-    #   state: Playing Roblox
-    #   unknown_place: Unknown experience
-    # Advanced: overrides the application bundled by the package maintainer.
-    # application_id: 123456789012345678
-
 window:
   # Integer (default: 1280): initial window width in logical desktop units.
   width: 1280
@@ -163,7 +127,6 @@ updates:
   # accepted values resolve the provider chain, which currently starts with
   # APKPure. Supported values: auto, apk-pure.
   source: apk-pure
-  # Reserved for desktop update integrations. `mocktail_updater` itself never
   # launches another process after changing the active payload.
   launch_after_update: false
 )yaml";

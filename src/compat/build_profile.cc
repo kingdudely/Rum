@@ -285,4 +285,20 @@ ProfileLookupResult FindBuildProfile(const std::string& manifest_path,
   return ProfileLookupResult{std::move(matched_profile), {}};
 }
 
+BuildProfile MakeUnknownBuildProfile(std::string_view build_id) {
+  BuildProfile profile;
+  profile.version_name = "unverified";
+  profile.version_code = 0;
+  profile.elf_build_id = NormalizeBuildId(build_id);
+  profile.status = BuildStatus::kUnverified;
+  profile.default_allowed = true;
+  profile.allow_legacy_binary_patches = false;
+  profile.allow_host_abi_bridges = false;
+  profile.allow_host_constructor_replay = false;
+  profile.reason =
+      "accepted without a researched Build-ID profile; guest entrypoints, "
+      "allocator interposition, and vtable bridges are disabled";
+  return profile;
+}
+
 }  // namespace mocktail::compat

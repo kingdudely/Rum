@@ -8,10 +8,6 @@
 #include <cstdlib>
 #include <optional>
 
-#ifndef MOCKTAIL_DISCORD_APPLICATION_ID
-#define MOCKTAIL_DISCORD_APPLICATION_ID ""
-#endif
-
 namespace mocktail {
 namespace runtime {
 namespace {
@@ -29,21 +25,6 @@ constexpr std::array<std::string_view, 7> kUnsafeDetachedThreadOverrides = {
 bool LegacyEnabled(const Environment& environment, std::string_view name) {
   const std::optional<std::string> value = environment.Get(name);
   return value.has_value() && !value->empty() && *value != "0";
-}
-
-bool IsDiscordApplicationId(std::string_view value) {
-  return value.empty() ||
-         (value.size() >= 17 && value.size() <= 20 &&
-          std::all_of(value.begin(), value.end(), [](unsigned char byte) {
-            return byte >= '0' && byte <= '9';
-          }));
-}
-
-bool IsDiscordText(std::string_view value, std::size_t maximum) {
-  return !value.empty() && value.size() <= maximum &&
-         std::none_of(value.begin(), value.end(), [](unsigned char byte) {
-           return byte < 0x20 || byte == 0x7f;
-         });
 }
 
 bool ReadBoolean(const Environment& environment, std::string_view name,
@@ -287,35 +268,6 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
   config.use_system_proxy_ =
       LegacyEnabled(environment, "MOCKTAIL_USE_SYSTEM_PROXY");
   config.network_proxy_ = ReadNetworkProxy(environment);
-  config.fleasion_enabled_ = ReadBoolean(
-      environment, "MOCKTAIL_FLEASION_ENABLED", false, &config.fleasion_valid_);
-  config.fleasion_proxy_mode_ = environment.GetOr("MOCKTAIL_FLEASION_PROXY_MODE", "env");
-  const auto fleasion_proxy = ParseNetworkProxyConfig(
-      "127.0.0.1", environment.GetOr("MOCKTAIL_FLEASION_PROXY_PORT", "58443"));
-  if (!fleasion_proxy || (config.fleasion_proxy_mode_ != "env" &&
-                         config.fleasion_proxy_mode_ != "hosts")) {
-    config.fleasion_valid_ = false;
-  } else {
-    config.fleasion_proxy_port_ = fleasion_proxy->port;
-  }
-  if (const auto certificate = environment.Get("MOCKTAIL_FLEASION_CA_CERTIFICATE")) {
-    config.fleasion_ca_certificate_ = *certificate;
-    if (certificate->empty() || !config.fleasion_ca_certificate_->is_absolute())
-      config.fleasion_valid_ = false;
-  }
-  if (config.fleasion_enabled_) {
-    if (config.use_system_proxy_) config.fleasion_valid_ = false;
-    if (config.fleasion_proxy_mode_ == "env" && fleasion_proxy) {
-      if (config.network_proxy_ &&
-          (config.network_proxy_->host != fleasion_proxy->host ||
-           config.network_proxy_->port != fleasion_proxy->port ||
-           config.network_proxy_->scheme != "http"))
-        config.fleasion_valid_ = false;
-      config.network_proxy_ = fleasion_proxy;
-    } else if (config.network_proxy_) {
-      config.fleasion_valid_ = false;
-    }
-  }
   if (const std::optional<std::string> ca_bundle =
           environment.Get("MOCKTAIL_CA_BUNDLE");
       ca_bundle.has_value()) {
@@ -323,47 +275,6 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
     config.ca_bundle_valid_ = !ca_bundle->empty() &&
                               config.ca_bundle_->is_absolute();
   }
-  bool discord_booleans_valid = true;
-  config.discord_rpc_.enabled = ReadBoolean(
-      environment, "MOCKTAIL_DISCORD_RPC_ENABLED", false,
-      &discord_booleans_valid);
-  config.discord_rpc_.show_place_name = ReadBoolean(
-      environment, "MOCKTAIL_DISCORD_RPC_SHOW_PLACE_NAME", true,
-      &discord_booleans_valid);
-  config.discord_rpc_.show_elapsed_time = ReadBoolean(
-      environment, "MOCKTAIL_DISCORD_RPC_SHOW_ELAPSED_TIME", true,
-      &discord_booleans_valid);
-  config.discord_rpc_.join_enabled = ReadBoolean(
-      environment, "MOCKTAIL_DISCORD_RPC_JOIN_ENABLED", true,
-      &discord_booleans_valid);
-  config.discord_rpc_.public_servers_only = ReadBoolean(
-      environment, "MOCKTAIL_DISCORD_RPC_PUBLIC_SERVERS_ONLY", true,
-      &discord_booleans_valid);
-  config.discord_rpc_.join_button_label = environment.GetOr(
-      "MOCKTAIL_DISCORD_RPC_JOIN_BUTTON_LABEL",
-      config.discord_rpc_.join_button_label);
-  config.discord_rpc_.application_id = environment.GetOr(
-      "MOCKTAIL_DISCORD_APPLICATION_ID", MOCKTAIL_DISCORD_APPLICATION_ID);
-  config.discord_rpc_.text.browsing = environment.GetOr(
-      "MOCKTAIL_DISCORD_RPC_TEXT_BROWSING",
-      config.discord_rpc_.text.browsing);
-  config.discord_rpc_.text.joining = environment.GetOr(
-      "MOCKTAIL_DISCORD_RPC_TEXT_JOINING", config.discord_rpc_.text.joining);
-  config.discord_rpc_.text.playing = environment.GetOr(
-      "MOCKTAIL_DISCORD_RPC_TEXT_PLAYING", config.discord_rpc_.text.playing);
-  config.discord_rpc_.text.state = environment.GetOr(
-      "MOCKTAIL_DISCORD_RPC_TEXT_STATE", config.discord_rpc_.text.state);
-  config.discord_rpc_.text.unknown_place = environment.GetOr(
-      "MOCKTAIL_DISCORD_RPC_TEXT_UNKNOWN_PLACE",
-      config.discord_rpc_.text.unknown_place);
-  config.discord_rpc_valid_ = discord_booleans_valid &&
-      IsDiscordApplicationId(config.discord_rpc_.application_id) &&
-      IsDiscordText(config.discord_rpc_.join_button_label, 32) &&
-      IsDiscordText(config.discord_rpc_.text.browsing, 128) &&
-      IsDiscordText(config.discord_rpc_.text.joining, 128) &&
-      IsDiscordText(config.discord_rpc_.text.playing, 128) &&
-      IsDiscordText(config.discord_rpc_.text.state, 128) &&
-      IsDiscordText(config.discord_rpc_.text.unknown_place, 128);
   for (const std::string_view name : kUnsafeDetachedThreadOverrides) {
     if (LegacyEnabled(environment, name)) {
       config.unsafe_detached_thread_overrides_.emplace_back(name);

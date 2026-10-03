@@ -40,12 +40,8 @@ else
   BIN_DIR="${BUNDLED_BIN_DIR}"
 fi
 MAIN_BINARY="${BIN_DIR}/mocktail"
-UPDATE_HELPER="${BIN_DIR}/mocktail_updater"
-FAILURE_DIALOG_HELPER="${BIN_DIR}/mocktail_failure_dialog"
 WEBVIEW_HELPER="${BIN_DIR}/mocktail_webview_helper"
 FREEBSD_SOCKET_HELPER="${BUNDLED_BIN_DIR}/mocktail_freebsd_socket_helper"
-ANDROID_BUILD_TOOLS="${RUNTIME_ROOT}/runtime/android-tools/bin"
-ANDROID_TOOL_EXEC_DIR="${ANYLINUX_BIN_DIR:-${ANDROID_BUILD_TOOLS}}"
 METADATA_DIR="${RUNTIME_ROOT}/metadata"
 ABI_MANIFEST="${METADATA_DIR}/ABI.txt"
 DEPENDENCY_MANIFEST="${METADATA_DIR}/DEPENDENCIES.txt"
@@ -56,7 +52,7 @@ if [[ -n "${ANYLINUX_BIN_DIR}" ]]; then
 else
   SUPPORT_BIN="${SUPPORT_ROOT}/bin"
 fi
-export PATH="${BIN_DIR}:${SUPPORT_BIN}:${ANDROID_BUILD_TOOLS}:${PATH}"
+export PATH="${BIN_DIR}:${SUPPORT_BIN}:${PATH}"
 export LD_LIBRARY_PATH="${RUNTIME_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export MOCKTAIL_FREEBSD_SOCKET_HELPER="${FREEBSD_SOCKET_HELPER}"
 
@@ -71,7 +67,6 @@ ABI_LIBC=""
 ABI_MODE=""
 ABI_INTERPRETER=""
 ABI_ANDROID_TOOLS_LIBC=""
-WEBKITGTK6_NAMESPACE_DIR=""
 
 LoadAbiManifest() {
   [[ -f "${ABI_MANIFEST}" && ! -L "${ABI_MANIFEST}" ]] ||
@@ -177,69 +172,8 @@ ValidateRelativeRuntimePath() {
 
 ConfigureStandaloneEnvironment() {
   [[ "${ABI_MODE}" == standalone ]] || return 0
-  local environment_file="${RUNTIME_ROOT}/webkit.env"
-  [[ -f "${environment_file}" && ! -L "${environment_file}" ]] ||
-    Die "missing standalone WebKit environment"
-
-  local key value
-  local webkit6_exec="" webkit6_bundle=""
-  local gst_plugins="" gst_scanner="" gio_modules="" gio_tls=""
-  local pixbuf_cache="" glycin_data="" schemas=""
-  local data_dirs="" fontconfig=""
-  while IFS='=' read -r key value; do
-    case "${key}" in
-      \#*|'') continue ;;
-      MOCKTAIL_WEBKITGTK6_EXEC_DIR_REL) webkit6_exec="${value}" ;;
-      MOCKTAIL_WEBKITGTK6_INJECTED_BUNDLE_REL) webkit6_bundle="${value}" ;;
-      MOCKTAIL_WEBKITGTK6_NAMESPACE_DIR)
-        WEBKITGTK6_NAMESPACE_DIR="${value}"
-        ;;
-      GST_PLUGIN_PATH_1_0_REL) gst_plugins="${value}" ;;
-      GST_PLUGIN_SYSTEM_PATH_1_0) export GST_PLUGIN_SYSTEM_PATH_1_0="${value}" ;;
-      GST_PLUGIN_SCANNER_REL) gst_scanner="${value}" ;;
-      GIO_EXTRA_MODULES_REL) gio_modules="${value}" ;;
-      GIO_USE_TLS) gio_tls="${value}" ;;
-      GDK_PIXBUF_MODULE_FILE_REL) pixbuf_cache="${value}" ;;
-      GLYCIN_DATA_DIR_REL) glycin_data="${value}" ;;
-      GSETTINGS_SCHEMA_DIR_REL) schemas="${value}" ;;
-      XDG_DATA_DIRS_REL) data_dirs="${value}" ;;
-      FONTCONFIG_FILE_REL) fontconfig="${value}" ;;
-      *) Die "unknown standalone WebKit environment field: ${key}" ;;
-    esac
-  done <"${environment_file}"
-
-  local relative
-  for relative in "${webkit6_exec}" "${webkit6_bundle}" \
-      "${gst_plugins}" "${gst_scanner}" \
-      "${gio_modules}" "${pixbuf_cache}" "${glycin_data}" \
-      "${schemas}" "${data_dirs}" "${fontconfig}"; do
-    ValidateRelativeRuntimePath "${relative}"
-  done
-  [[ -n "${webkit6_exec}" && -n "${webkit6_bundle}" ]] ||
-    Die "standalone WebKit environment is incomplete"
-  [[ "${WEBKITGTK6_NAMESPACE_DIR}" =~ ^/usr/(lib|lib64|libexec|lib/x86_64-linux-gnu)/webkitgtk-6\.0$ ]] ||
-    Die "standalone WebKitGTK 6 namespace path is invalid"
-  export JAVA_HOME="${SUPPORT_ROOT}/jre"
+  [[ -n "${SUPPORT_ROOT}" && -d "${SUPPORT_ROOT}" ]] || return 0
   export SSL_CERT_FILE="${SUPPORT_ROOT}/share/ca-certificates/ca-bundle.crt"
-  if [[ -n "${ANYLINUX_BIN_DIR}" ]]; then
-    export WEBKIT_EXEC_PATH="${ANYLINUX_BIN_DIR}"
-    export GST_PLUGIN_SCANNER="${ANYLINUX_BIN_DIR}/gst-plugin-scanner"
-  else
-    export WEBKIT_EXEC_PATH="${RUNTIME_ROOT}/${webkit6_exec}"
-    export GST_PLUGIN_SCANNER="${RUNTIME_ROOT}/${gst_scanner}"
-  fi
-  export WEBKIT_INJECTED_BUNDLE_PATH="$(dirname -- \
-    "${RUNTIME_ROOT}/${webkit6_bundle}")"
-  export GST_PLUGIN_PATH_1_0="${RUNTIME_ROOT}/${gst_plugins}"
-  export GIO_EXTRA_MODULES="${RUNTIME_ROOT}/${gio_modules}"
-  export GIO_USE_TLS="${gio_tls}"
-  export GDK_PIXBUF_MODULE_FILE="${RUNTIME_ROOT}/${pixbuf_cache}"
-  [[ -z "${glycin_data}" ]] ||
-    export GLYCIN_DATA_DIR="${RUNTIME_ROOT}/${glycin_data}"
-  export GSETTINGS_SCHEMA_DIR="${RUNTIME_ROOT}/${schemas}"
-  export XDG_DATA_DIRS="${RUNTIME_ROOT}/${data_dirs}${XDG_DATA_DIRS:+:${XDG_DATA_DIRS}}"
-  [[ -z "${fontconfig}" ]] ||
-    export FONTCONFIG_FILE="${RUNTIME_ROOT}/${fontconfig}"
 }
 
 EnterStandaloneNamespace() {
@@ -367,20 +301,8 @@ CheckBundleAbi() {
   [[ "${main_interpreter}" == "${ABI_INTERPRETER}" ]] ||
     Die "mocktail ELF interpreter does not match ABI.txt (expected ${ABI_INTERPRETER}, found ${main_interpreter:-none})"
   ValidateBundledElfAbi "${BUNDLED_BIN_DIR}/mocktail" "mocktail"
-  ValidateBundledElfAbi "${BUNDLED_BIN_DIR}/mocktail_updater" \
-    "Mocktail updater"
   ValidateBundledElfAbi "${BUNDLED_BIN_DIR}/mocktail_webview_helper" \
     "WebView helper"
-  [[ -x "${ANDROID_BUILD_TOOLS}/aapt" ]] ||
-    Die "Android APK metadata tool is unavailable"
-  if [[ "${ABI_ANDROID_TOOLS_LIBC}" == java ]]; then
-    [[ -x "${ANDROID_BUILD_TOOLS}/apkanalyzer" ]] ||
-      Die "Android Java APK analyzer is unavailable"
-  else
-    ValidateBundledElfAbi "${ANDROID_BUILD_TOOLS}/aapt" \
-      "Android aapt" glibc
-  fi
-
   if [[ -z "${ANYLINUX_BIN_DIR}" ]]; then
     host_libc="$(DetectHostLibc)"
     [[ "${host_libc}" != unknown ]] ||
@@ -423,34 +345,16 @@ CheckSystem() {
 
   if [[ "${ABI_MODE}" == thin ]]; then
     CheckElfDependencies "${MAIN_BINARY}" runtime || status=1
-    CheckElfDependencies "${FAILURE_DIALOG_HELPER}" libadwaita/GTK || status=1
-    CheckElfDependencies "${WEBVIEW_HELPER}" WebKit/GTK || status=1
   fi
 
   local command_name
-  for command_name in bash java jq unzip aapt apksigner file flock \
+  for command_name in bash jq unzip file flock \
       timeout readelf sha256sum; do
     CheckCommand "${command_name}" || status=1
   done
-  if ! "${ANDROID_TOOL_EXEC_DIR}/aapt" version >/dev/null 2>&1; then
-    printf '  bundled Android APK analyzer cannot execute\n' >&2
-    status=1
-  fi
-  if [[ "${ABI_ANDROID_TOOLS_LIBC}" == java ]] &&
-      ! "${ANDROID_TOOL_EXEC_DIR}/apkanalyzer" --help >/dev/null 2>&1; then
-      printf '  bundled Android apkanalyzer cannot execute with Java\n' >&2
-      status=1
-  fi
-  if ! "${ANDROID_TOOL_EXEC_DIR}/apksigner" version >/dev/null 2>&1; then
-    printf '  bundled Android apksigner cannot execute with host Java\n' >&2
-    status=1
-  fi
-
   local webview_dependencies icd_manifest
   if [[ "${ABI_MODE}" == thin ]]; then
-    webview_dependencies="$(LC_ALL=C ldd "${WEBVIEW_HELPER}" 2>/dev/null || true)"
-    if ! grep -q 'libvulkan\.so\.1[[:space:]]*=>' \
-        <<<"${webview_dependencies}"; then
+    if ! ldd "${WEBVIEW_HELPER}" | grep -q 'libvulkan\.so\.1'; then
       printf '  missing host Vulkan loader: libvulkan.so.1\n' >&2
       status=1
     fi
@@ -465,12 +369,12 @@ CheckSystem() {
   if (( status != 0 )); then
     if [[ "${ABI_LIBC}" == glibc ]]; then
       printf '\nArch example:\n' >&2
-      printf '  sudo pacman -S --needed vulkan-icd-loader libadwaita webkitgtk-6.0 jq unzip file binutils jre-openjdk-headless\n' >&2
+      printf '  sudo pacman -S --needed vulkan-icd-loader jq unzip file binutils\n' >&2
       printf '\nVoid x86_64-glibc example:\n' >&2
     else
       printf '\nVoid x86_64-musl example:\n' >&2
     fi
-    printf '  sudo xbps-install -S vulkan-loader libadwaita libwebkitgtk60 jq unzip file binutils openjdk17-jre\n' >&2
+    printf '  sudo xbps-install -S vulkan-loader jq unzip file binutils\n' >&2
     printf 'Install the Vulkan ICD matching the GPU (for example vulkan-radeon, nvidia-utils, or vulkan-intel).\n' >&2
     return "${status}"
   fi
@@ -483,16 +387,9 @@ CheckSystem() {
 [[ -d "${RUNTIME_ROOT}" && ! -L "${RUNTIME_ROOT}" ]] ||
   Die "missing regular runtime directory: ${RUNTIME_ROOT}"
 [[ -x "${MAIN_BINARY}" ]] || Die "missing executable: ${MAIN_BINARY}"
-[[ -x "${UPDATE_HELPER}" ]] || Die "missing executable: ${UPDATE_HELPER}"
-[[ -x "${FAILURE_DIALOG_HELPER}" ]] ||
-  Die "missing executable: ${FAILURE_DIALOG_HELPER}"
 [[ -x "${WEBVIEW_HELPER}" ]] || Die "missing WebView helper: ${WEBVIEW_HELPER}"
-[[ -x "${ANDROID_BUILD_TOOLS}/aapt" &&
-   -x "${ANDROID_BUILD_TOOLS}/apksigner" ]] ||
-  Die "missing bundled Android validation tools"
 [[ -r "${METADATA_DIR}/roblox_compatibility.json" ]] ||
   Die "missing compatibility manifest"
-[[ -r "${METADATA_DIR}/roblox_host_abi_reference.json" ]] ||
   Die "missing native HostAbi reference profile"
 
 CheckBundleAbi
@@ -518,10 +415,6 @@ fi
 
 export MOCKTAIL_PROJECT_ROOT="${RUNTIME_ROOT}"
 export MOCKTAIL_COMPATIBILITY_MANIFEST="${METADATA_DIR}/roblox_compatibility.json"
-export MOCKTAIL_UPDATE_COMPATIBILITY_PATH="${METADATA_DIR}/roblox_compatibility.json"
-export MOCKTAIL_UPDATE_SIGNING_TRUST_PATH="${METADATA_DIR}/roblox_signing_certificates.json"
-export MOCKTAIL_UPDATE_HOST_ABI_REFERENCE="${METADATA_DIR}/roblox_host_abi_reference.json"
-export MOCKTAIL_BOOTSTRAP_SOURCES_PATH="${METADATA_DIR}/roblox_bootstrap_sources.json"
 export MOCKTAIL_UPDATE_HELPER="${UPDATE_HELPER}"
 export MOCKTAIL_UPDATE_CANARY_BIN="${MAIN_BINARY}"
 export MOCKTAIL_BIN="${MAIN_BINARY}"

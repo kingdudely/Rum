@@ -55,24 +55,6 @@ set(MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST
   CACHE FILEPATH
   "Fallback compatibility manifest used outside an installed runtime"
 )
-set(MOCKTAIL_DEFAULT_SIGNING_TRUST_MANIFEST
-  "${CMAKE_SOURCE_DIR}/config/roblox_signing_certificates.json"
-  CACHE FILEPATH
-  "Fallback signing trust manifest used outside an installed runtime"
-)
-set(MOCKTAIL_DISCORD_APPLICATION_ID "1537088975720812655" CACHE STRING
-  "Discord application ID baked into Mocktail Rich Presence releases"
-)
-string(LENGTH "${MOCKTAIL_DISCORD_APPLICATION_ID}"
-  MOCKTAIL_DISCORD_APPLICATION_ID_LENGTH)
-if(NOT MOCKTAIL_DISCORD_APPLICATION_ID STREQUAL "" AND
-   (NOT MOCKTAIL_DISCORD_APPLICATION_ID MATCHES "^[0-9]+$" OR
-    MOCKTAIL_DISCORD_APPLICATION_ID_LENGTH LESS 17 OR
-    MOCKTAIL_DISCORD_APPLICATION_ID_LENGTH GREATER 20))
-  message(FATAL_ERROR
-    "MOCKTAIL_DISCORD_APPLICATION_ID must be empty or a Discord snowflake")
-endif()
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -87,56 +69,12 @@ function(mocktail_apply_compile_options target_name)
   target_link_libraries(${target_name} PRIVATE mocktail_compile_options)
 endfunction()
 
-option(MOCKTAIL_ENABLE_UPSTREAM_JNIVM
-  "Build upstream libjnivm for the incremental JNI runtime migration" ON)
-if(MOCKTAIL_ENABLE_UPSTREAM_JNIVM)
-  set(JNIVM_ENABLE_TRACE OFF CACHE BOOL
-    "Enable tracing inside upstream libjnivm")
-  set(JNIVM_ENABLE_GC ON CACHE BOOL
-    "Enable local/global reference tracking inside upstream libjnivm")
-  set(JNIVM_ENABLE_DEBUG OFF CACHE BOOL
-    "Enable upstream libjnivm class-dump/code-generation support")
-  set(JNIVM_ENABLE_RETURN_NON_ZERO OFF CACHE BOOL
-    "Allow upstream libjnivm to fabricate unresolved object return values")
-  set(JNIVM_FAKE_JNI_MINECRAFT_LINUX_COMPAT OFF CACHE BOOL
-    "Enable legacy fake-jni static method promotion")
-  set(JNIVM_ENABLE_TESTS OFF CACHE BOOL
-    "Build upstream libjnivm's own test suite")
-  set(JNIVM_BUILD_EXAMPLES OFF CACHE BOOL
-    "Build upstream libjnivm examples")
-
-  add_subdirectory(third_party/libjnivm EXCLUDE_FROM_ALL)
-  # Work around a missing include in libjnivm.
-  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(jnivm PRIVATE -include string)
-  endif()
-  target_link_libraries(jnivm PUBLIC Threads::Threads)
-  add_library(Mocktail::UpstreamJni ALIAS jnivm)
-endif()
-
 add_subdirectory(third_party/mcpelauncher-linker)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(linker PRIVATE -w)
 endif()
 
-set(VULKAN_HEADERS_ENABLE_TESTS OFF CACHE BOOL
-  "Build Khronos Vulkan-Headers tests" FORCE)
-set(VULKAN_HEADERS_ENABLE_INSTALL OFF CACHE BOOL
-  "Install vendored Vulkan-Headers" FORCE)
-add_subdirectory(third_party/Vulkan-Headers EXCLUDE_FROM_ALL)
-
-include(CTest)
-if(BUILD_TESTING)
-  # Package builds disable tests and do not fetch Google Test.
-  include(FetchContent)
-  FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG        v1.14.0
-  )
-  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-  FetchContent_MakeAvailable(googletest)
-endif()
+find_package(VulkanHeaders REQUIRED)
 
 find_package(OpenSSL REQUIRED)
 
@@ -146,13 +84,6 @@ foreach(foundation_target IN ITEMS
     mocktail_graphics_foundation
     mocktail_sdl_vulkan_wsi)
   mocktail_apply_compile_options(${foundation_target})
-endforeach()
-foreach(graphics_test_target IN ITEMS
-    bionic_egl_bridge_test
-    platform_graphics_foundation_test)
-  if(TARGET ${graphics_test_target})
-    mocktail_apply_compile_options(${graphics_test_target})
-  endif()
 endforeach()
 
 include(${CMAKE_SOURCE_DIR}/cmake/MocktailAudio.cmake)
@@ -172,18 +103,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
     -Wno-array-bounds
   )
 endif()
-if(TARGET audio_foundation_test)
-  mocktail_apply_compile_options(audio_foundation_test)
-endif()
-if(TARGET opensl_playback_runtime_test)
-  mocktail_apply_compile_options(opensl_playback_runtime_test)
-endif()
-if(TARGET fmod_java_audio_runtime_test)
-  mocktail_apply_compile_options(fmod_java_audio_runtime_test)
-endif()
-if(TARGET fmod_jni_audio_bridge_test)
-  mocktail_apply_compile_options(fmod_jni_audio_bridge_test)
-endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/MocktailElfCompatibility.cmake)
 
@@ -199,52 +118,7 @@ find_package(CURL REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBYAML REQUIRED IMPORTED_TARGET yaml-0.1)
-pkg_check_modules(MINIZIP REQUIRED IMPORTED_TARGET minizip)
-pkg_check_modules(CAPSTONE REQUIRED IMPORTED_TARGET capstone)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
-pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
-pkg_check_modules(LIBADWAITA REQUIRED IMPORTED_TARGET "libadwaita-1>=1.6")
-pkg_check_modules(WEBKITGTK6 REQUIRED IMPORTED_TARGET webkitgtk-6.0)
-
-add_library(mocktail_update STATIC
-  src/update/android_manifest.cc
-  src/update/apk_bundle.cc
-  src/update/apk_provider.cc
-  src/update/apk_signature.cc
-  src/update/apkpure_provider.cc
-  src/update/candidate_approval.cc
-  src/update/compatibility_catalog.cc
-  src/update/http_download.cc
-  src/update/host_abi_deriver.cc
-  src/update/payload_integrity.cc
-  src/update/payload_store.cc
-  src/update/readiness_canary.cc
-  src/update/unsafe_latest_runner.cc
-  src/update/update_config.cc
-  src/update/update_coordinator.cc
-  src/update/zip_archive.cc
-)
-add_library(Mocktail::Update ALIAS mocktail_update)
-target_include_directories(mocktail_update PUBLIC include)
-target_link_libraries(mocktail_update PUBLIC
-  Mocktail::Compat
-  CURL::libcurl
-  OpenSSL::Crypto
-  PkgConfig::LIBYAML
-  PkgConfig::MINIZIP
-  PkgConfig::CAPSTONE
-  nlohmann_json::nlohmann_json
-  Threads::Threads
-)
-mocktail_apply_compile_options(mocktail_update)
-
-add_executable(mocktail_updater src/update/main.cc)
-target_link_libraries(mocktail_updater PRIVATE Mocktail::Update)
-target_compile_definitions(mocktail_updater PRIVATE
-  "MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST=\"${MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST}\""
-  "MOCKTAIL_DEFAULT_SIGNING_TRUST_MANIFEST=\"${MOCKTAIL_DEFAULT_SIGNING_TRUST_MANIFEST}\""
-)
-mocktail_apply_compile_options(mocktail_updater)
 
 add_library(mocktail_legacy_jnivm STATIC
   src/jnivm/jnivm.cc
@@ -266,13 +140,11 @@ target_include_directories(mocktail_legacy_jnivm PUBLIC
 add_library(mocktail_runtime STATIC
   src/runtime/command_line.cc
   src/runtime/crash_report_policy.cc
-  src/runtime/discord_rpc.cc
   src/runtime/device_memory_profile.cc
   src/runtime/device_profile.cc
   src/runtime/environment.cc
   src/runtime/external_launch_broker.cc
   src/runtime/frame_rate_policy.cc
-  src/runtime/fleasion.cc
   src/runtime/game_mode.cc
   src/runtime/game_session_coordinator.cc
   src/runtime/graphics_launch_policy.cc
@@ -293,7 +165,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/roblox_permissions_bridge.cc
   src/runtime/roblox_message_bus_request_bridge.cc
   src/runtime/roblox_call_protocol_bridge.cc
-  src/runtime/payload_update_preflight.cc
   src/runtime/process_launch_policy.cc
   src/runtime/process_diagnostics.cc
   src/runtime/runtime_config.cc
@@ -303,7 +174,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/session_log.cc
   src/runtime/single_instance_lock.cc
   src/runtime/startup_state_machine.cc
-  src/runtime/supported_launch_policy.cc
   src/runtime/support_bundle.cc
   src/runtime/system_proxy.cc
   src/runtime/texture_memory_policy.cc
@@ -312,9 +182,6 @@ add_library(Mocktail::Runtime ALIAS mocktail_runtime)
 target_include_directories(mocktail_runtime PUBLIC include)
 target_include_directories(mocktail_runtime PUBLIC
   ${MOCKTAIL_JNI_INCLUDE_DIRS}
-)
-target_compile_definitions(mocktail_runtime PRIVATE
-  "MOCKTAIL_DISCORD_APPLICATION_ID=\"${MOCKTAIL_DISCORD_APPLICATION_ID}\""
 )
 set_property(SOURCE src/runtime/session_log.cc APPEND PROPERTY
   COMPILE_DEFINITIONS
@@ -351,16 +218,7 @@ add_library(mocktail_failure_dialog_runtime STATIC
 )
 add_library(Mocktail::FailureDialog ALIAS mocktail_failure_dialog_runtime)
 target_include_directories(mocktail_failure_dialog_runtime PUBLIC include)
-target_compile_definitions(mocktail_failure_dialog_runtime PRIVATE
-  "MOCKTAIL_INSTALL_LIBDIR=\"${CMAKE_INSTALL_LIBDIR}\""
-)
 mocktail_apply_compile_options(mocktail_failure_dialog_runtime)
-
-add_executable(mocktail_failure_dialog
-  src/ui/mocktail_failure_dialog.cc
-)
-target_link_libraries(mocktail_failure_dialog PRIVATE PkgConfig::LIBADWAITA)
-mocktail_apply_compile_options(mocktail_failure_dialog)
 
 add_library(mocktail_services STATIC
   src/services/http_client.cc
@@ -385,26 +243,12 @@ target_include_directories(mocktail_webview_launcher PUBLIC include)
 target_link_libraries(mocktail_webview_launcher PUBLIC CURL::libcurl)
 mocktail_apply_compile_options(mocktail_webview_launcher)
 
-add_library(mocktail_webview_helper_policy STATIC
-  src/webview/webview_helper_policy.cc
-)
-add_library(Mocktail::WebViewHelperPolicy ALIAS mocktail_webview_helper_policy)
-target_include_directories(mocktail_webview_helper_policy PUBLIC src)
-target_link_libraries(mocktail_webview_helper_policy PUBLIC
-  PkgConfig::WEBKITGTK6
-  nlohmann_json::nlohmann_json
-)
-mocktail_apply_compile_options(mocktail_webview_helper_policy)
-
 add_executable(mocktail_webview_helper
   src/webview/mocktail_webview_helper.cc
 )
+target_include_directories(mocktail_webview_helper PRIVATE include)
 target_link_libraries(mocktail_webview_helper PRIVATE
   Mocktail::WebViewLauncher
-  Mocktail::WebViewHelperPolicy
-  Mocktail::Runtime
-  PkgConfig::GTK4
-  PkgConfig::WEBKITGTK6
 )
 mocktail_apply_compile_options(mocktail_webview_helper)
 
@@ -705,8 +549,6 @@ install(TARGETS mocktail
 )
 install(TARGETS
     mocktail
-    mocktail_updater
-    mocktail_failure_dialog
     mocktail_webview_helper
     mocktail_audio_sdl
     mocktail_opensles
@@ -731,9 +573,6 @@ install(PROGRAMS "${MOCKTAIL_FREEBSD_SOCKET_HELPER}"
 endif()
 install(FILES
     config/roblox_compatibility.json
-    config/roblox_bootstrap_sources.json
-    config/roblox_host_abi_reference.json
-    config/roblox_signing_certificates.json
   DESTINATION "${MOCKTAIL_INSTALL_DATA_DIR}/metadata"
 )
 install(FILES packaging/space.bigrat.mocktail.desktop
@@ -805,7 +644,6 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
 set(CPACK_PACKAGE_DESCRIPTION
   "Runs the Android Roblox client on Linux."
 )
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 set(CPACK_STRIP_FILES TRUE)
 
@@ -832,9 +670,5 @@ endif()
 include(CPack)
 
 add_dependencies(mocktail all_stubs)
-add_dependencies(mocktail mocktail_failure_dialog)
 add_dependencies(mocktail mocktail_webview_helper)
 
-if(BUILD_TESTING)
-  add_subdirectory(tests)
-endif()

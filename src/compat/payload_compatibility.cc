@@ -37,13 +37,14 @@ PayloadCompatibilityResult CheckPayloadCompatibility(
     return result;
   }
   if (!profile.profile.has_value()) {
-    result.error = "Unsupported Roblox Build ID " + result.build_id +
-                   ".\n  Add and validate a profile in " + manifest_path +
-                   " before starting native code.";
-    return result;
+    // An unresearched Build ID is not a reason to refuse to start. Nothing in
+    // the synthesized profile points into the guest binary, so the run simply
+    // has no allocator interposition, constructor replay, or vtable bridges.
+    result.profile = MakeUnknownBuildProfile(result.build_id);
+    result.used_unknown_build_profile = true;
+  } else {
+    result.profile = *profile.profile;
   }
-
-  result.profile = *profile.profile;
   if (!result.profile.default_allowed && !allow_unverified_build) {
     result.error = "This Roblox build is not enabled for normal runs: " +
                    result.profile.reason +
@@ -52,13 +53,11 @@ PayloadCompatibilityResult CheckPayloadCompatibility(
     result.profile = {};
     return result;
   }
+  // A host ABI profile is what makes allocator interposition and constructor
+  // replay build-scoped. Without one both stay denied, which the engine runs
+  // fine with: its own allocator and constructors do the work.
   if (FindHostAbiProfile(result.build_id) == nullptr) {
-    result.error =
-        "No exact host ABI profile is loaded for Roblox Build ID " +
-        result.build_id +
-        ".\n  Refusing to start native code without Build-ID-scoped ABI "
-        "boundaries.";
-    result.profile = {};
+    result.missing_host_abi_profile = true;
   }
   return result;
 }

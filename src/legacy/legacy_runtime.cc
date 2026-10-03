@@ -24,6 +24,7 @@
 #include <signal.h>
 #include <string>
 #include <string_view>
+#include <optional>
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -63,7 +64,6 @@
 #include "runtime/device_memory_profile.h"
 #include "runtime/display_size.h"
 #include "runtime/environment.h"
-#include "runtime/discord_rpc.h"
 #include "runtime/jnivm_platform_web_callbacks.h"
 #include "runtime/owned_pthread.h"
 #include "runtime/platform_cache_migration.h"
@@ -645,7 +645,12 @@ void ApplyRuntimeDefaults() {
   // Startup worker ownership is joined. Returning while it still references
   // JNI, runtime, or stack state is never supported.
   SetEnvDefault("MOCKTAIL_ENGINE_DETACH", "0");
-  SetEnvDefault("MOCKTAIL_INIT_CLIENT_SETTINGS", "0");
+  // Roblox refuses to create its TaskScheduler until its FastFlag store is
+  // loaded, and that store comes from ClientSettings. Sober mode's inline
+  // defaults only disable flag fetching, so both of these must stay on for
+  // the engine to get past "flags have been loaded".
+  SetEnvDefault("MOCKTAIL_FETCH_CLIENT_SETTINGS", "1");
+  SetEnvDefault("MOCKTAIL_INIT_CLIENT_SETTINGS", "1");
   SetEnvDefault("MOCKTAIL_POST_CLIENT_SETTINGS", "0");
   SetEnvDefault("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP", "1");
   // Current Roblox Android builds drive app startup through NativeGLInterface's
@@ -2023,10 +2028,14 @@ extern "C" bool mocktail_should_skip_soinfo_constructors(const char* realpath) {
       g_allow_host_constructor_replay.load(std::memory_order_acquire) &&
       HostAbiExperimentRequested();
   if (!typed_replay_allowed) {
-    std::cout << "  [compat] skipping libroblox constructors: no exact "
-                 "Build-ID replay policy\n"
+    // Without a Build-ID-scoped replay policy there is nothing to replay them,
+    // so skipping every constructor would leave the engine's static state
+    // uninitialized and fault on the first JNI entry point. Let the linker run
+    // the whole .init_array instead.
+    std::cout << "  [compat] running libroblox static constructors (no "
+                 "Build-ID replay policy for this build)\n"
               << std::flush;
-    return true;
+    return false;
   }
 
   // Explicit host ABI policy, independent of fixed-offset binary patches.
@@ -4493,17 +4502,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   const mocktail::runtime::ProcessEnvironment process_environment;
   const mocktail::runtime::RuntimeConfig runtime_config =
       mocktail::runtime::RuntimeConfig::FromEnvironment(process_environment);
-  mocktail::runtime::DiscordRpcSession discord_rpc(
-      runtime_config.discord_rpc());
-  if (runtime_config.discord_rpc().enabled) {
-    std::string discord_rpc_detail;
-    if (discord_rpc.Start(&discord_rpc_detail)) {
-      std::cout << "  [discord-rpc] enabled; browsing activity queued\n";
-    } else {
-      std::cerr << "  [discord-rpc] unavailable: " << discord_rpc_detail
-                << "; continuing without Rich Presence\n";
-    }
-  }
   const mocktail::runtime::InputCapabilityConfig& input_capabilities =
       runtime_config.input_capabilities();
   if (!runtime_config.frame_rate().valid()) {
@@ -4556,6 +4554,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       manifest_override != nullptr && manifest_override[0] != '\0'
           ? manifest_override
           : MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST;
+  std::optional<mocktail::compat::BuildProfile> synthesized_profile;
   const mocktail::compat::ProfileLookupResult profile_result =
       mocktail::compat::FindBuildProfile(compatibility_manifest,
                                          build_id_result.build_id);
@@ -4565,15 +4564,15 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     return EXIT_FAILURE;
   }
   if (!profile_result.profile.has_value()) {
-    std::cerr << "[FATAL] Unsupported Roblox Build ID "
-              << build_id_result.build_id << ".\n"
-              << "  Add and validate a profile in " << compatibility_manifest
-              << " before starting native code.\n";
-    return EXIT_FAILURE;
+    std::cerr << "[WARNING] Roblox Build ID " << build_id_result.build_id
+              << " has no researched compatibility profile; running without "
+                 "allocator interposition or vtable bridges.\n";
+    synthesized_profile =
+        mocktail::compat::MakeUnknownBuildProfile(build_id_result.build_id);
   }
 
   const mocktail::compat::BuildProfile& build_profile =
-      *profile_result.profile;
+      synthesized_profile ? *synthesized_profile : *profile_result.profile;
   const mocktail::compat::HostAbiProfile* host_abi_profile =
       mocktail::compat::FindHostAbiProfile(build_profile.elf_build_id);
   const bool experiment_allowed =
@@ -6683,7 +6682,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
               jni_factory, present_boundary, std::move(surface_config),
               &dependencies.roblox_credential(),
               mocktail::runtime::RobloxExperienceSurfaceProvider{},
-              discord_rpc.observer(),
+              mocktail::runtime::RobloxExperiencePresenceObserver{},
               dependencies.clear_persisted_web_view_cookie(),
               runtime_config.microphone_enabled());
       const mocktail::Status platform_protocol_status =

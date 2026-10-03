@@ -78,6 +78,13 @@ struct ProfileLookupResult {
 ProfileLookupResult FindBuildProfile(const std::string& manifest_path,
                                      std::string_view build_id);
 
+// Builds the permissive stand-in used when the runtime is explicitly told to
+// accept a Build ID that has no researched profile. Every Build-ID-scoped
+// offset stays empty and every capability stays denied, so nothing inside the
+// guest binary is called or interposed: the engine simply runs with the
+// capabilities that are safe without a per-build research pass.
+BuildProfile MakeUnknownBuildProfile(std::string_view build_id);
+
 std::string_view BuildStatusName(BuildStatus status) noexcept;
 
 }  // namespace mocktail::compat

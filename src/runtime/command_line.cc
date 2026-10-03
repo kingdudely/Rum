@@ -77,8 +77,12 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
       }
     } else if (argument == "--allow-unverified-build") {
       result.options.allow_unverified_build = true;
-    } else if (argument == "--force-run-latest") {
-      result.options.force_run_latest = true;
+    } else if (argument == "--assets") {
+      if (!ReadOptionValue(argc, argv, &index, argument,
+                           &result.options.assets_path,
+                           &result.error)) {
+        return result;
+      }
     } else if (argument == "--launch-uri") {
       if (!result.options.launch_request_json.empty()) {
         result.error = "duplicate option: --launch-uri";
@@ -137,14 +141,6 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
                          : "unknown option: " + argument;
       return result;
     }
-  }
-  if (result.options.force_run_latest &&
-      (!result.options.roblox_library_path.empty() ||
-       result.options.window_mode != WindowMode::kUnspecified ||
-       !result.options.graphics_backend.empty() ||
-       result.options.allow_unverified_build ||
-       !result.options.launch_request_json.empty())) {
-    result.error = "--force-run-latest must be used on its own";
   }
   return result;
 }
@@ -242,33 +238,25 @@ std::string CommandLineUsage(const std::string& program_name) {
   usage
       << "Usage: " << (program_name.empty() ? "mocktail" : program_name)
       << " [options] [roblox-uri]\n\n"
-      << "Normal startup downloads and activates a verified managed "
-      << compat::kGuestAbi
-      << " Roblox payload automatically.\n\n"
+      << "Mocktail runs a locally provided Roblox Android client; it does not\n"
+      << "download Roblox files. Provide libroblox.so via --roblox-lib.\n\n"
       << "Options:\n"
-      << "  --roblox-lib <path>      Development override for a specific "
-      << compat::kGuestAbi << " libroblox.so\n"
-      << "  --headless               Run without creating an SDL window\n"
-      << "  --windowed               Force windowed startup (default)\n"
-      << "  --graphics <backend>     direct-vulkan | opengl | system | "
+      << "  --roblox-lib <path>    Path to libroblox.so (required)\n"
+      << "  --assets <path>        Path to the Roblox assets/content directory\n"
+      << "  --headless             Run without creating an SDL window\n"
+      << "  --windowed             Force windowed startup (default)\n"
+      << "  --graphics <backend>   direct-vulkan | opengl | system | "
          "angle-vulkan (default: direct-vulkan)\n"
       << "  --allow-unverified-build Run a known but unverified Build-ID "
          "profile\n"
-      << "  --force-run-latest       Download and run the provider latest once "
-         "without approval; it is not activated\n"
-      << "  --launch-uri <uri>       Join from a roblox: or roblox-player: "
+      << "  --launch-uri <uri>     Join from a roblox: or roblox-player: "
          "website link\n"
-      << "  --help, -h               Show this help\n\n"
+      << "  --help, -h             Show this help\n\n"
       << "Auth:\n"
-      << "  When no saved Roblox session is found, Roblox's welcome screen "
-         "opens with the native sign-in flow.\n"
-      << "  Set MOCKTAIL_NATIVE_LOGIN=0 to use the optional WebView sign-in "
-         "window.\n"
-      << "  Roblox may still open a WebView for required verification "
-         "challenges.\n"
-      << "  New credentials are stored privately.\n\n"
-      << "Additional runtime options are available as MOCKTAIL_* environment "
-         "variables.\n";
+      << "  With no saved session, paste your .ROBLOSECURITY cookie at the\n"
+      << "  first-run prompt (get it from your browser after signing in to\n"
+      << "  roblox.com), or play as guest. New credentials are stored privately.\n\n"
+      << "Additional runtime options are available as MOCKTAIL_* environment variables.\n";
   return usage.str();
 }
 

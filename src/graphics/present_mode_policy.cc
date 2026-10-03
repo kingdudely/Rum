@@ -54,7 +54,7 @@ FilterPresentModes(PresentModePolicy policy,
   // MAILBOX present the newest image instead. FIFO_RELAXED only tears if
   // the deadline was already missed.
   const VkPresentModeKHR vsync_modes[] = {
-      VK_PRESENT_MODE_FIFO_LATEST_READY_KHR, VK_PRESENT_MODE_MAILBOX_KHR,
+      VK_PRESENT_MODE_FIFO_LATEST_READY_EXT, VK_PRESENT_MODE_MAILBOX_KHR,
       VK_PRESENT_MODE_FIFO_RELAXED_KHR, VK_PRESENT_MODE_FIFO_KHR};
   const VkPresentModeKHR unthrottled_modes[] = {
       VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR,
@@ -84,7 +84,7 @@ const char *PresentModeKhrName(VkPresentModeKHR mode) {
     return "fifo";
   case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
     return "fifo-relaxed";
-  case VK_PRESENT_MODE_FIFO_LATEST_READY_KHR:
+  case VK_PRESENT_MODE_FIFO_LATEST_READY_EXT:
     return "fifo-latest-ready";
   default:
     return "other";

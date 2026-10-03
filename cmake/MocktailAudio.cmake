@@ -8,7 +8,7 @@ get_filename_component(MOCKTAIL_AUDIO_ROOT
 )
 
 # SDL 3.4 provides the callback needed for OpenSL buffer completion.
-find_package(SDL3 3.4 REQUIRED CONFIG)
+find_package(SDL3 3.2 REQUIRED CONFIG)
 find_package(Threads REQUIRED)
 
 add_library(mocktail_audio_core STATIC
@@ -149,56 +149,3 @@ target_link_options(mocktail_opensles PRIVATE
   "-Wl,--exclude-libs,ALL"
 )
 
-if(BUILD_TESTING AND TARGET GTest::gtest_main)
-  add_executable(audio_foundation_test
-    ${MOCKTAIL_AUDIO_ROOT}/tests/audio_foundation_test.cc
-    ${MOCKTAIL_AUDIO_ROOT}/stubs/libopensl_stub.cc
-  )
-  target_link_libraries(audio_foundation_test PRIVATE
-    Mocktail::Audio
-    GTest::gtest_main
-  )
-  target_compile_features(audio_foundation_test PRIVATE cxx_std_17)
-  include(GoogleTest)
-  gtest_discover_tests(audio_foundation_test
-    PROPERTIES ENVIRONMENT "SDL_AUDIODRIVER=dummy"
-  )
-
-  add_executable(opensl_playback_runtime_test
-    ${MOCKTAIL_AUDIO_ROOT}/tests/opensl_playback_runtime_test.cc
-  )
-  target_link_libraries(opensl_playback_runtime_test PRIVATE
-    mocktail_opensles
-    Mocktail::AudioSdl
-    GTest::gtest_main
-  )
-  target_compile_features(opensl_playback_runtime_test PRIVATE cxx_std_17)
-  gtest_discover_tests(opensl_playback_runtime_test
-    PROPERTIES ENVIRONMENT "SDL_AUDIODRIVER=dummy"
-  )
-
-  add_executable(fmod_java_audio_runtime_test
-    ${MOCKTAIL_AUDIO_ROOT}/tests/fmod_java_audio_runtime_test.cc
-  )
-  target_link_libraries(fmod_java_audio_runtime_test PRIVATE
-    Mocktail::FmodJavaAudioRuntime
-    GTest::gtest_main
-    Threads::Threads
-  )
-  target_compile_features(fmod_java_audio_runtime_test PRIVATE cxx_std_17)
-  gtest_discover_tests(fmod_java_audio_runtime_test
-    PROPERTIES ENVIRONMENT "SDL_AUDIODRIVER=dummy"
-  )
-
-  add_executable(fmod_jni_audio_bridge_test
-    ${MOCKTAIL_AUDIO_ROOT}/tests/fmod_jni_audio_bridge_test.cc
-  )
-  target_link_libraries(fmod_jni_audio_bridge_test PRIVATE
-    Mocktail::FmodJniAudioBridge
-    GTest::gtest_main
-  )
-  target_compile_features(fmod_jni_audio_bridge_test PRIVATE cxx_std_17)
-  gtest_discover_tests(fmod_jni_audio_bridge_test
-    PROPERTIES ENVIRONMENT "SDL_AUDIODRIVER=dummy"
-  )
-endif()

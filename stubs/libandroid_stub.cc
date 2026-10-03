@@ -86,14 +86,73 @@ std::string_view StripAssetUriPrefix(std::string_view path) {
   return path;
 }
 
-bool HasUnsafePathSegment(std::string_view path) {
+// Folds "." and ".." segments so requests like
+// "content/../shaders/shaders_vulkan_mobile.pack" resolve the way the guest
+// expects. Returns empty when the request escapes its own root. Absolute
+// requests are left untouched: the guest already resolved them, and they are
+// matched against the asset root before being trusted.
+std::string NormalizeAssetRequest(std::string_view path) {
   if (path.empty() || path[0] == '/') {
-    return true;
+    return std::string(path);
   }
-  return path == "." || path == ".." ||
-         path.find("/../") != std::string_view::npos || path.find("../") == 0 ||
-         (path.size() >= 3 && path.rfind("/..") == path.size() - 3) ||
-         path.find("//") != std::string_view::npos;
+  std::vector<std::string_view> parts;
+  size_t index = 0;
+  while (index < path.size()) {
+    size_t end = path.find('/', index);
+    if (end == std::string_view::npos) {
+      end = path.size();
+    }
+    const std::string_view segment = path.substr(index, end - index);
+    index = end + 1;
+    if (segment.empty() || segment == ".") {
+      continue;
+    }
+    if (segment == "..") {
+      if (parts.empty()) {
+        return {};
+      }
+      parts.pop_back();
+      continue;
+    }
+    parts.push_back(segment);
+  }
+  if (parts.empty()) {
+    return {};
+  }
+  std::string normalized;
+  for (size_t part = 0; part < parts.size(); ++part) {
+    if (part != 0) {
+      normalized += '/';
+    }
+    normalized.append(parts[part]);
+  }
+  return normalized;
+}
+
+// The guest resolves assets against the APK's asset directory, which is the
+// parent of the content/ directory handed to the app bridge. Derive it from
+// MOCKTAIL_ASSET_PATH so asset lookups work during early startup, before the
+// engine calls back into MocktailSetAssetPath.
+std::string DefaultAssetRoot() {
+  const char* root = GetEnvNonEmpty("MOCKTAIL_ASSET_ROOT");
+  if (root != nullptr) {
+    return root;
+  }
+  const char* content = GetEnvNonEmpty("MOCKTAIL_ASSET_PATH");
+  if (content != nullptr) {
+    std::string assets(content);
+    while (assets.size() > 1 && assets.back() == '/') {
+      assets.pop_back();
+    }
+    static constexpr std::string_view kSuffix = "/content";
+    if (assets.size() > kSuffix.size() &&
+        assets.compare(assets.size() - kSuffix.size(), kSuffix.size(),
+                       kSuffix) == 0) {
+      return assets.substr(0, assets.size() - kSuffix.size());
+    }
+    return assets;
+  }
+  return "rbx_bin/assets";
 }
 
 std::string_view StripAndroidAssetPrefix(std::string_view path) {
@@ -138,13 +197,12 @@ std::string ResolveAssetPath(const char* filename) {
     return {};
   }
   const std::string_view requested_view = StripAssetUriPrefix(filename);
-  if (HasUnsafePathSegment(requested_view)) {
+  const bool absolute_request = !requested_view.empty() && requested_view[0] == '/';
+  const std::string requested(NormalizeAssetRequest(requested_view));
+  if (requested.empty() && !absolute_request) {
     return {};
   }
-
-  const std::string requested(requested_view);
-  const char* root_env = GetEnvNonEmpty("MOCKTAIL_ASSET_ROOT");
-  const std::string root = root_env != nullptr ? root_env : "rbx_bin/assets";
+  const std::string root = DefaultAssetRoot();
   const std::string cache_key = AssetCacheKey(root, requested);
 
   {
@@ -158,7 +216,19 @@ std::string ResolveAssetPath(const char* filename) {
     }
   }
 
-  const std::string stripped(StripAndroidAssetPrefix(requested_view));
+  // The guest sometimes hands back a path it already resolved against the host
+  // asset root. Accept it only when it stays inside that root.
+  if (absolute_request) {
+    if (requested.compare(0, root.size(), root) == 0 &&
+        requested.size() > root.size() && requested[root.size()] == '/' &&
+        FileExists(requested)) {
+      return requested;
+    }
+    return {};
+  }
+
+  const std::string_view normalized_view(requested);
+  const std::string stripped(StripAndroidAssetPrefix(normalized_view));
 
   const std::vector<std::string> candidates = {
       root + "/" + requested,
@@ -332,12 +402,23 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename,
   }
   std::string path = ResolveAssetPath(filename);
   if (path.empty()) {
+    if (AssetTraceEnabled()) {
+      std::fprintf(stderr, "[asset] open MISS %s (root=%s)\n",
+                   filename ? filename : "(null)",
+                   GetEnvNonEmpty("MOCKTAIL_ASSET_ROOT") != nullptr
+                       ? GetEnvNonEmpty("MOCKTAIL_ASSET_ROOT")
+                       : "rbx_bin/assets");
+    }
     return nullptr;
   }
   auto* asset = new AAsset;
   asset->path = path;
   asset->apk_entry = ApkEntryName(filename);
   if (!LoadFile(path, &asset->data)) {
+    if (AssetTraceEnabled()) {
+      std::fprintf(stderr, "[asset] read-failed %s -> %s\n", filename,
+                   path.c_str());
+    }
     delete asset;
     return nullptr;
   }

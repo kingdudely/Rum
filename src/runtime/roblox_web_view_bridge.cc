@@ -1212,8 +1212,11 @@ Status RobloxWebViewBridge::DispatchOpenRequest(
   // Native sign-in must keep the original challenge and its return token so
   // Roblox can finish the in-app login instead of starting a browser login.
   const bool login_challenge = IsLoginChallengeUrl(request.url);
+  // The webview helper is a browser launcher, so the system browser is the
+  // default sign-in path. An in-app native sign-in would need an embedded
+  // webview, which Mocktail no longer builds.
   const bool browser_login_fallback =
-      ProcessEnvironment{}.Get("MOCKTAIL_NATIVE_LOGIN") == "0" &&
+      ProcessEnvironment{}.Get("MOCKTAIL_NATIVE_LOGIN") != "0" &&
       login_challenge;
   if (login_challenge) {
     // Roblox can preload challenges with isVisible=false and ask to reveal

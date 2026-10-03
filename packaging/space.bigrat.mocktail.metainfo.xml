@@ -82,7 +82,6 @@
         <ul>
           <li>Fixed the “Roblox is out of date” bug</li>
           <li>Improved logging</li>
-          <li>Fixed issues with Discord RPC where the game you were playing wasn’t displayed</li>
         </ul>
       </description>
     </release>
@@ -90,7 +89,6 @@
       <description>
         <ul>
           <li>Fix issues with GameMode</li>
-          <li>Add Discord RPC support</li>
         </ul>
       </description>
     </release>

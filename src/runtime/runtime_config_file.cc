@@ -188,22 +188,6 @@ bool ValidateAndMap(const ValueMap& yaml, ValueMap* environment,
       "network.proxy_host",
       "network.proxy_port",
       "network.ca_bundle",
-      "integrations.fleasion.enabled",
-      "integrations.fleasion.proxy_mode",
-      "integrations.fleasion.proxy_port",
-      "integrations.fleasion.ca_certificate",
-      "integrations.discord_rpc.enabled",
-      "integrations.discord_rpc.show_place_name",
-      "integrations.discord_rpc.show_elapsed_time",
-      "integrations.discord_rpc.application_id",
-      "integrations.discord_rpc.join.enabled",
-      "integrations.discord_rpc.join.public_servers_only",
-      "integrations.discord_rpc.join.button_label",
-      "integrations.discord_rpc.text.browsing",
-      "integrations.discord_rpc.text.joining",
-      "integrations.discord_rpc.text.playing",
-      "integrations.discord_rpc.text.state",
-      "integrations.discord_rpc.text.unknown_place",
   };
   for (const auto& [key, ignored] : yaml) {
     if (supported.find(key) == supported.end()) {
@@ -483,88 +467,6 @@ bool ValidateAndMap(const ValueMap& yaml, ValueMap* environment,
     }
     (*environment)["MOCKTAIL_CA_BUNDLE"] = *ca_bundle;
   }
-  for (const auto& [key, variable] : {
-           std::pair<std::string_view, std::string_view>(
-               "integrations.discord_rpc.enabled",
-               "MOCKTAIL_DISCORD_RPC_ENABLED"),
-           {"integrations.fleasion.enabled", "MOCKTAIL_FLEASION_ENABLED"},
-           {"integrations.discord_rpc.show_place_name",
-            "MOCKTAIL_DISCORD_RPC_SHOW_PLACE_NAME"},
-           {"integrations.discord_rpc.show_elapsed_time",
-            "MOCKTAIL_DISCORD_RPC_SHOW_ELAPSED_TIME"},
-           {"integrations.discord_rpc.join.enabled",
-            "MOCKTAIL_DISCORD_RPC_JOIN_ENABLED"},
-           {"integrations.discord_rpc.join.public_servers_only",
-            "MOCKTAIL_DISCORD_RPC_PUBLIC_SERVERS_ONLY"},
-       }) {
-    const std::optional<std::string> configured = value(key);
-    if (!configured.has_value()) {
-      continue;
-    }
-    bool parsed = false;
-    if (!ParseBoolean(*configured, &parsed)) {
-      *error = std::string(key) + " must be true or false";
-      return false;
-    }
-    (*environment)[std::string(variable)] = parsed ? "1" : "0";
-  }
-  for (const auto& [key, variable] : {
-           std::pair<std::string_view, std::string_view>(
-               "integrations.fleasion.proxy_mode", "MOCKTAIL_FLEASION_PROXY_MODE"),
-           {"integrations.fleasion.proxy_port", "MOCKTAIL_FLEASION_PROXY_PORT"},
-           {"integrations.fleasion.ca_certificate", "MOCKTAIL_FLEASION_CA_CERTIFICATE"},
-       }) {
-    if (const auto configured = value(key))
-      (*environment)[std::string(variable)] = *configured;
-  }
-  if (const auto application_id =
-          value("integrations.discord_rpc.application_id");
-      application_id.has_value()) {
-    if (application_id->size() < 17 || application_id->size() > 20 ||
-        !std::all_of(application_id->begin(), application_id->end(),
-                     [](unsigned char byte) {
-                       return byte >= '0' && byte <= '9';
-                     })) {
-      *error = "integrations.discord_rpc.application_id must be a Discord "
-               "snowflake";
-      return false;
-    }
-    (*environment)["MOCKTAIL_DISCORD_APPLICATION_ID"] = *application_id;
-  }
-  struct DiscordStringField {
-    std::string_view yaml;
-    std::string_view variable;
-    std::size_t maximum;
-  };
-  for (const DiscordStringField& field : {
-           DiscordStringField{"integrations.discord_rpc.join.button_label",
-                              "MOCKTAIL_DISCORD_RPC_JOIN_BUTTON_LABEL", 32},
-           {"integrations.discord_rpc.text.browsing",
-            "MOCKTAIL_DISCORD_RPC_TEXT_BROWSING", 128},
-           {"integrations.discord_rpc.text.joining",
-            "MOCKTAIL_DISCORD_RPC_TEXT_JOINING", 128},
-           {"integrations.discord_rpc.text.playing",
-            "MOCKTAIL_DISCORD_RPC_TEXT_PLAYING", 128},
-           {"integrations.discord_rpc.text.state",
-            "MOCKTAIL_DISCORD_RPC_TEXT_STATE", 128},
-           {"integrations.discord_rpc.text.unknown_place",
-            "MOCKTAIL_DISCORD_RPC_TEXT_UNKNOWN_PLACE", 128},
-       }) {
-    const std::optional<std::string> configured = value(field.yaml);
-    if (!configured.has_value()) {
-      continue;
-    }
-    if (configured->empty() || configured->size() > field.maximum ||
-        std::any_of(configured->begin(), configured->end(),
-                    [](unsigned char byte) {
-                      return byte < 0x20 || byte == 0x7f;
-                    })) {
-      *error = std::string(field.yaml) +
-               " must be non-empty, bounded, and contain no control bytes";
-      return false;
-    }
-    (*environment)[std::string(field.variable)] = *configured;
-  }
   return true;
 }
 
@@ -765,24 +667,14 @@ RuntimeConfigLoadResult LoadRuntimeConfig(
     result.error = "GameMode policy is invalid";
   } else if (!result.config.performance().physics_worker_mode_valid) {
     result.error = "physics worker policy is invalid";
-  } else if (!result.config.fleasion_valid()) {
-    result.error = "Fleasion configuration is invalid: use proxy_mode env or hosts, "
-                   "a port from 1 to 65535, an absolute CA certificate path, and "
-                   "no conflicting system/fixed proxy";
   } else if (!result.config.ca_bundle_valid()) {
     result.error = "CA bundle path is invalid";
-  } else if (!result.config.discord_rpc_valid()) {
-    result.error = "Discord Rich Presence configuration is invalid";
   }
   return result;
 }
 
 bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
                                     std::string* error) {
-  if (!config.fleasion_valid()) {
-    if (error != nullptr) *error = "cannot export invalid Fleasion configuration";
-    return false;
-  }
   if (!config.device_profile_valid()) {
     if (error != nullptr) {
       *error = "cannot export an invalid device profile";
@@ -822,12 +714,6 @@ bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
   if (!config.ca_bundle_valid()) {
     if (error != nullptr) {
       *error = "cannot export an invalid CA bundle path";
-    }
-    return false;
-  }
-  if (!config.discord_rpc_valid()) {
-    if (error != nullptr) {
-      *error = "cannot export an invalid Discord Rich Presence policy";
     }
     return false;
   }
@@ -900,50 +786,8 @@ bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
       SetEnvironmentValue("MOCKTAIL_AUDIO_INPUT_DEVICE",
                           config.audio_input_device(), error) &&
       SetEnvironmentValue("MOCKTAIL_USE_SYSTEM_PROXY",
-                          config.use_system_proxy() ? "1" : "0", error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_RPC_ENABLED",
-                          config.discord_rpc().enabled ? "1" : "0", error) &&
-      SetEnvironmentValue(
-          "MOCKTAIL_DISCORD_RPC_SHOW_PLACE_NAME",
-          config.discord_rpc().show_place_name ? "1" : "0", error) &&
-      SetEnvironmentValue(
-          "MOCKTAIL_DISCORD_RPC_SHOW_ELAPSED_TIME",
-          config.discord_rpc().show_elapsed_time ? "1" : "0", error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_RPC_JOIN_ENABLED",
-                          config.discord_rpc().join_enabled ? "1" : "0",
-                          error) &&
-      SetEnvironmentValue(
-          "MOCKTAIL_DISCORD_RPC_PUBLIC_SERVERS_ONLY",
-          config.discord_rpc().public_servers_only ? "1" : "0", error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_RPC_JOIN_BUTTON_LABEL",
-                          config.discord_rpc().join_button_label, error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_APPLICATION_ID",
-                          config.discord_rpc().application_id, error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_RPC_TEXT_BROWSING",
-                          config.discord_rpc().text.browsing, error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_RPC_TEXT_JOINING",
-                          config.discord_rpc().text.joining, error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_RPC_TEXT_PLAYING",
-                          config.discord_rpc().text.playing, error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_RPC_TEXT_STATE",
-                          config.discord_rpc().text.state, error) &&
-      SetEnvironmentValue("MOCKTAIL_DISCORD_RPC_TEXT_UNKNOWN_PLACE",
-                          config.discord_rpc().text.unknown_place, error);
+                          config.use_system_proxy() ? "1" : "0", error);
   if (!base_exported) {
-    return false;
-  }
-  if (!SetEnvironmentValue("MOCKTAIL_FLEASION_ENABLED",
-                           config.fleasion_enabled() ? "1" : "0", error) ||
-      !SetEnvironmentValue("MOCKTAIL_FLEASION_PROXY_MODE",
-                           config.fleasion_proxy_mode(), error) ||
-      !SetEnvironmentValue("MOCKTAIL_FLEASION_PROXY_PORT",
-                           std::to_string(config.fleasion_proxy_port()), error))
-    return false;
-  if (config.fleasion_ca_certificate()) {
-    if (!SetEnvironmentValue("MOCKTAIL_FLEASION_CA_CERTIFICATE",
-                             config.fleasion_ca_certificate()->string(), error))
-      return false;
-  } else if (!UnsetEnvironmentValue("MOCKTAIL_FLEASION_CA_CERTIFICATE", error)) {
     return false;
   }
   if (config.ca_bundle().has_value()) {

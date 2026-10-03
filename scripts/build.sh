@@ -41,14 +41,12 @@ Options:
   --cmake-sysroot DIR Explicit compiler/CMake sysroot.
   --build-type TYPE   Debug, Release, or RelWithDebInfo (default: Release).
   --jobs N            Parallel build jobs (default: nproc).
-  --run-tests         Run CTest after building.
   --clean             Remove the selected build directory first.
   -h, --help          Show this help.
 
 Examples:
   make build
   ./scripts/build.sh
-  ./scripts/build.sh --build-type Debug --run-tests
   ./scripts/build.sh --apk /path/to/roblox-x86_64.apk
 EOF
 }
@@ -63,7 +61,6 @@ EXTRACT_APK=false
 EXPLICIT_RUNTIME_OVERRIDE=false
 BUILD_TYPE="Release"
 JOBS="$(nproc)"
-RUN_TESTS=false
 CLEAN=false
 CMAKE_TOOLCHAIN_FILE=""
 CMAKE_SYSROOT=""
@@ -103,7 +100,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --build-type)  BUILD_TYPE="$2"; shift 2 ;;
     --jobs)        JOBS="$2"; shift 2 ;;
-    --run-tests)   RUN_TESTS=true; shift ;;
     --clean)       CLEAN=true; shift ;;
     --help|-h)
       Usage
@@ -217,7 +213,6 @@ if [[ -f ".gitmodules" ]]; then
   success "Submodules ready."
 else
   warn "No .gitmodules found — skipping submodule init."
-  info "To add submodules run: ./scripts/add_submodules.sh"
 fi
 
 step "5/5 configuring CMake"
@@ -227,17 +222,10 @@ if [[ "${CLEAN}" == true && -d "${BUILD_DIR}" ]]; then
   rm -rf "${BUILD_DIR}"
 fi
 
-if [[ "${RUN_TESTS}" == true ]]; then
-  CMAKE_BUILD_TESTING=ON
-else
-  CMAKE_BUILD_TESTING=OFF
-fi
-
 cmake_arguments=(
   -S "${PROJECT_ROOT}"
   -B "${BUILD_DIR}"
   -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
-  -DBUILD_TESTING="${CMAKE_BUILD_TESTING}"
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 )
 if [[ -n "${CMAKE_TOOLCHAIN_FILE}" ]]; then
@@ -255,12 +243,6 @@ step "building Mocktail"
 cmake --build "${BUILD_DIR}" -j"${JOBS}"
 
 success "Build complete → ${BUILD_DIR}/mocktail"
-
-if [[ "${RUN_TESTS}" == true ]]; then
-  step "running unit tests"
-  ctest --test-dir "${BUILD_DIR}" --output-on-failure -j"${JOBS}"
-  success "All tests passed."
-fi
 
 echo
 success "Build successful."

@@ -23,6 +23,7 @@ struct CommandLineOptions {
   WindowMode window_mode = WindowMode::kUnspecified;
   std::string program_name = "mocktail";
   std::string roblox_library_path;
+  std::string assets_path;
   std::string graphics_backend;
   // Raw browser/internal input exists only until the composition root creates
   // safe re-exec arguments, then it is overwritten in this string and argv.
@@ -30,9 +31,6 @@ struct CommandLineOptions {
   std::string launch_request_json;
   int launch_argument_index = -1;
   bool allow_unverified_build = false;
-  // Requests one explicit launch of the provider latest without promoting it
-  // into the managed payload state.
-  bool force_run_latest = false;
 };
 
 struct CommandLineParseResult {

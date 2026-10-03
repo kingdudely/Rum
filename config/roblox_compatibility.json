@@ -103,6 +103,18 @@
         "input_select_method_rva": "0x32d0a56"
       },
       "reason": "Verified 2026-09-06: exact Build-ID profile passed two isolated no-recovery Tier C Vulkan canaries and real game sessions, including fullscreen state synchronization and host FMOD output-device interposition; legacy executable patches and signal recovery remain disabled."
+    },
+    {
+      "version_name": "2.739.691",
+      "version_code": 3120,
+      "abi": "x86_64",
+      "elf_build_id": "22a9a05307b862ab7348857e08970f9c62c79cc4",
+      "status": "experimental",
+      "default_allowed": true,
+      "allow_legacy_binary_patches": false,
+      "allow_host_abi_bridges": false,
+      "allow_host_constructor_replay": false,
+      "reason": "Verified 2026-10-02 on this host: real frames presented through the Vulkan backend at roughly 42 fps in a live guest session joining place 1818, with ClientSettings-driven FastFlags, MegaReplicator replication, and FMOD audio all functioning. No Build-ID-scoped host ABI profile is researched for this payload, so allocator interposition, selective constructor replay, fullscreen state synchronization, and FMOD host device enumeration stay disabled; the engine uses its own allocator and full constructor pass instead."
     }
   ]
 }

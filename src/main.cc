@@ -29,11 +29,9 @@
 #include "runtime/environment.h"
 #include "runtime/external_launch_broker.h"
 #include "runtime/failure_dialog.h"
-#include "runtime/fleasion.h"
 #include "runtime/game_mode.h"
 #include "runtime/graphics_launch_policy.h"
 #include "runtime/memory_limit.h"
-#include "runtime/payload_update_preflight.h"
 #include "runtime/performance_policy.h"
 #include "runtime/platform_cache_migration.h"
 #include "runtime/process_diagnostics.h"
@@ -47,9 +45,7 @@
 #include "runtime/session_log.h"
 #include "runtime/single_instance_lock.h"
 #include "runtime/support_bundle.h"
-#include "runtime/supported_launch_policy.h"
 #include "runtime/system_proxy.h"
-#include "runtime/webview_helper_launcher.h"
 #include "services/auth_service.h"
 #include "services/browser_tracker_service.h"
 #include "services/client_settings_service.h"
@@ -120,105 +116,67 @@ void PromptFirstLaunchSignIn(
     mocktail::services::AuthService& auth_service,
     const std::shared_ptr<mocktail::services::HttpClient>& http_client,
     mocktail::runtime::AuthRuntimeComposition* composition) {
+  // Runs only when no usable session exists. A fresh install has no cookie
+  // file at all, which composes to kInvalidCredentials rather than kGuest, so
+  // gating on kGuest (as the WebKit flow used to) made this unreachable.
   if (composition == nullptr ||
-      composition->status != mocktail::runtime::AuthRuntimeStatus::kGuest ||
-      environment.Get("MOCKTAIL_GUEST") == "1" ||
-      environment.Get("MOCKTAIL_SKIP_FIRST_LAUNCH_LOGIN") == "1") {
+      composition->status == mocktail::runtime::AuthRuntimeStatus::kAuthenticated ||
+      composition->status == mocktail::runtime::AuthRuntimeStatus::kGuest) {
     return;
   }
-  if (environment.Get("MOCKTAIL_NATIVE_LOGIN") != "0") {
-    std::cout << "  [auth] native sign-in selected; opening Roblox welcome screen\n";
-    return;
-  }
-
-  std::filesystem::path helper;
-  const char* helper_override = std::getenv("MOCKTAIL_WEBVIEW_HELPER");
-  if (helper_override != nullptr && helper_override[0] != '\0') {
-    helper = helper_override;
-  } else {
-    std::error_code error;
-    const std::filesystem::path executable =
-        std::filesystem::read_symlink("/proc/self/exe", error);
-    if (!error && !executable.empty()) {
-      helper = executable.parent_path() / "mocktail_webview_helper";
-    }
-  }
-  if (helper.empty() || !std::filesystem::exists(helper)) {
+  if (environment.Get("MOCKTAIL_SKIP_FIRST_LAUNCH_LOGIN") == "1") {
     return;
   }
 
   std::cout << "\n======================================================\n"
             << "  First-Time Setup: Roblox Sign-In\n"
             << "======================================================\n"
-            << "  [auth] no saved session found; opening desktop sign-in window...\n"
-            << "  [auth] tip: you can use Quick Log In (QR code) or username/password\n"
-            << "  [auth] (close the sign-in window to play as guest)\n\n";
-
-  struct FirstLaunchContext {
-    std::mutex mutex;
-    std::string captured_cookie;
-    bool finished = false;
-  };
-  auto context = std::make_shared<FirstLaunchContext>();
-
-  mocktail::runtime::WebViewHelperExitObserver exit_observer;
-  exit_observer.context = context;
-  exit_observer.on_exit = [](void* ctx) {
-    auto* c = static_cast<FirstLaunchContext*>(ctx);
-    std::lock_guard<std::mutex> lock(c->mutex);
-    c->finished = true;
-  };
-
-  const auto launched = mocktail::runtime::LaunchWebViewHelper(
-      helper, "https://www.roblox.com/login", exit_observer);
-  if (!launched || launched.process == nullptr) {
+            << "  Open https://www.roblox.com/login in your browser, sign in,\n"
+            << "  then copy the .ROBLOSECURITY cookie value from your browser's\n"
+            << "  developer tools. Paste it below and press Enter to continue,\n"
+            << "  or just press Enter to play as guest.\n\n";
+  std::cout << "  .ROBLOSECURITY cookie: " << std::flush;
+  std::string cookie;
+  std::getline(std::cin, cookie);
+  // Strip surrounding quotes/whitespace and any ".ROBLOSECURITY=" prefix.
+  auto is_space = [](unsigned char c) { return c == ' ' || c == '\t' || c == '\r'; };
+  while (!cookie.empty() && is_space(cookie.front())) cookie.erase(cookie.begin());
+  while (!cookie.empty() && is_space(cookie.back())) cookie.pop_back();
+  constexpr std::string_view kPrefix = ".ROBLOSECURITY=";
+  if (cookie.compare(0, kPrefix.size(), kPrefix) == 0) {
+    cookie.erase(0, kPrefix.size());
+  }
+  if (cookie.empty()) {
+    // Guest mode only composes when the no-cookie LuaApp path is enabled, and
+    // that same switch is what the engine runtime enables for itself later.
+    // Turn it on now so the offer above is truthful instead of falling
+    // through to the preflight failure.
+    setenv("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP", "1", 1);
+    mocktail::runtime::AuthRuntimeComposition guest_comp =
+        mocktail::runtime::ComposeAuthRuntime(environment, paths,
+                                              auth_service, http_client);
+    if (guest_comp.status == mocktail::runtime::AuthRuntimeStatus::kGuest) {
+      *composition = std::move(guest_comp);
+      std::cout << "  [auth] continuing as guest\n";
+    } else {
+      std::cerr << "  [auth] guest session unavailable: " << guest_comp.error
+                << '\n';
+    }
     return;
   }
-  if (!launched.process->WaitUntilReady(std::chrono::milliseconds(5000))) {
-    (void)launched.process->RequestClose();
-    return;
-  }
-  (void)launched.process->SetRobloxCookie("");
-  (void)launched.process->SetTitle("Roblox sign in");
-  (void)launched.process->SetVisible(true);
-
-  std::vector<mocktail::runtime::WebViewHelperEvent> events;
-  while (true) {
-    {
-      std::lock_guard<std::mutex> lock(context->mutex);
-      if (context->finished) {
-        break;
-      }
-    }
-    if (launched.process->DrainEvents(&events)) {
-      for (const auto& event : events) {
-        if (event.type ==
-            mocktail::runtime::WebViewHelperEventType::kRobloxCookie) {
-          std::lock_guard<std::mutex> lock(context->mutex);
-          context->captured_cookie = event.payload;
-          (void)launched.process->RequestClose();
-          break;
-        }
-      }
-      events.clear();
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-  }
-
-  if (!context->captured_cookie.empty()) {
-    if (mocktail::runtime::PersistRobloxCookie(paths.cookie_file(),
-                                               context->captured_cookie)) {
-      mocktail::runtime::AuthRuntimeComposition new_comp =
-          mocktail::runtime::ComposeAuthRuntime(environment, paths,
-                                                auth_service, http_client);
-      if (new_comp.status ==
-          mocktail::runtime::AuthRuntimeStatus::kAuthenticated) {
-        *composition = std::move(new_comp);
-        std::cout << "  [auth] desktop sign-in successful; launching authenticated session\n";
-      }
+  if (mocktail::runtime::PersistRobloxCookie(paths.cookie_file(), cookie)) {
+    mocktail::runtime::AuthRuntimeComposition new_comp =
+        mocktail::runtime::ComposeAuthRuntime(environment, paths,
+                                              auth_service, http_client);
+    if (new_comp.status ==
+        mocktail::runtime::AuthRuntimeStatus::kAuthenticated) {
+      *composition = std::move(new_comp);
+      std::cout << "  [auth] cookie saved; launching authenticated session\n";
+    } else {
+      std::cerr << "  [auth] cookie could not be verified; launching as guest\n";
     }
   } else {
-    std::cout << "  [auth] desktop sign-in window closed; continuing as guest\n";
+    std::cerr << "  [auth] could not save cookie; launching as guest\n";
   }
 }
 
@@ -265,12 +223,6 @@ int main(int argc, char* argv[]) {
           ? mocktail::runtime::ApplyInteractiveProcessLaunchPolicy()
           : std::string{};
   std::string command_line_error;
-  if (!mocktail::runtime::ApplySupportedLaunchPolicy(
-          command_line.options.mode == mocktail::runtime::CommandMode::kRun,
-          &command_line_error)) {
-    std::cerr << "[FATAL] " << command_line_error << '\n';
-    return EXIT_FAILURE;
-  }
   if (!mocktail::runtime::ApplyCommandLineEnvironment(command_line.options,
                                                       &command_line_error)) {
     std::cerr << command_line_error << '\n';
@@ -284,21 +236,6 @@ int main(int argc, char* argv[]) {
                         MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST));
   const mocktail::runtime::RuntimePaths paths =
       mocktail::runtime::RuntimePaths::FromEnvironment(environment);
-  if (command_line.options.force_run_latest) {
-    std::cerr << "[runtime] WARNING: latest Roblox will run once without "
-                 "approval and will not become the active payload\n";
-    const mocktail::runtime::PayloadUpdatePreflightResult force_latest =
-        mocktail::runtime::RunPayloadUpdatePreflight(environment, paths, true);
-    if (!force_latest) {
-      std::cerr << "[FATAL] " << force_latest.error;
-      if (!force_latest.details.empty()) {
-        std::cerr << ": " << force_latest.details;
-      }
-      std::cerr << '\n';
-      return EXIT_FAILURE;
-    }
-    return EXIT_SUCCESS;
-  }
   std::optional<mocktail::runtime::RobloxExperienceLaunchRequest>
       external_launch_request;
   if (!command_line.options.launch_request_json.empty()) {
@@ -474,38 +411,6 @@ int main(int argc, char* argv[]) {
     mocktail::runtime::LogProcessDiagnostics(
         mocktail::runtime::ProcessDiagnosticStage::kStartup);
   }
-  if (runtime_config.config.fleasion_enabled()) {
-    const auto fleasion = mocktail::runtime::PrepareFleasion(
-        runtime_config.config, environment, paths);
-    if (!fleasion ||
-        setenv("MOCKTAIL_CA_BUNDLE", fleasion.bundle.c_str(), 1) != 0 ||
-        setenv("MOCKTAIL_FLEASION_BASE_CA_BUNDLE", fleasion.base_bundle.c_str(), 1) != 0 ||
-        setenv("MOCKTAIL_FLEASION_GENERATED_BUNDLE", fleasion.bundle.c_str(), 1) != 0 ||
-        setenv("MOCKTAIL_FLEASION_CA_CERTIFICATE", fleasion.certificate.c_str(), 1) != 0) {
-      std::cerr << "[FATAL] Cannot prepare Fleasion: "
-                << (!fleasion ? fleasion.error : "cannot export certificate paths") << '\n';
-      return EXIT_FAILURE;
-    }
-    if (const auto& proxy = runtime_config.config.network_proxy(); proxy &&
-        (setenv("MOCKTAIL_HTTP_PROXY_HOST", proxy->host.c_str(), 1) != 0 ||
-         setenv("MOCKTAIL_HTTP_PROXY_PORT", std::to_string(proxy->port).c_str(), 1) != 0 ||
-         setenv("MOCKTAIL_HTTP_PROXY_SCHEME", proxy->scheme.c_str(), 1) != 0)) {
-      std::cerr << "[FATAL] Cannot export Fleasion proxy\n";
-      return EXIT_FAILURE;
-    }
-    runtime_config = mocktail::runtime::LoadRuntimeConfig(environment, paths.config_file());
-    if (!runtime_config) {
-      std::cerr << "[FATAL] Cannot apply Fleasion: " << runtime_config.error << '\n';
-      return EXIT_FAILURE;
-    }
-    std::cout << "  [fleasion] mode=" << runtime_config.config.fleasion_proxy_mode()
-              << " certificate=" << fleasion.certificate
-              << " trust_bundle=" << fleasion.bundle << '\n';
-    if (runtime_config.config.network_proxy()) {
-      std::cout << "  [fleasion] proxy=" << mocktail::runtime::BuildNetworkProxyUrl(
-          *runtime_config.config.network_proxy()) << "; start Fleasion before Roblox\n";
-    }
-  }
   if (config_bootstrap.created()) {
     std::cout << "  [runtime] created first-run configuration: "
               << paths.config_file() << '\n';
@@ -590,10 +495,15 @@ int main(int argc, char* argv[]) {
               << " MiB\n";
   }
   SecureEraseArguments(&cgroup_reexec_arguments);
-  const bool uses_managed_payload =
-      !environment.HasNonEmpty("ROBLOX_LIB_PATH") &&
+  // Mocktail no longer downloads or manages the Roblox payload. The client
+  // library must be supplied explicitly via ROBLOX_LIB_PATH / --libroblox.
+  const bool uses_managed_payload = false;
+  if (!environment.HasNonEmpty("ROBLOX_LIB_PATH") &&
       runtime_config.config.roblox_library_path() ==
-          std::filesystem::path("rbx_bin/libroblox.so");
+          std::filesystem::path("rbx_bin/libroblox.so")) {
+    std::cerr << "[FATAL] Provide the Roblox client library via --libroblox\n";
+    return EXIT_FAILURE;
+  }
   if (!uses_managed_payload &&
       !environment.HasNonEmpty("MOCKTAIL_ASSET_PATH")) {
     const std::filesystem::path adjacent_assets =
@@ -607,31 +517,6 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "  [runtime] explicit Roblox library uses adjacent assets: "
               << adjacent_assets << '\n';
-  }
-  if (command_line.options.mode == mocktail::runtime::CommandMode::kRun &&
-      uses_managed_payload) {
-    failure_dialog.SetMessage(
-        "Mocktail could not update or verify the Roblox installation.");
-    const mocktail::runtime::PayloadUpdatePreflightResult update_preflight =
-        mocktail::runtime::RunPayloadUpdatePreflight(environment, paths);
-    if (!update_preflight) {
-      std::cerr << "[FATAL] " << update_preflight.error;
-      if (!update_preflight.details.empty()) {
-        // Without this the dialog only ever said "could not update or verify",
-        // which is indistinguishable between a provider outage, a rejected
-        // signature, and a full disk.
-        std::cerr << ": " << update_preflight.details;
-        failure_dialog.SetMessage(
-            "Mocktail could not update or verify the Roblox installation.\n\n" +
-            update_preflight.details + "\n\nSession log: " +
-            (paths.logs_root() / "sessions").string());
-      }
-      std::cerr << '\n';
-      return EXIT_FAILURE;
-    }
-    failure_dialog.SetMessage(
-        "Mocktail could not finish starting Roblox because of an internal "
-        "error.");
   }
   if (!mocktail::runtime::ExportRuntimePathEnvironment(paths,
                                                        &command_line_error)) {
@@ -670,78 +555,6 @@ int main(int argc, char* argv[]) {
       std::cout << "  [runtime] platform cache profile transitioned; "
                 << "refreshable identity and policy caches invalidated="
                 << (cache_migration.app_storage_updated ? 1 : 0) << '\n';
-    }
-  }
-  const bool needs_active_library =
-      !environment.HasNonEmpty("ROBLOX_LIB_PATH") &&
-      runtime_config.config.roblox_library_path() ==
-          std::filesystem::path("rbx_bin/libroblox.so");
-  const bool needs_active_assets =
-      !environment.HasNonEmpty("MOCKTAIL_ASSET_PATH");
-  if (needs_active_library || needs_active_assets) {
-    const mocktail::runtime::ActivePayloadPaths active =
-        paths.ResolveActivePayload();
-    if (!active) {
-      std::cerr << "[FATAL] Cannot resolve " << paths.active_payload_manifest()
-                << ": " << active.error << '\n';
-      return EXIT_FAILURE;
-    }
-    if (active.active) {
-      if (uses_managed_payload &&
-          !mocktail::runtime::PrepareManagedPayloadWorkingDirectory(
-              paths, active, &command_line_error)) {
-        std::cerr << "[FATAL] " << command_line_error << '\n';
-        return EXIT_FAILURE;
-      }
-      if ((needs_active_library &&
-           setenv("ROBLOX_LIB_PATH", active.roblox_library.c_str(), 1) != 0) ||
-          (needs_active_assets &&
-           setenv("MOCKTAIL_ASSET_PATH", active.assets_content.c_str(), 1) !=
-               0)) {
-        std::cerr << "[FATAL] Cannot activate resolved Roblox payload\n";
-        return EXIT_FAILURE;
-      }
-      if (uses_managed_payload) {
-        bool use_external_profile = !active.compatibility_manifest.empty();
-        if (use_external_profile) {
-          const mocktail::compat::BuildIdResult active_build_id =
-              mocktail::compat::ReadElfBuildId(active.roblox_library.string());
-          if (!active_build_id) {
-            std::cerr << "[FATAL] Cannot identify active Roblox payload: "
-                      << active_build_id.error << '\n';
-            return EXIT_FAILURE;
-          }
-          // Built-in profiles supersede stale probation receipts and never
-          // use external overrides.
-          use_external_profile = mocktail::compat::FindHostAbiProfile(
-                                     active_build_id.build_id) == nullptr;
-        }
-        if (use_external_profile) {
-          if (setenv("MOCKTAIL_COMPATIBILITY_MANIFEST",
-                     active.compatibility_manifest.c_str(), 1) != 0 ||
-              setenv("MOCKTAIL_HOST_ABI_PROFILE_FILE",
-                     active.host_abi_profile.c_str(), 1) != 0 ||
-              setenv("MOCKTAIL_HOST_ABI_APPROVAL_RECEIPT",
-                     active.host_abi_approval_receipt.c_str(), 1) != 0) {
-            std::cerr
-                << "[FATAL] Cannot activate approved Roblox ABI profile\n";
-            return EXIT_FAILURE;
-          }
-        } else if (setenv("MOCKTAIL_COMPATIBILITY_MANIFEST",
-                          built_in_compatibility_manifest.c_str(), 1) != 0 ||
-                   unsetenv("MOCKTAIL_HOST_ABI_PROFILE_FILE") != 0 ||
-                   unsetenv("MOCKTAIL_HOST_ABI_APPROVAL_RECEIPT") != 0) {
-          std::cerr << "[FATAL] Cannot activate built-in Roblox ABI profile\n";
-          return EXIT_FAILURE;
-        }
-      }
-      runtime_config = mocktail::runtime::LoadRuntimeConfig(
-          environment, paths.config_file());
-      if (!runtime_config) {
-        std::cerr << "[FATAL] Cannot resolve runtime configuration: "
-                  << runtime_config.error << '\n';
-        return EXIT_FAILURE;
-      }
     }
   }
   if (!mocktail::runtime::ExportRuntimeConfigEnvironment(runtime_config.config,
@@ -881,6 +694,11 @@ int main(int argc, char* argv[]) {
     if (!compatibility) {
       std::cerr << "[FATAL] " << compatibility.error << '\n';
       return EXIT_FAILURE;
+    }
+    if (compatibility.used_unknown_build_profile) {
+      std::cerr << "[WARNING] Roblox Build ID " << compatibility.build_id
+                << " has no researched compatibility profile; running without "
+                   "allocator interposition or vtable bridges.\n";
     }
     const mocktail::Status fullscreen_status =
         fullscreen_bridge.Install(compatibility.profile);
