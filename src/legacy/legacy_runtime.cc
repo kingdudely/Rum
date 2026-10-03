@@ -3908,6 +3908,345 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 
 }  // namespace
 
+// Every engine entry point the startup sequence can call, resolved once up
+// front. Keeping them in one struct means the startup context is wired by
+// name rather than by counting aggregate arguments, and there is a single
+// place to see which parts of the engine surface this client uses.
+struct RobloxEngineSymbols {
+  NativeGameGlobalInitFn                       global_init = nullptr;
+  NativeNoArgFn                                update_adapter_init = nullptr;
+  NativeAppBridgeObjectParamsFn                init_with_params = nullptr;
+  NativeNoArgFn                                start_lua_app_dm = nullptr;
+  NativeAppBridgeObjectParamsFn                start_app_with_params = nullptr;
+  NativeUpdateSurfaceAppFn                     update_surface_app = nullptr;
+  NativeNoArgFn                                call_messages_from_main_thread = nullptr;
+  NativeInitClientSettingsFn                   init_client_settings = nullptr;
+  NativeInitClientSettingsSignedFn             init_client_settings_signed = nullptr;
+  NativeInitClientSettingsCachedFn             init_client_settings_cached = nullptr;
+  NativeInitClientSettingsCachedCompressedFn   init_client_settings_cached_compressed = nullptr;
+  NativePostClientSettingsFn                   post_client_settings = nullptr;
+  NativeInitializeNativeFlagsFn                initialize_native_flags = nullptr;
+  NativeAppBridgeAppStartFn                    app_bridge_app_start = nullptr;
+  NativeSetIsFirstInstallFn                    set_is_first_install = nullptr;
+  NativeSetBaseUrlFn                           set_base_url = nullptr;
+  NativeObjectInitFn                           set_device_info = nullptr;
+  NativeObjectInitFn                           base_url_protocol_init = nullptr;
+  NativeObjectInitFn                           web_login_protocol_init = nullptr;
+  NativeColdStartUriFn                         web_login_cold_start = nullptr;
+  NativeSetStringParamFn                       set_roblox_channel = nullptr;
+  NativeSetStringParamFn                       override_channel_platform_name = nullptr;
+  NativeSetStringParamFn                       set_roblox_version = nullptr;
+  NativeSetStringParamFn                       set_exception_reason_filename = nullptr;
+  NativeSetTwoStringParamsFn                   set_base_data_directories = nullptr;
+  NativeSetStringParamFn                       set_cache_directory = nullptr;
+  NativeSetStringParamFn                       set_files_directory = nullptr;
+  NativeSetStringParamFn                       set_external_directory = nullptr;
+  NativeSetStringParamFn                       set_preferences_file = nullptr;
+  NativeSetStringParamFn                       set_default_app_policy_file = nullptr;
+  NativeSetHttpClientProxyFn                   set_http_client_proxy = nullptr;
+  NativeNoArgFn                                init_fast_log = nullptr;
+  NativeSetTwoStringParamsFn                   set_multiple_cookies = nullptr;
+  jnivm::RobloxCookieGetter                    get_cookies_for_domain = nullptr;
+  NativeSetTwoStringParamsFn                   cookie_manager_set_cookie = nullptr;
+  NativeSetThreeStringParamsFn                 set_platform_headers_with_idfa = nullptr;
+  NativeSetStringParamFn                       set_user_id = nullptr;
+  NativeObjectInitFn                           init_asset_manager = nullptr;
+  NativeInitStorageManagerFn                   init_storage_manager = nullptr;
+  NativeSetPlatformImplFn                      local_storage_set_platform_impl = nullptr;
+  NativeAppBridgeSetInitParamsFn               set_init_params = nullptr;
+  NativeNoArgFn                                retry_init = nullptr;
+  NativeUpdateScreenOrientationFn              update_screen_orientation = nullptr;
+  NativeUpdateAppUiSizesFn                     update_app_ui_sizes = nullptr;
+  NativeNoArgFn                                on_fragment_start = nullptr;
+  NativePassCurrentDisplayRefreshRateFn        pass_current_display_refresh_rate = nullptr;
+  NativePassSupportedRefreshRatesFn            pass_supported_refresh_rates = nullptr;
+  NativeSetTaskSchedulerBackgroundModeFn       set_task_scheduler_background_mode = nullptr;
+  NativeSendAppReadyFn                         send_app_ready = nullptr;
+  NativeSendGameLoadedFn                       send_game_loaded = nullptr;
+  NativeSetStringParamFn                       set_asset_path = nullptr;
+  NativeActivityLifecycleCallbacks             activity_lifecycle = {};
+  NativeGameActivityInitFn                     game_activity_init = nullptr;
+  NativeNoArgFn                                app_lifecycle_set_active = nullptr;
+};
+
+// The first seven come from the caller's capability resolution; the rest are
+// looked up directly so a missing optional symbol degrades to a null entry
+// point instead of failing the whole startup.
+RobloxEngineSymbols ResolveRobloxEngineSymbols(
+    void* roblox_handle,
+    const mocktail::runtime::RobloxStartupSymbols& startup_symbols,
+    jnivm::VM* jni_vm) {
+  RobloxEngineSymbols symbols;
+  symbols.global_init =
+      startup_symbols.game_global_init;
+  symbols.update_adapter_init =
+      startup_symbols.update_adapter_init;
+  symbols.init_with_params =
+      startup_symbols.app_bridge_v2_init_with_params;
+  symbols.start_lua_app_dm =
+      startup_symbols.app_bridge_start_lua_app_dm;
+  symbols.start_app_with_params =
+      startup_symbols.app_bridge_v2_start_app_with_params;
+  symbols.update_surface_app =
+      startup_symbols.app_bridge_v2_update_surface_app_with_platform_params;
+  symbols.call_messages_from_main_thread =
+      startup_symbols.call_messages_from_main_thread;
+
+  symbols.init_client_settings =
+      reinterpret_cast<NativeInitClientSettingsFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeGLInterface_"
+          "nativeInitClientSettings"));
+  symbols.init_client_settings_signed =
+      reinterpret_cast<NativeInitClientSettingsSignedFn>(
+          linker::ResolveSymbol(
+              roblox_handle,
+              "Java_com_roblox_engine_jni_NativeGLInterface_"
+              "nativeInitClientSettingsSigned"));
+  symbols.init_client_settings_cached =
+      reinterpret_cast<NativeInitClientSettingsCachedFn>(
+          linker::ResolveSymbol(
+              roblox_handle,
+              "Java_com_roblox_engine_jni_NativeGLInterface_"
+              "nativeInitClientSettingsCached"));
+  symbols.init_client_settings_cached_compressed =
+      reinterpret_cast<NativeInitClientSettingsCachedCompressedFn>(
+          linker::ResolveSymbol(
+              roblox_handle,
+              "Java_com_roblox_engine_jni_NativeGLInterface_"
+              "nativeInitClientSettingsCachedCompressed"));
+  symbols.post_client_settings =
+      reinterpret_cast<NativePostClientSettingsFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeGLInterface_"
+          "nativePostClientSettingsLoadedInitialization3"));
+  symbols.initialize_native_flags =
+      reinterpret_cast<NativeInitializeNativeFlagsFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_client_flags_FlagJniInterface_"
+          "nativeInitializeNativeFlags"));
+  symbols.app_bridge_app_start =
+      reinterpret_cast<NativeAppBridgeAppStartFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeAppBridgeInterface_"
+          "nativeAppBridgeAppStart__Ljava_lang_String_2Ljava_lang_String_2Z"
+          "Ljava_lang_String_2Ljava_lang_String_2Ljava_lang_String_2"));
+  symbols.set_is_first_install =
+      reinterpret_cast<NativeSetIsFirstInstallFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeAppBridgeInterface_"
+          "setIsFirstInstall"));
+  symbols.set_base_url =
+      reinterpret_cast<NativeSetBaseUrlFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetBaseUrl"));
+  symbols.set_device_info =
+      reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetDeviceInfo"));
+  symbols.base_url_protocol_init =
+      reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_universalapp_linking_JNIBaseUrlProtocol_init"));
+  symbols.web_login_protocol_init =
+      reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_universalapp_linking_JNIWebLoginProtocol_init"));
+  symbols.web_login_cold_start =
+      reinterpret_cast<NativeColdStartUriFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_universalapp_linking_"
+          "JNIWebLoginProtocol_maybeHandleColdStartProtocolLaunch"));
+  symbols.set_roblox_channel =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetRobloxChannel"));
+  symbols.override_channel_platform_name =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeOverrideChannelPlatformName"));
+  symbols.set_roblox_version =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetRobloxVersion"));
+  symbols.set_exception_reason_filename =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetExceptionReasonFilename"));
+  symbols.set_base_data_directories =
+      reinterpret_cast<NativeSetTwoStringParamsFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetBaseDataDirectories"));
+  symbols.set_cache_directory =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetCacheDirectory"));
+  symbols.set_files_directory =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetFilesDirectory"));
+  symbols.set_external_directory =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetExternalDirectory"));
+  symbols.set_preferences_file =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetPreferencesFile"));
+  symbols.set_default_app_policy_file =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetDefaultAppPolicyFile"));
+  symbols.set_http_client_proxy =
+      reinterpret_cast<NativeSetHttpClientProxyFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetHttpClientProxy"));
+  symbols.init_fast_log =
+      reinterpret_cast<NativeNoArgFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeInitFastLog"));
+  symbols.set_multiple_cookies =
+      reinterpret_cast<NativeSetTwoStringParamsFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetMultipleCookies"));
+  symbols.get_cookies_for_domain =
+      reinterpret_cast<jnivm::RobloxCookieGetter>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeGetCookiesForDomain"));
+  jni_vm->SetRobloxCookieGetter(symbols.get_cookies_for_domain);
+  symbols.cookie_manager_set_cookie =
+      reinterpret_cast<NativeSetTwoStringParamsFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_universalapp_cookie_JNICookieManager_setCookie"));
+  symbols.set_platform_headers_with_idfa =
+      reinterpret_cast<NativeSetThreeStringParamsFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetPlatformHeadersWithIdfa"));
+  symbols.set_user_id =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeSettingsInterface_"
+          "nativeSetUserId"));
+  symbols.init_asset_manager =
+      reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_client_JNIAAssetManagerSetup_initNative"));
+  symbols.init_storage_manager =
+      reinterpret_cast<NativeInitStorageManagerFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_client_LocalStorageManager_"
+          "initStorageManagerNativeV3"));
+  symbols.local_storage_set_platform_impl =
+      reinterpret_cast<NativeSetPlatformImplFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_protocols_localstorageplatforminterface_"
+          "generated_ILocalStorageHandlerCore_setPlatformImpl"));
+  symbols.set_init_params =
+      reinterpret_cast<NativeAppBridgeSetInitParamsFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_client_startup_MainGameActivity_"
+          "nativeAppBridgeSetInitParams"));
+  symbols.retry_init =
+      reinterpret_cast<NativeNoArgFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_client_startup_MainGameActivity_"
+          "nativeRetryInit"));
+  symbols.update_screen_orientation =
+      reinterpret_cast<NativeUpdateScreenOrientationFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeInputInterface_"
+          "nativeUpdateScreenOrientation"));
+  symbols.update_app_ui_sizes =
+      reinterpret_cast<NativeUpdateAppUiSizesFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeGLInterface_updateAppUISizes"));
+  symbols.on_fragment_start =
+      reinterpret_cast<NativeNoArgFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeGLInterface_"
+          "nativeOnFragmentStart"));
+  symbols.pass_current_display_refresh_rate =
+      reinterpret_cast<NativePassCurrentDisplayRefreshRateFn>(
+          linker::ResolveSymbol(
+              roblox_handle,
+              "Java_com_roblox_engine_jni_NativeGLInterface_"
+              "nativePassCurrentDisplayRefreshRate"));
+  symbols.pass_supported_refresh_rates =
+      reinterpret_cast<NativePassSupportedRefreshRatesFn>(
+          linker::ResolveSymbol(
+              roblox_handle,
+              "Java_com_roblox_engine_jni_NativeGLInterface_"
+              "nativePassSupportedRefreshRates"));
+  symbols.set_task_scheduler_background_mode =
+      reinterpret_cast<NativeSetTaskSchedulerBackgroundModeFn>(
+          linker::ResolveSymbol(
+              roblox_handle,
+              "Java_com_roblox_engine_jni_NativeGLInterface_"
+              "setTaskSchedulerBackgroundMode"));
+  symbols.send_app_ready =
+      reinterpret_cast<NativeSendAppReadyFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeGLInterface_"
+          "nativeAppBridgeV2SendAppEventOnAppReady"));
+  symbols.send_game_loaded =
+      reinterpret_cast<NativeSendGameLoadedFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_engine_jni_NativeGLInterface_"
+          "nativeAppBridgeV2SendAppEventOnGameLoaded"));
+  symbols.set_asset_path =
+      reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_client_startup_MainGameActivity_"
+          "nativeSetAssetPath"));
+  auto resolve_activity_lifecycle =
+      [&](const char* method_name) -> NativeActivityLifecycleStringFn {
+    std::string symbol =
+        "Java_com_roblox_universalapp_activitylifecyclecallbacks_"
+        "JNIActivityLifecycleCallbacks_";
+    symbol += method_name;
+    return reinterpret_cast<NativeActivityLifecycleStringFn>(
+        linker::ResolveSymbol(roblox_handle, symbol.c_str()));
+  };
+  symbols.activity_lifecycle = {
+      resolve_activity_lifecycle("nativeOnPreCreated"),
+      resolve_activity_lifecycle("nativeOnCreated"),
+      resolve_activity_lifecycle("nativeOnPostCreated"),
+      resolve_activity_lifecycle("nativeOnPreStarted"),
+      resolve_activity_lifecycle("nativeOnStarted"),
+      resolve_activity_lifecycle("nativeOnPostStarted"),
+      resolve_activity_lifecycle("nativeOnPreResumed"),
+      resolve_activity_lifecycle("nativeOnResumed"),
+      resolve_activity_lifecycle("nativeOnPostResumed"),
+  };
+  symbols.game_activity_init =
+      reinterpret_cast<NativeGameActivityInitFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_google_androidgamesdk_GameActivity_initializeNativeCode"));
+  symbols.app_lifecycle_set_active =
+      reinterpret_cast<NativeNoArgFn>(linker::ResolveSymbol(
+          roblox_handle,
+          "Java_com_roblox_universalapp_applifecyclenativeadapter_"
+          "JNIAppLifecycleNativeAdapter_setActive"));
+  return symbols;
+}
+
 int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   const bool user_overrode_start_lua_app_dm =
@@ -5292,412 +5631,150 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       }
     }
 
-    NativeGameGlobalInitFn native_global_init =
-        startup_symbols.game_global_init;
-    NativeNoArgFn native_update_adapter_init =
-        startup_symbols.update_adapter_init;
-    NativeAppBridgeObjectParamsFn native_init_with_params =
-        startup_symbols.app_bridge_v2_init_with_params;
-    NativeNoArgFn native_start_lua_app_dm =
-        startup_symbols.app_bridge_start_lua_app_dm;
-    NativeAppBridgeObjectParamsFn native_start_app_with_params =
-        startup_symbols.app_bridge_v2_start_app_with_params;
-    NativeUpdateSurfaceAppFn native_update_surface_app =
-        startup_symbols.app_bridge_v2_update_surface_app_with_platform_params;
-    NativeNoArgFn native_call_messages_from_main_thread =
-        startup_symbols.call_messages_from_main_thread;
-
-    auto* native_init_client_settings =
-        reinterpret_cast<NativeInitClientSettingsFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeGLInterface_"
-            "nativeInitClientSettings"));
-    auto* native_init_client_settings_signed =
-        reinterpret_cast<NativeInitClientSettingsSignedFn>(
-            linker::ResolveSymbol(
-                roblox_handle,
-                "Java_com_roblox_engine_jni_NativeGLInterface_"
-                "nativeInitClientSettingsSigned"));
-    auto* native_init_client_settings_cached =
-        reinterpret_cast<NativeInitClientSettingsCachedFn>(
-            linker::ResolveSymbol(
-                roblox_handle,
-                "Java_com_roblox_engine_jni_NativeGLInterface_"
-                "nativeInitClientSettingsCached"));
-    auto* native_init_client_settings_cached_compressed =
-        reinterpret_cast<NativeInitClientSettingsCachedCompressedFn>(
-            linker::ResolveSymbol(
-                roblox_handle,
-                "Java_com_roblox_engine_jni_NativeGLInterface_"
-                "nativeInitClientSettingsCachedCompressed"));
-    auto* native_post_client_settings =
-        reinterpret_cast<NativePostClientSettingsFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeGLInterface_"
-            "nativePostClientSettingsLoadedInitialization3"));
-    auto* native_initialize_native_flags =
-        reinterpret_cast<NativeInitializeNativeFlagsFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_client_flags_FlagJniInterface_"
-            "nativeInitializeNativeFlags"));
-    auto* native_app_bridge_app_start =
-        reinterpret_cast<NativeAppBridgeAppStartFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeAppBridgeInterface_"
-            "nativeAppBridgeAppStart__Ljava_lang_String_2Ljava_lang_String_2Z"
-            "Ljava_lang_String_2Ljava_lang_String_2Ljava_lang_String_2"));
-    auto* native_set_is_first_install =
-        reinterpret_cast<NativeSetIsFirstInstallFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeAppBridgeInterface_"
-            "setIsFirstInstall"));
-    auto* native_set_base_url =
-        reinterpret_cast<NativeSetBaseUrlFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetBaseUrl"));
-    auto* native_set_device_info =
-        reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetDeviceInfo"));
-    auto* native_base_url_protocol_init =
-        reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_universalapp_linking_JNIBaseUrlProtocol_init"));
-    auto* native_web_login_protocol_init =
-        reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_universalapp_linking_JNIWebLoginProtocol_init"));
-    auto* native_web_login_cold_start =
-        reinterpret_cast<NativeColdStartUriFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_universalapp_linking_"
-            "JNIWebLoginProtocol_maybeHandleColdStartProtocolLaunch"));
-    auto* native_set_roblox_channel =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetRobloxChannel"));
-    auto* native_override_channel_platform_name =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeOverrideChannelPlatformName"));
-    auto* native_set_roblox_version =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetRobloxVersion"));
-    auto* native_set_exception_reason_filename =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetExceptionReasonFilename"));
-    auto* native_set_base_data_directories =
-        reinterpret_cast<NativeSetTwoStringParamsFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetBaseDataDirectories"));
-    auto* native_set_cache_directory =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetCacheDirectory"));
-    auto* native_set_files_directory =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetFilesDirectory"));
-    auto* native_set_external_directory =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetExternalDirectory"));
-    auto* native_set_preferences_file =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetPreferencesFile"));
-    auto* native_set_default_app_policy_file =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetDefaultAppPolicyFile"));
-    auto* native_set_http_client_proxy =
-        reinterpret_cast<NativeSetHttpClientProxyFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetHttpClientProxy"));
-    auto* native_init_fast_log =
-        reinterpret_cast<NativeNoArgFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeInitFastLog"));
-    auto* native_set_multiple_cookies =
-        reinterpret_cast<NativeSetTwoStringParamsFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetMultipleCookies"));
-    auto* native_get_cookies_for_domain =
-        reinterpret_cast<jnivm::RobloxCookieGetter>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeGetCookiesForDomain"));
-    jni_vm->SetRobloxCookieGetter(native_get_cookies_for_domain);
-    auto* native_cookie_manager_set_cookie =
-        reinterpret_cast<NativeSetTwoStringParamsFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_universalapp_cookie_JNICookieManager_setCookie"));
-    auto* native_set_platform_headers_with_idfa =
-        reinterpret_cast<NativeSetThreeStringParamsFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetPlatformHeadersWithIdfa"));
-    auto* native_set_user_id =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeSettingsInterface_"
-            "nativeSetUserId"));
-    auto* native_init_asset_manager =
-        reinterpret_cast<NativeObjectInitFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_client_JNIAAssetManagerSetup_initNative"));
-    auto* native_init_storage_manager =
-        reinterpret_cast<NativeInitStorageManagerFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_client_LocalStorageManager_"
-            "initStorageManagerNativeV3"));
-    auto* native_local_storage_set_platform_impl =
-        reinterpret_cast<NativeSetPlatformImplFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_protocols_localstorageplatforminterface_"
-            "generated_ILocalStorageHandlerCore_setPlatformImpl"));
-    auto* native_set_init_params =
-        reinterpret_cast<NativeAppBridgeSetInitParamsFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_client_startup_MainGameActivity_"
-            "nativeAppBridgeSetInitParams"));
-    auto* native_retry_init =
-        reinterpret_cast<NativeNoArgFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_client_startup_MainGameActivity_"
-            "nativeRetryInit"));
-    auto* native_update_screen_orientation =
-        reinterpret_cast<NativeUpdateScreenOrientationFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeInputInterface_"
-            "nativeUpdateScreenOrientation"));
-    auto* native_update_app_ui_sizes =
-        reinterpret_cast<NativeUpdateAppUiSizesFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeGLInterface_updateAppUISizes"));
-    auto* native_on_fragment_start =
-        reinterpret_cast<NativeNoArgFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeGLInterface_"
-            "nativeOnFragmentStart"));
-    auto* native_pass_current_display_refresh_rate =
-        reinterpret_cast<NativePassCurrentDisplayRefreshRateFn>(
-            linker::ResolveSymbol(
-                roblox_handle,
-                "Java_com_roblox_engine_jni_NativeGLInterface_"
-                "nativePassCurrentDisplayRefreshRate"));
-    auto* native_pass_supported_refresh_rates =
-        reinterpret_cast<NativePassSupportedRefreshRatesFn>(
-            linker::ResolveSymbol(
-                roblox_handle,
-                "Java_com_roblox_engine_jni_NativeGLInterface_"
-                "nativePassSupportedRefreshRates"));
-    auto* native_set_task_scheduler_background_mode =
-        reinterpret_cast<NativeSetTaskSchedulerBackgroundModeFn>(
-            linker::ResolveSymbol(
-                roblox_handle,
-                "Java_com_roblox_engine_jni_NativeGLInterface_"
-                "setTaskSchedulerBackgroundMode"));
-    auto* native_send_app_ready =
-        reinterpret_cast<NativeSendAppReadyFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeGLInterface_"
-            "nativeAppBridgeV2SendAppEventOnAppReady"));
-    auto* native_send_game_loaded =
-        reinterpret_cast<NativeSendGameLoadedFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_engine_jni_NativeGLInterface_"
-            "nativeAppBridgeV2SendAppEventOnGameLoaded"));
-    auto* native_set_asset_path =
-        reinterpret_cast<NativeSetStringParamFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_client_startup_MainGameActivity_"
-            "nativeSetAssetPath"));
-    auto resolve_activity_lifecycle =
-        [&](const char* method_name) -> NativeActivityLifecycleStringFn {
-      std::string symbol =
-          "Java_com_roblox_universalapp_activitylifecyclecallbacks_"
-          "JNIActivityLifecycleCallbacks_";
-      symbol += method_name;
-      return reinterpret_cast<NativeActivityLifecycleStringFn>(
-          linker::ResolveSymbol(roblox_handle, symbol.c_str()));
-    };
-    NativeActivityLifecycleCallbacks activity_lifecycle_callbacks = {
-        resolve_activity_lifecycle("nativeOnPreCreated"),
-        resolve_activity_lifecycle("nativeOnCreated"),
-        resolve_activity_lifecycle("nativeOnPostCreated"),
-        resolve_activity_lifecycle("nativeOnPreStarted"),
-        resolve_activity_lifecycle("nativeOnStarted"),
-        resolve_activity_lifecycle("nativeOnPostStarted"),
-        resolve_activity_lifecycle("nativeOnPreResumed"),
-        resolve_activity_lifecycle("nativeOnResumed"),
-        resolve_activity_lifecycle("nativeOnPostResumed"),
-    };
-    auto* native_game_activity_init =
-        reinterpret_cast<NativeGameActivityInitFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_google_androidgamesdk_GameActivity_initializeNativeCode"));
-    auto* native_app_lifecycle_set_active =
-        reinterpret_cast<NativeNoArgFn>(linker::ResolveSymbol(
-            roblox_handle,
-            "Java_com_roblox_universalapp_applifecyclenativeadapter_"
-            "JNIAppLifecycleNativeAdapter_setActive"));
+    const RobloxEngineSymbols symbols = ResolveRobloxEngineSymbols(
+        roblox_handle, startup_symbols, jni_vm.get());
     g_native_call_messages_from_main_thread =
-        native_call_messages_from_main_thread;
+        symbols.call_messages_from_main_thread;
+
+    g_native_call_messages_from_main_thread =
+        symbols.call_messages_from_main_thread;
     std::cout << "  [engine] Stage6 symbol resolve done" << std::endl;
     std::cout << "    native_init_with_params="
-              << reinterpret_cast<const void*>(native_init_with_params) << '\n'
+              << reinterpret_cast<const void*>(symbols.init_with_params) << '\n'
               << "    native_init_client_settings="
-              << reinterpret_cast<const void*>(native_init_client_settings)
+              << reinterpret_cast<const void*>(symbols.init_client_settings)
               << '\n'
               << "    native_init_client_settings_signed="
               << reinterpret_cast<const void*>(
-                     native_init_client_settings_signed)
+                     symbols.init_client_settings_signed)
               << '\n'
               << "    native_init_client_settings_cached="
               << reinterpret_cast<const void*>(
-                     native_init_client_settings_cached)
+                     symbols.init_client_settings_cached)
               << '\n'
               << "    native_init_client_settings_cached_compressed="
               << reinterpret_cast<const void*>(
-                     native_init_client_settings_cached_compressed)
+                     symbols.init_client_settings_cached_compressed)
               << '\n'
               << "    native_initialize_native_flags="
               << reinterpret_cast<const void*>(
-                     native_initialize_native_flags)
+                     symbols.initialize_native_flags)
               << '\n'
               << "    native_app_bridge_app_start="
-              << reinterpret_cast<const void*>(native_app_bridge_app_start)
+              << reinterpret_cast<const void*>(symbols.app_bridge_app_start)
               << '\n'
               << "    native_set_is_first_install="
-              << reinterpret_cast<const void*>(native_set_is_first_install)
+              << reinterpret_cast<const void*>(symbols.set_is_first_install)
               << '\n'
               << "    native_update_adapter_init="
-              << reinterpret_cast<const void*>(native_update_adapter_init)
+              << reinterpret_cast<const void*>(symbols.update_adapter_init)
               << '\n'
               << "    native_update_app_ui_sizes="
-              << reinterpret_cast<const void*>(native_update_app_ui_sizes)
+              << reinterpret_cast<const void*>(symbols.update_app_ui_sizes)
               << '\n'
               << "    native_update_surface_app="
-              << reinterpret_cast<const void*>(native_update_surface_app) << '\n'
+              << reinterpret_cast<const void*>(symbols.update_surface_app) << '\n'
               << "    native_start_app_with_params="
-              << reinterpret_cast<const void*>(native_start_app_with_params) << '\n'
+              << reinterpret_cast<const void*>(symbols.start_app_with_params) << '\n'
               << "    native_send_app_ready="
-              << reinterpret_cast<const void*>(native_send_app_ready) << '\n'
+              << reinterpret_cast<const void*>(symbols.send_app_ready) << '\n'
               << "    native_send_game_loaded="
-              << reinterpret_cast<const void*>(native_send_game_loaded) << '\n'
+              << reinterpret_cast<const void*>(symbols.send_game_loaded) << '\n'
               << "    native_start_lua_app_dm="
-              << reinterpret_cast<const void*>(native_start_lua_app_dm) << '\n'
+              << reinterpret_cast<const void*>(symbols.start_lua_app_dm) << '\n'
               << "    native_call_messages_from_main_thread="
               << reinterpret_cast<const void*>(
-                     native_call_messages_from_main_thread)
+                     symbols.call_messages_from_main_thread)
               << '\n'
               << "    native_base_url_protocol_init="
-              << reinterpret_cast<const void*>(native_base_url_protocol_init)
+              << reinterpret_cast<const void*>(symbols.base_url_protocol_init)
               << '\n'
               << "    native_set_device_info="
-              << reinterpret_cast<const void*>(native_set_device_info)
+              << reinterpret_cast<const void*>(symbols.set_device_info)
               << '\n'
               << "    native_override_channel_platform_name="
               << reinterpret_cast<const void*>(
-                     native_override_channel_platform_name)
+                     symbols.override_channel_platform_name)
               << '\n'
               << "    native_set_roblox_version="
-              << reinterpret_cast<const void*>(native_set_roblox_version)
+              << reinterpret_cast<const void*>(symbols.set_roblox_version)
               << '\n'
               << "    native_set_http_client_proxy="
-              << reinterpret_cast<const void*>(native_set_http_client_proxy)
+              << reinterpret_cast<const void*>(symbols.set_http_client_proxy)
               << '\n'
               << "    native_init_fast_log="
-              << reinterpret_cast<const void*>(native_init_fast_log) << '\n'
+              << reinterpret_cast<const void*>(symbols.init_fast_log) << '\n'
               << "    native_set_multiple_cookies="
-              << reinterpret_cast<const void*>(native_set_multiple_cookies)
+              << reinterpret_cast<const void*>(symbols.set_multiple_cookies)
               << '\n'
               << "    native_cookie_manager_set_cookie="
               << reinterpret_cast<const void*>(
-                     native_cookie_manager_set_cookie)
+                     symbols.cookie_manager_set_cookie)
               << '\n'
               << "    native_set_platform_headers_with_idfa="
               << reinterpret_cast<const void*>(
-                     native_set_platform_headers_with_idfa)
+                     symbols.set_platform_headers_with_idfa)
               << '\n'
               << "    native_local_storage_set_platform_impl="
               << reinterpret_cast<const void*>(
-                     native_local_storage_set_platform_impl)
+                     symbols.local_storage_set_platform_impl)
               << '\n'
               << "    native_retry_init="
-              << reinterpret_cast<const void*>(native_retry_init) << '\n'
+              << reinterpret_cast<const void*>(symbols.retry_init) << '\n'
               << "    native_set_asset_path="
-              << reinterpret_cast<const void*>(native_set_asset_path) << '\n'
+              << reinterpret_cast<const void*>(symbols.set_asset_path) << '\n'
               << "    activity_on_pre_created="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_pre_created)
+                     symbols.activity_lifecycle.on_pre_created)
               << '\n'
               << "    activity_on_created="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_created)
+                     symbols.activity_lifecycle.on_created)
               << '\n'
               << "    activity_on_post_created="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_post_created)
+                     symbols.activity_lifecycle.on_post_created)
               << '\n'
               << "    activity_on_pre_started="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_pre_started)
+                     symbols.activity_lifecycle.on_pre_started)
               << '\n'
               << "    activity_on_started="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_started)
+                     symbols.activity_lifecycle.on_started)
               << '\n'
               << "    activity_on_post_started="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_post_started)
+                     symbols.activity_lifecycle.on_post_started)
               << '\n'
               << "    activity_on_pre_resumed="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_pre_resumed)
+                     symbols.activity_lifecycle.on_pre_resumed)
               << '\n'
               << "    activity_on_resumed="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_resumed)
+                     symbols.activity_lifecycle.on_resumed)
               << '\n'
               << "    activity_on_post_resumed="
               << reinterpret_cast<const void*>(
-                     activity_lifecycle_callbacks.on_post_resumed)
+                     symbols.activity_lifecycle.on_post_resumed)
               << '\n'
               << "    native_game_activity_init="
-              << reinterpret_cast<const void*>(native_game_activity_init)
+              << reinterpret_cast<const void*>(symbols.game_activity_init)
               << '\n'
               << "    native_app_lifecycle_set_active="
-              << reinterpret_cast<const void*>(native_app_lifecycle_set_active)
+              << reinterpret_cast<const void*>(symbols.app_lifecycle_set_active)
               << '\n'
               << "    native_on_fragment_start="
-              << reinterpret_cast<const void*>(native_on_fragment_start)
+              << reinterpret_cast<const void*>(symbols.on_fragment_start)
               << '\n'
               << "    native_pass_supported_refresh_rates="
               << reinterpret_cast<const void*>(
-                     native_pass_supported_refresh_rates)
+                     symbols.pass_supported_refresh_rates)
               << '\n'
               << "    native_pass_current_display_refresh_rate="
               << reinterpret_cast<const void*>(
-                     native_pass_current_display_refresh_rate)
+                     symbols.pass_current_display_refresh_rate)
               << '\n'
               << std::flush;
     void* message_bus_publish_response_raw = linker::ResolveSymbol(
@@ -5705,29 +5782,29 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         "Java_com_roblox_universalapp_messagebus_MessageBus_"
         "publishProtocolMethodResponseRaw");
 
-    if ((native_init_client_settings == nullptr &&
-         native_init_client_settings_signed == nullptr &&
-         native_init_client_settings_cached == nullptr &&
-         native_init_client_settings_cached_compressed == nullptr) ||
-        native_post_client_settings == nullptr ||
-        native_set_base_url == nullptr || native_set_device_info == nullptr ||
-        native_set_roblox_channel == nullptr ||
-        native_set_exception_reason_filename == nullptr ||
-        native_set_base_data_directories == nullptr ||
-        native_set_cache_directory == nullptr ||
-        native_set_files_directory == nullptr ||
-        native_set_external_directory == nullptr ||
-        native_set_preferences_file == nullptr ||
-        native_set_default_app_policy_file == nullptr ||
-        native_set_http_client_proxy == nullptr ||
-        native_init_fast_log == nullptr ||
-        native_set_multiple_cookies == nullptr ||
-        native_set_platform_headers_with_idfa == nullptr ||
-        native_init_storage_manager == nullptr ||
-        native_set_init_params == nullptr || native_set_asset_path == nullptr ||
-        activity_lifecycle_callbacks.on_created == nullptr ||
-        activity_lifecycle_callbacks.on_started == nullptr ||
-        activity_lifecycle_callbacks.on_resumed == nullptr ||
+    if ((symbols.init_client_settings == nullptr &&
+         symbols.init_client_settings_signed == nullptr &&
+         symbols.init_client_settings_cached == nullptr &&
+         symbols.init_client_settings_cached_compressed == nullptr) ||
+        symbols.post_client_settings == nullptr ||
+        symbols.set_base_url == nullptr || symbols.set_device_info == nullptr ||
+        symbols.set_roblox_channel == nullptr ||
+        symbols.set_exception_reason_filename == nullptr ||
+        symbols.set_base_data_directories == nullptr ||
+        symbols.set_cache_directory == nullptr ||
+        symbols.set_files_directory == nullptr ||
+        symbols.set_external_directory == nullptr ||
+        symbols.set_preferences_file == nullptr ||
+        symbols.set_default_app_policy_file == nullptr ||
+        symbols.set_http_client_proxy == nullptr ||
+        symbols.init_fast_log == nullptr ||
+        symbols.set_multiple_cookies == nullptr ||
+        symbols.set_platform_headers_with_idfa == nullptr ||
+        symbols.init_storage_manager == nullptr ||
+        symbols.set_init_params == nullptr || symbols.set_asset_path == nullptr ||
+        symbols.activity_lifecycle.on_created == nullptr ||
+        symbols.activity_lifecycle.on_started == nullptr ||
+        symbols.activity_lifecycle.on_resumed == nullptr ||
         message_bus_publish_response_raw == nullptr) {
       std::cerr << "\n[FATAL] One or more NativeGL startup symbols were not "
                 << "found.\n";
@@ -5760,7 +5837,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     const bool run_app_bridge_app_start =
         ShouldRunStartupStep("MOCKTAIL_STEP_APP_BRIDGE_APP_START",
                              IsEnabled("MOCKTAIL_APP_BRIDGE_APP_START")) &&
-        native_app_bridge_app_start != nullptr;
+        symbols.app_bridge_app_start != nullptr;
     const bool run_init_with_params = requested_init_with_params;
     const bool call_real_init_with_params =
         run_init_with_params &&
@@ -5768,7 +5845,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     const bool run_update_screen_orientation =
         ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SCREEN_ORIENTATION",
                              IsEnabled("MOCKTAIL_UPDATE_SCREEN_ORIENTATION")) &&
-        native_update_screen_orientation != nullptr;
+        symbols.update_screen_orientation != nullptr;
     const bool run_update_surface_app =
         ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SURFACE_APP",
                              IsEnabled("MOCKTAIL_UPDATE_SURFACE_APP"));
@@ -5798,14 +5875,14 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         ShouldRunStartupStep("MOCKTAIL_STEP_NATIVE_FRAGMENT_START",
                              has_window &&
                                  IsEnabled("MOCKTAIL_NATIVE_FRAGMENT_START")) &&
-        native_on_fragment_start != nullptr;
+        symbols.on_fragment_start != nullptr;
     const bool run_display_refresh_rate =
         ShouldRunStartupStep(
             "MOCKTAIL_STEP_PASS_CURRENT_DISPLAY_REFRESH_RATE",
             has_window &&
                 IsEnabled("MOCKTAIL_PASS_CURRENT_DISPLAY_REFRESH_RATE")) &&
-        (native_pass_current_display_refresh_rate != nullptr ||
-         native_pass_supported_refresh_rates != nullptr);
+        (symbols.pass_current_display_refresh_rate != nullptr ||
+         symbols.pass_supported_refresh_rates != nullptr);
     const bool run_start_app_with_params = requested_start_app_with_params;
     // Keep the real call opt-in because it can block before rendering starts.
     const bool call_real_start_app_with_params =
@@ -6048,58 +6125,58 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         run_native_fragment_start,
         run_display_refresh_rate,
         run_start_lua_app_dm,
-        native_global_init,
-        native_init_client_settings,
-        native_init_client_settings_signed,
-        native_init_client_settings_cached,
-        native_init_client_settings_cached_compressed,
-        native_post_client_settings,
-        native_initialize_native_flags,
-        native_app_bridge_app_start,
-        native_set_is_first_install,
-        native_set_base_url,
-        native_set_device_info,
-        native_base_url_protocol_init,
-        native_web_login_protocol_init,
-        native_web_login_cold_start,
-        native_set_roblox_channel,
-        native_override_channel_platform_name,
-        native_set_roblox_version,
-        native_set_exception_reason_filename,
-        native_set_base_data_directories,
-        native_set_cache_directory,
-        native_set_files_directory,
-        native_set_external_directory,
-        native_set_preferences_file,
-        native_set_default_app_policy_file,
-        native_set_http_client_proxy,
-        native_init_fast_log,
-        native_set_multiple_cookies,
-        native_cookie_manager_set_cookie,
-        native_set_platform_headers_with_idfa,
-        native_set_user_id,
-        native_init_asset_manager,
-        native_init_storage_manager,
-        native_local_storage_set_platform_impl,
-        native_set_init_params,
-        native_retry_init,
-        native_init_with_params,
-        native_update_adapter_init,
-        native_update_screen_orientation,
-        native_update_app_ui_sizes,
-        native_set_task_scheduler_background_mode,
-        native_update_surface_app,
-        native_start_app_with_params,
-        native_send_app_ready,
-        native_send_game_loaded,
-        native_set_asset_path,
-        activity_lifecycle_callbacks,
-        native_game_activity_init,
-        native_app_lifecycle_set_active,
-        native_on_fragment_start,
-        native_pass_supported_refresh_rates,
-        native_pass_current_display_refresh_rate,
-        native_start_lua_app_dm};
+        symbols.global_init,
+        symbols.init_client_settings,
+        symbols.init_client_settings_signed,
+        symbols.init_client_settings_cached,
+        symbols.init_client_settings_cached_compressed,
+        symbols.post_client_settings,
+        symbols.initialize_native_flags,
+        symbols.app_bridge_app_start,
+        symbols.set_is_first_install,
+        symbols.set_base_url,
+        symbols.set_device_info,
+        symbols.base_url_protocol_init,
+        symbols.web_login_protocol_init,
+        symbols.web_login_cold_start,
+        symbols.set_roblox_channel,
+        symbols.override_channel_platform_name,
+        symbols.set_roblox_version,
+        symbols.set_exception_reason_filename,
+        symbols.set_base_data_directories,
+        symbols.set_cache_directory,
+        symbols.set_files_directory,
+        symbols.set_external_directory,
+        symbols.set_preferences_file,
+        symbols.set_default_app_policy_file,
+        symbols.set_http_client_proxy,
+        symbols.init_fast_log,
+        symbols.set_multiple_cookies,
+        symbols.cookie_manager_set_cookie,
+        symbols.set_platform_headers_with_idfa,
+        symbols.set_user_id,
+        symbols.init_asset_manager,
+        symbols.init_storage_manager,
+        symbols.local_storage_set_platform_impl,
+        symbols.set_init_params,
+        symbols.retry_init,
+        symbols.init_with_params,
+        symbols.update_adapter_init,
+        symbols.update_screen_orientation,
+        symbols.update_app_ui_sizes,
+        symbols.set_task_scheduler_background_mode,
+        symbols.update_surface_app,
+        symbols.start_app_with_params,
+        symbols.send_app_ready,
+        symbols.send_game_loaded,
+        symbols.set_asset_path,
+        symbols.activity_lifecycle,
+        symbols.game_activity_init,
+        symbols.app_lifecycle_set_active,
+        symbols.on_fragment_start,
+        symbols.pass_supported_refresh_rates,
+        symbols.pass_current_display_refresh_rate,
+        symbols.start_lua_app_dm};
     if (game_session_runtime != nullptr) {
       if (!game_present_observer.Register(
               &mocktail::runtime::RobloxGameSessionRuntime::
