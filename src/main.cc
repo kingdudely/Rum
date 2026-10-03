@@ -24,6 +24,7 @@
 #include "runtime/external_launch_broker.h"
 #include "runtime/failure_dialog.h"
 #include "runtime/game_mode.h"
+#include "runtime/guest_abi_check.h"
 #include "runtime/graphics_launch_policy.h"
 #include "runtime/memory_limit.h"
 #include "runtime/performance_policy.h"
@@ -502,6 +503,14 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
       !std::filesystem::is_regular_file(roblox_library)) {
     std::cerr << "[FATAL] No libroblox.so. Place it next to this executable, "
                  "or pass --roblox-lib <path>\n";
+    return StepResult::kExitFailure;
+  }
+  // The guest ABI is fixed at build time, so a library for another
+  // architecture can only fail somewhere deep in the loader. Say so here.
+  const mocktail::runtime::GuestAbiReport abi =
+      mocktail::runtime::InspectGuestLibraryAbi(roblox_library);
+  if (abi.verdict != mocktail::runtime::GuestAbiVerdict::kOk) {
+    std::cerr << "[FATAL] " << abi.message << '\n';
     return StepResult::kExitFailure;
   }
   // Everything downstream reads MOCKTAIL_ASSET_PATH, so the asset location is
