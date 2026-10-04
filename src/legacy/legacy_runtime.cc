@@ -566,13 +566,13 @@ void* OpenRealGlesLibrary() {
 }
 
 void ApplyRuntimeDefaults() {
-  SetEnvDefault("MOCKTAIL_SOBER_MODE", "1");
+  SetEnvDefault("MOCKTAIL_OFFLINE_SETTINGS", "1");
   SetEnvDefault("MOCKTAIL_HEADLESS", "0");
   // Startup worker ownership is joined. Returning while it still references
   // JNI, runtime, or stack state is never supported.
   SetEnvDefault("MOCKTAIL_ENGINE_DETACH", "0");
   // Roblox refuses to create its TaskScheduler until its FastFlag store is
-  // loaded, and that store comes from ClientSettings. Sober mode's inline
+  // loaded, and that store comes from ClientSettings. The offline-settings
   // defaults only disable flag fetching, so both of these must stay on for
   // the engine to get past "flags have been loaded".
   SetEnvDefault("MOCKTAIL_FETCH_CLIENT_SETTINGS", "1");
@@ -1095,28 +1095,12 @@ mocktail::runtime::RuntimePaths CurrentRuntimePaths() {
   return mocktail::runtime::RuntimePaths::FromEnvironment(environment);
 }
 
-std::string SoberDataRoot() {
-  return CurrentRuntimePaths().sober_data_root().string();
-}
-
-std::string SoberCacheRoot() {
-  return CurrentRuntimePaths().sober_cache_root().string();
-}
-
 std::string MocktailCacheRoot() {
   return CurrentRuntimePaths().cache_root().string();
 }
 
 std::string MocktailConfigRoot() {
   return CurrentRuntimePaths().config_root().string();
-}
-
-std::string DefaultSoberAwarePath(const char* sober_path,
-                                  const char* fallback_path) {
-  return CurrentRuntimePaths()
-      .DefaultSoberAwarePath(sober_path ? sober_path : "",
-                             fallback_path ? fallback_path : "")
-      .string();
 }
 
 std::string DefaultAssetPath() {
@@ -1580,7 +1564,7 @@ std::string ResolveClientSettingsJson() {
   options.explicit_file =
       GetEnvString("MOCKTAIL_CLIENT_SETTINGS_JSON_FILE", "");
   options.use_bundled = IsEnabled("MOCKTAIL_USE_BUNDLED_CLIENT_SETTINGS");
-  options.sober_mode = IsEnabled("MOCKTAIL_SOBER_MODE");
+  options.offline_settings = IsEnabled("MOCKTAIL_OFFLINE_SETTINGS");
   options.fetch = IsEnabled("MOCKTAIL_FETCH_CLIENT_SETTINGS");
   options.auto_update =
       !IsDisabled("MOCKTAIL_CLIENT_SETTINGS_AUTO_UPDATE");
@@ -2303,34 +2287,24 @@ struct NativeSettingsValues {
 // an anonymous one before it starts calling into the engine.
 NativeSettingsValues ResolveNativeSettingsValues(
     const EngineStartupContext* context) {
-  const std::string sober_data_root = SoberDataRoot();
-  const std::string sober_cache_root = SoberCacheRoot();
   std::string data_dir = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_DATA_DIR",
-      DefaultSoberAwarePath(sober_data_root.c_str(),
-                            "/data/user/0/com.roblox.client"));
+      "/data/user/0/com.roblox.client");
   std::string files_dir = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_FILES_DIR",
-      DefaultSoberAwarePath((sober_data_root + "/files").c_str(),
-                            "/data/user/0/com.roblox.client/files"));
+      "/data/user/0/com.roblox.client/files");
   std::string settings_cache_dir = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_SETTINGS_CACHE_DIR",
-      DefaultSoberAwarePath(sober_cache_root.c_str(),
-                            "/data/user/0/com.roblox.client"));
+      "/data/user/0/com.roblox.client");
   std::string cache_dir = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_CACHE_DIR",
-      DefaultSoberAwarePath((sober_cache_root + "/cache").c_str(),
-                            "/data/user/0/com.roblox.client/cache"));
+      "/data/user/0/com.roblox.client/cache");
   std::string external_base = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_EXTERNAL_BASE_DIR",
-      DefaultSoberAwarePath((sober_data_root + "/sdcard/Android/data/"
-                             "com.roblox.client")
-                                .c_str(),
-                            "/sdcard/Android/data/com.roblox.client"));
+      "/sdcard/Android/data/com.roblox.client");
   std::string external_dir = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_EXTERNAL_DIR",
-      DefaultSoberAwarePath((external_base + "/files").c_str(),
-                            "/sdcard/Android/data/com.roblox.client/files"));
+      "/sdcard/Android/data/com.roblox.client/files");
   std::string preferences_file = GetEnvString("MOCKTAIL_ANDROID_PREFERENCES_FILE",
                                               "prefs");
   std::string default_policy_file = GetEnvString(
@@ -2696,20 +2670,15 @@ void ConfigureLocalStorage(JNIEnv* env, const EngineStartupContext* context) {
   if (!env || !context) {
     return;
   }
-  const std::string sober_data_root = SoberDataRoot();
-  const std::string sober_cache_root = SoberCacheRoot();
   std::string data_dir = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_DATA_DIR",
-      DefaultSoberAwarePath(sober_data_root.c_str(),
-                            "/data/user/0/com.roblox.client"));
+      "/data/user/0/com.roblox.client");
   std::string files_dir = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_FILES_DIR",
-      DefaultSoberAwarePath((sober_data_root + "/files").c_str(),
-                            "/data/user/0/com.roblox.client/files"));
+      "/data/user/0/com.roblox.client/files");
   std::string cache_dir = GetEnvStringDefaultPath(
       "MOCKTAIL_ANDROID_CACHE_DIR",
-      DefaultSoberAwarePath((sober_cache_root + "/cache").c_str(),
-                            "/data/user/0/com.roblox.client/cache"));
+      "/data/user/0/com.roblox.client/cache");
   EnsureAndroidDirectory(files_dir + "/appData");
   EnsureAndroidDirectory(files_dir + "/appData/LocalStorage");
   EnsureAndroidDirectory(files_dir + "/appData/OTAPatchBackups");
@@ -4678,9 +4647,9 @@ bool InitializeHostWindow(
               << std::flush;
     window_initialised = mocktail::window::Init(win_w, win_h, win_title);
     if (!window_initialised) {
-      if (IsEnabled("MOCKTAIL_SOBER_MODE")) {
-        std::cerr << "  [window] FATAL: Sober-style startup requires a "
-                  << "working SDL video device. Check DISPLAY/WAYLAND_DISPLAY "
+      if (IsEnabled("MOCKTAIL_OFFLINE_SETTINGS")) {
+        std::cerr << "  [window] FATAL: Roblox needs a working SDL video "
+                  << "device. Check DISPLAY/WAYLAND_DISPLAY "
                   << "and SDL3.\n"
                   << std::flush;
         return EXIT_FAILURE;

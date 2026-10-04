@@ -252,7 +252,7 @@ ClientSettingsResult ClientSettingsService::Resolve(
     }
   }
 
-  if (options.sober_mode && !options.fetch) {
+  if (options.offline_settings && !options.fetch) {
     const std::string defaults = SafeDefaultsJson();
     return {defaults, ClientSettingsSource::kSafeDefaults, true, false, {}};
   }

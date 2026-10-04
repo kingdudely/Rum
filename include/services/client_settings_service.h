@@ -29,7 +29,9 @@ struct ClientSettingsOptions {
   std::string application = "GoogleAndroidApp";
   std::string url;
   bool use_bundled = false;
-  bool sober_mode = true;
+  // When set and no fetch is wanted, hand the engine inline safe defaults
+  // instead of a downloaded FastFlag store.
+  bool offline_settings = true;
   bool fetch = false;
   bool auto_update = true;
 };

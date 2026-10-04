@@ -53,24 +53,15 @@ const char* GetEnvNonEmpty(const char* name) {
   return value != nullptr && value[0] != '\0' ? value : nullptr;
 }
 
-std::string HomePath(const char* suffix) {
-  const char* home = std::getenv("HOME");
-  return std::string(home && home[0] != '\0' ? home : "/root") +
-         (suffix ? suffix : "");
-}
-
 std::string RuntimeRoot() {
   const char* runtime_root = std::getenv("MOCKTAIL_RUNTIME_ROOT");
   if (runtime_root != nullptr && runtime_root[0] != '\0') {
     return runtime_root;
   }
-  return "runtime/sober";
+  return "runtime";
 }
 
 std::string DefaultDataRoot() {
-  if (IsEnabled("MOCKTAIL_USE_REAL_SOBER_PATHS")) {
-    return HomePath("/.var/app/org.vinegarhq.Sober/data/sober");
-  }
   return RuntimeRoot() + "/data";
 }
 
