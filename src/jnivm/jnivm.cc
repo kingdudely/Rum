@@ -1583,8 +1583,8 @@ jobject MakeFileObject(const char* path) {
 jobject MakeApplicationInfoObject() {
   jobject object = SingletonObject("android/content/pm/ApplicationInfo");
   SetStringFieldRaw(object, "packageName", "com.roblox.client");
-  SetStringFieldRaw(object, "sourceDir", "rbx_bin/sober_apk/base.apk");
-  SetStringFieldRaw(object, "publicSourceDir", "rbx_bin/sober_apk/base.apk");
+  SetStringFieldRaw(object, "sourceDir", "rbx_bin");
+  SetStringFieldRaw(object, "publicSourceDir", "rbx_bin");
   SetStringFieldRaw(object, "nativeLibraryDir", "rbx_bin");
   SetStringFieldRaw(object, "dataDir", "/data/user/0/com.roblox.client");
   SetStringFieldRaw(object, "processName", "com.roblox.client");

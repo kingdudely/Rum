@@ -26,15 +26,13 @@ Usage() {
   cat <<'EOF'
 Usage: scripts/build.sh [OPTIONS]
 
-With no APK option, this helper builds only the native runtime. The first
-normal launch downloads, validates, canaries, and activates the supported
-Roblox x86_64 payload automatically. The ordinary entry point is `make build`,
-which invokes CMake directly without this helper.
+With no APK option, this helper builds only the native runtime. Supply
+--apk or --apk-url to extract the native library into ./rbx_bin, or place
+libroblox.so next to the resulting executable.
 
 Options:
   --apk PATH          Explicitly extract a local Roblox x86_64 APK.
   --apk-url URL       Explicitly download and extract an APK URL.
-  --skip-apk          Compatibility alias for managed-payload mode.
   --build-dir PATH    CMake build directory (default: build).
   --cmake-toolchain FILE
                       Explicit CMake toolchain file.
@@ -45,7 +43,6 @@ Options:
   -h, --help          Show this help.
 
 Examples:
-  make build
   ./scripts/build.sh
   ./scripts/build.sh --apk /path/to/roblox-x86_64.apk
 EOF
@@ -78,10 +75,6 @@ while [[ $# -gt 0 ]]; do
       APK_URL="$2"
       EXTRACT_APK=true
       shift 2
-      ;;
-    --skip-apk)
-      EXTRACT_APK=false
-      shift
       ;;
     --build-dir)
       [[ $# -ge 2 ]] || die "--build-dir requires a path"
@@ -202,8 +195,8 @@ if [[ "${EXTRACT_APK}" == true ]]; then
     success "Extracted → ${LIBROBLOX_DST}"
   fi
 else
-  step "2/5 selecting managed Roblox payload"
-  success "No APK or libroblox.so is required at build time."
+  step "2/5 skipping APK extraction"
+  success "No APK provided; place libroblox.so next to the executable."
 fi
 
 step "4/5 initialising git submodules"
@@ -251,8 +244,8 @@ echo -e "  ${CYAN}${BUILD_DIR}/mocktail${RESET}"
 if [[ "${EXPLICIT_RUNTIME_OVERRIDE}" == true ]]; then
   info "The explicit runtime library override remains active for this shell."
 elif [[ "${EXTRACT_APK}" == false ]]; then
-  info "First launch downloads, verifies, and activates the supported Roblox x86_64 payload automatically."
+  info "Place libroblox.so next to the resulting executable, or pass --apk/--apk-url."
 else
-  info "Explicit APK extraction completed; managed first-run updates remain available."
+  info "Explicit APK extraction completed."
 fi
 echo
