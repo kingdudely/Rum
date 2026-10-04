@@ -572,7 +572,7 @@ void ApplyRuntimeDefaults() {
   // JNI, runtime, or stack state is never supported.
   SetEnvDefault("MOCKTAIL_ENGINE_DETACH", "0");
   // Roblox refuses to create its TaskScheduler until its FastFlag store is
-  // loaded, and that store comes from ClientSettings. The offline-settings
+  // loaded, and that store comes from ClientSettings. Sober mode's inline
   // defaults only disable flag fetching, so both of these must stay on for
   // the engine to get past "flags have been loaded".
   SetEnvDefault("MOCKTAIL_FETCH_CLIENT_SETTINGS", "1");
@@ -4648,8 +4648,8 @@ bool InitializeHostWindow(
     window_initialised = mocktail::window::Init(win_w, win_h, win_title);
     if (!window_initialised) {
       if (IsEnabled("MOCKTAIL_OFFLINE_SETTINGS")) {
-        std::cerr << "  [window] FATAL: Roblox needs a working SDL video "
-                  << "device. Check DISPLAY/WAYLAND_DISPLAY "
+        std::cerr << "  [window] FATAL: Sober-style startup requires a "
+                  << "working SDL video device. Check DISPLAY/WAYLAND_DISPLAY "
                   << "and SDL3.\n"
                   << std::flush;
         return EXIT_FAILURE;
