@@ -92,7 +92,6 @@ vgcore.*
 !/third_party/mcpelauncher-linker/core/base/
 !/third_party/mcpelauncher-linker/core/libcutils/
 !/third_party/mcpelauncher-linker/core/liblog/
-!/third_party/mcpelauncher-linker/core/libziparchive/
 
 # Reverse-engineering output
 *.i64
@@ -140,7 +139,6 @@ desktop.ini
 .env.*
 !.env.example
 *.pem
-!exe/cacert.pem
 cookies*.txt
 *credentials*
 *secret*
@@ -173,6 +171,3 @@ lsan.log*
 *.mem
 *.raw
 
-# Test fixtures
-!/third_party/mcpelauncher-linker/core/libziparchive/**/*.zip
-!/third_party/mcpelauncher-linker/core/libziparchive/**/*.apk
