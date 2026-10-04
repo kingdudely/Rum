@@ -300,16 +300,6 @@ jmethodID StoreMethodId(const char* name, const char* sig) {
   return method_id;
 }
 
-void CollectRequestedMethods(std::vector<ProbeMethod>* out) {
-  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  out->reserve(g_method_descriptors.size());
-  for (const auto& descriptor : g_method_descriptors) {
-    out->push_back({descriptor.name != nullptr ? descriptor.name : "",
-                    descriptor.signature != nullptr ? descriptor.signature : "",
-                    descriptor.tag != JniMethodTag::kUnknown});
-  }
-}
-
 jobject ObjectResultForMethod(jmethodID method_id);
 std::string CookieHeaderForJava();
 

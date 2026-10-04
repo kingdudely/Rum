@@ -177,14 +177,6 @@ jclass StoreClass(std::shared_ptr<Class> cls) {
   return handle;
 }
 
-void CollectRequestedClasses(std::vector<std::string>* out) {
-  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  out->reserve(g_class_handle_cache.size());
-  for (const auto& [name, handle] : g_class_handle_cache) {
-    out->push_back(name);
-  }
-}
-
 jobject StoreObject(std::unique_ptr<Object> object) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   Object* raw_ptr = object.get();

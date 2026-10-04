@@ -2,7 +2,10 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <elf.h>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -12,9 +15,9 @@
 #include <utility>
 #include <vector>
 
+#include "compat/guest_abi.h"
 #include "legacy/legacy_runtime.h"
 #include "libc_shim/libc_shim.h"
-#include "jnivm/abi_probe.h"
 #include "mocktail/audio/fmod_jni_audio_bridge.h"
 #include "mocktail/audio/webrtc_jni_audio_bridge.h"
 #include "mocktail/platform/posix_primitives.h"
@@ -25,7 +28,6 @@
 #include "runtime/external_launch_broker.h"
 #include "runtime/failure_dialog.h"
 #include "runtime/game_mode.h"
-#include "runtime/guest_abi_check.h"
 #include "runtime/graphics_launch_policy.h"
 #include "runtime/memory_limit.h"
 #include "runtime/performance_policy.h"
@@ -493,6 +495,38 @@ mocktail::runtime::GameModeSession StartGameModeSession(
 // payload: libroblox.so and assets/content default to this executable's own
 // directory, and every writable path comes from the resolved RuntimePaths.
 // ---------------------------------------------------------------------------
+// The guest ABI is fixed at compile time, so a library for another
+// architecture can only fail somewhere deep in the loader. Say so here.
+// Returns an empty string when the file is a loadable library for this build.
+std::string GuestAbiMismatch(const std::filesystem::path& library) {
+  unsigned char header[64];
+  std::FILE* file = std::fopen(library.c_str(), "rb");
+  const std::size_t read =
+      file != nullptr ? std::fread(header, 1, sizeof(header), file) : 0;
+  if (file != nullptr) {
+    std::fclose(file);
+  }
+  // Magic before length: a short file with the wrong magic is simply not an
+  // ELF library, and "too short" would point at the wrong problem.
+  if (read < SELFMAG || std::memcmp(header, ELFMAG, SELFMAG) != 0) {
+    return "That file is not an ELF shared library. Pass the native "
+           "libroblox.so, not an APK or a zip.";
+  }
+  // e_ident is EI_NIDENT bytes, then a 2-byte e_type, then e_machine. Read the
+  // bytes rather than casting a header struct so this does not depend on the
+  // host's alignment rules.
+  std::uint16_t machine = 0;
+  std::memcpy(&machine, header + EI_NIDENT + 2, sizeof(machine));
+  if (machine == mocktail::compat::kGuestElfMachine) {
+    return "";
+  }
+  const char* guest_abi =
+      machine == EM_AARCH64 ? "arm64-v8a" : "another architecture";
+  return std::string("That libroblox.so is ") + guest_abi +
+         ", but this Mocktail build is " +
+         std::string(mocktail::compat::kGuestAbi) + ".";
+}
+
 StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
                               const RuntimePaths& paths,
                               const CommandLineOptions& options,
@@ -508,10 +542,9 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
   }
   // The guest ABI is fixed at build time, so a library for another
   // architecture can only fail somewhere deep in the loader. Say so here.
-  const mocktail::runtime::GuestAbiReport abi =
-      mocktail::runtime::InspectGuestLibraryAbi(roblox_library);
-  if (abi.verdict != mocktail::runtime::GuestAbiVerdict::kOk) {
-    std::cerr << "[FATAL] " << abi.message << '\n';
+  const std::string abi_error = GuestAbiMismatch(roblox_library);
+  if (!abi_error.empty()) {
+    std::cerr << "[FATAL] " << abi_error << '\n';
     return StepResult::kExitFailure;
   }
   // Everything downstream reads MOCKTAIL_ASSET_PATH, so the asset location is
@@ -1056,9 +1089,6 @@ int main(int argc, char* argv[]) {
   }
   const int runtime_status =
       mocktail::legacy::Run(command_line.options, std::move(dependencies));
-  // Reads the JNI class, method and field tables, so it has to happen while
-  // those are still intact. No-op unless MOCKTAIL_ABI_PROBE is set.
-  jnivm::WriteAbiProbe();
   // The engine has had its chance at the web-login ticket; it is a bearer
   // value, so it does not outlive native startup.
   mocktail::runtime::ScrubEngineLaunchUri(&command_line.options);
