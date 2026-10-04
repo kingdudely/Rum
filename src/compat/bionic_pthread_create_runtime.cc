@@ -296,7 +296,10 @@ int mocktail_pthread_attr_destroy(MocktailBionicPthreadAttr* attr) {
 
 int mocktail_pthread_attr_setstacksize(MocktailBionicPthreadAttr* attr,
                                        size_t stack_size) {
-  if (attr == nullptr || stack_size < PTHREAD_STACK_MIN) {
+  // glibc defines PTHREAD_STACK_MIN as a non-negative signed long, so widening
+  // it preserves the comparison exactly.
+  if (attr == nullptr ||
+      stack_size < static_cast<size_t>(PTHREAD_STACK_MIN)) {
     return EINVAL;
   }
   attr->stack_size = stack_size;
