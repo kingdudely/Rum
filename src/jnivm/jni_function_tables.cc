@@ -1269,44 +1269,42 @@ void VM::InitJNIEnvMiscInterface() {
 	      if (name == nullptr) {
 	        continue;
 	      }
-	      if (std::strcmp(name, "onStartNative") == 0) {
-	        mocktail_gameactivity_on_start_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onResumeNative") == 0) {
-	        mocktail_gameactivity_on_resume_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onSurfaceCreatedNative") == 0) {
-	        mocktail_gameactivity_on_surface_created_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onSurfaceChangedNative") == 0) {
-	        mocktail_gameactivity_on_surface_changed_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onSurfaceRedrawNeededNative") == 0) {
-	        mocktail_gameactivity_on_surface_redraw_needed_native = methods[i].fnPtr;
-	      } else if (std::strcmp(name, "onTrimMemoryNative") == 0) {
-	        mocktail_gameactivity_on_trim_memory_native = methods[i].fnPtr;
+	      struct GameActivityBinding { const char* method; void** out; };
+	      const GameActivityBinding game_activity_bindings[] = {
+	          {"onStartNative", &mocktail_gameactivity_on_start_native},
+	          {"onResumeNative", &mocktail_gameactivity_on_resume_native},
+	          {"onSurfaceCreatedNative", &mocktail_gameactivity_on_surface_created_native},
+	          {"onSurfaceChangedNative", &mocktail_gameactivity_on_surface_changed_native},
+	          {"onSurfaceRedrawNeededNative", &mocktail_gameactivity_on_surface_redraw_needed_native},
+	          {"onTrimMemoryNative", &mocktail_gameactivity_on_trim_memory_native},
+	      };
+	      for (const auto& b : game_activity_bindings) {
+	        if (std::strcmp(name, b.method) == 0) {
+	          *b.out = methods[i].fnPtr;
+	          break;
+	        }
 	      }
-              if (cls != nullptr &&
-                  cls->GetName() ==
-                      "org/webrtc/voiceengine/WebRtcAudioManager") {
-                if (VM* vm = CurrentVM()) {
-                  vm->RegisterWebRtcAudioManagerNative(
-                      methods[i].name, methods[i].signature, methods[i].fnPtr);
-                }
-              }
-              if (cls != nullptr &&
-                  cls->GetName() ==
-                      "org/webrtc/voiceengine/WebRtcAudioRecord") {
-                VM *vm = CurrentVM();
-                if (vm != nullptr) {
-                  vm->RegisterWebRtcAudioRecordNative(
-                      methods[i].name, methods[i].signature, methods[i].fnPtr);
-                }
-              }
-              if (cls != nullptr &&
-                  cls->GetName() == "org/webrtc/voiceengine/WebRtcAudioTrack") {
-                VM *vm = CurrentVM();
-                if (vm != nullptr) {
-                  vm->RegisterWebRtcAudioTrackNative(
-                      methods[i].name, methods[i].signature, methods[i].fnPtr);
-                }
-              }
+	      if (cls != nullptr) {
+	        const std::string kWebrtcBase = "org/webrtc/voiceengine/";
+	        const std::string class_name = cls->GetName();
+	        if (class_name.size() > kWebrtcBase.size() &&
+	            class_name.compare(0, kWebrtcBase.size(), kWebrtcBase) == 0) {
+	          VM* vm = CurrentVM();
+	          if (vm != nullptr) {
+	            const std::string tail = class_name.substr(kWebrtcBase.size());
+	            if (tail == "WebRtcAudioManager") {
+	              vm->RegisterWebRtcAudioManagerNative(
+	                  methods[i].name, methods[i].signature, methods[i].fnPtr);
+	            } else if (tail == "WebRtcAudioRecord") {
+	              vm->RegisterWebRtcAudioRecordNative(
+	                  methods[i].name, methods[i].signature, methods[i].fnPtr);
+	            } else if (tail == "WebRtcAudioTrack") {
+	              vm->RegisterWebRtcAudioTrackNative(
+	                  methods[i].name, methods[i].signature, methods[i].fnPtr);
+	            }
+	          }
+	        }
+	      }
             }
 	    if (TraceEnabled()) {
 	      std::cout << "  [JNI] RegisterNatives for class "
