@@ -69,7 +69,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(linker PRIVATE -w)
 endif()
 
-find_package(VulkanHeaders REQUIRED)
+include(${CMAKE_SOURCE_DIR}/cmake/MocktailBundledDeps.cmake)
 
 find_package(OpenSSL REQUIRED)
 
@@ -110,9 +110,13 @@ target_include_directories(mocktail_bionic_stdio_runtime PUBLIC include)
 mocktail_apply_compile_options(mocktail_bionic_stdio_runtime)
 
 find_package(CURL REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
+if(NOT TARGET nlohmann_json::nlohmann_json)
+  find_package(nlohmann_json CONFIG REQUIRED)
+endif()
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBYAML REQUIRED IMPORTED_TARGET yaml-0.1)
+if(NOT TARGET PkgConfig::LIBYAML)
+  pkg_check_modules(LIBYAML REQUIRED IMPORTED_TARGET yaml-0.1)
+endif()
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 
 add_library(mocktail_legacy_jnivm STATIC
@@ -145,7 +149,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/device_memory_profile.cc
   src/runtime/device_profile.cc
   src/runtime/environment.cc
-  src/runtime/external_launch_broker.cc
   src/runtime/frame_rate_policy.cc
   src/runtime/game_mode.cc
   src/runtime/game_session_coordinator.cc
@@ -172,7 +175,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/runtime_config_file.cc
   src/runtime/runtime_paths.cc
   src/runtime/session_log.cc
-  src/runtime/single_instance_lock.cc
   src/runtime/startup_state_machine.cc
   src/runtime/support_bundle.cc
   src/runtime/system_proxy.cc
@@ -450,6 +452,11 @@ target_link_options(mocktail PRIVATE
 # The helper is x86-64 assembly; other host architectures have nothing to
 # assemble.
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+  set(MOCKTAIL_BUILD_FREEBSD_SOCKET_HELPER OFF)
+endif()
+# The helper only runs under FreeBSD Linuxulator; building it elsewhere just
+# demands ld.lld for an artifact that is never executed.
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   set(MOCKTAIL_BUILD_FREEBSD_SOCKET_HELPER OFF)
 endif()
 option(MOCKTAIL_BUILD_FREEBSD_SOCKET_HELPER

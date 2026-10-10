@@ -4,8 +4,12 @@
 include_guard(GLOBAL)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(UTF8PROC REQUIRED IMPORTED_TARGET libutf8proc)
-find_package(SDL3_ttf REQUIRED CONFIG)
+if(NOT TARGET PkgConfig::UTF8PROC)
+  pkg_check_modules(UTF8PROC REQUIRED IMPORTED_TARGET libutf8proc)
+endif()
+if(NOT TARGET SDL3_ttf::SDL3_ttf)
+  find_package(SDL3_ttf REQUIRED CONFIG)
+endif()
 pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
 
 get_filename_component(MOCKTAIL_INPUT_ROOT "${CMAKE_CURRENT_LIST_DIR}/.."

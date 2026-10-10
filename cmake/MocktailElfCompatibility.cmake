@@ -9,7 +9,9 @@ get_filename_component(MOCKTAIL_ELF_COMPAT_ROOT
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBELF REQUIRED IMPORTED_TARGET libelf)
-find_package(nlohmann_json CONFIG REQUIRED)
+if(NOT TARGET nlohmann_json::nlohmann_json)
+  find_package(nlohmann_json CONFIG REQUIRED)
+endif()
 
 add_library(mocktail_compat STATIC
   ${MOCKTAIL_ELF_COMPAT_ROOT}/src/compat/bionic_atfork_runtime.cc
