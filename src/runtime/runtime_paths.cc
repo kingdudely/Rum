@@ -11,13 +11,6 @@ namespace mocktail {
 namespace runtime {
 namespace {
 
-std::filesystem::path XdgHome(const Environment& environment,
-                              std::string_view variable,
-                              const std::filesystem::path& fallback) {
-  const std::filesystem::path configured = environment.GetOr(variable, "");
-  return configured.is_absolute() ? configured : fallback;
-}
-
                            bool SetEnvironmentDefault(const char* name,
                            const std::filesystem::path& value,
                            std::string* error) {
@@ -40,32 +33,31 @@ RuntimePaths RuntimePaths::FromEnvironment(const Environment& environment) {
   RuntimePaths paths;
   paths.home_ = environment.GetOr("HOME", "/root");
 
-  if (environment.HasNonEmpty("MOCKTAIL_CONFIG_ROOT")) {
-    paths.config_root_ = environment.GetOr("MOCKTAIL_CONFIG_ROOT", "");
-  } else {
-    paths.config_root_ =
-        XdgHome(environment, "XDG_CONFIG_HOME", paths.home_ / ".config") /
-        "mocktail";
-  }
-
-  const std::filesystem::path xdg_data_home =
-      XdgHome(environment, "XDG_DATA_HOME", paths.home_ / ".local/share");
-  const std::filesystem::path xdg_cache_home =
-      XdgHome(environment, "XDG_CACHE_HOME", paths.home_ / ".cache");
-  const std::filesystem::path xdg_state_home =
-      XdgHome(environment, "XDG_STATE_HOME", paths.home_ / ".local/state");
+  // Every writable root defaults under ./data next to the executable, so
+  // deleting that directory uninstalls everything Mocktail ever wrote.
+  // Each root stays overridable for isolation and testing.
+  const std::filesystem::path executable_directory = ExecutableDirectory();
+  const std::filesystem::path data_default =
+      executable_directory.empty()
+          ? std::filesystem::path("data")
+          : executable_directory / "data";
   paths.data_root_ =
       environment.HasNonEmpty("MOCKTAIL_DATA_ROOT")
           ? std::filesystem::path(environment.GetOr("MOCKTAIL_DATA_ROOT", ""))
-          : xdg_data_home / "mocktail";
+          : data_default;
   paths.cache_root_ =
       environment.HasNonEmpty("MOCKTAIL_CACHE_ROOT")
           ? std::filesystem::path(environment.GetOr("MOCKTAIL_CACHE_ROOT", ""))
-          : xdg_cache_home / "mocktail";
+          : data_default / "cache";
   paths.state_root_ =
       environment.HasNonEmpty("MOCKTAIL_STATE_ROOT")
           ? std::filesystem::path(environment.GetOr("MOCKTAIL_STATE_ROOT", ""))
-          : xdg_state_home / "mocktail";
+          : data_default / "state";
+  if (environment.HasNonEmpty("MOCKTAIL_CONFIG_ROOT")) {
+    paths.config_root_ = environment.GetOr("MOCKTAIL_CONFIG_ROOT", "");
+  } else {
+    paths.config_root_ = data_default / "config";
+  }
   paths.logs_root_ = paths.state_root_ / "logs";
   paths.android_runtime_root_ = paths.data_root_ / "android";
   paths.android_cache_root_ = paths.cache_root_ / "android";
