@@ -5,13 +5,10 @@
 // android/asset_manager.h, android/looper.h, android/configuration.h.
 
 #include "libc_shim/vulkan_etc1_sky_transcoder.h"
+#include "stub_helpers.h"
 
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <minizip/unzip.h>
-#if defined(MOCKTAIL_MINIZIP_HAS_STREAM_TELL)
-#include <minizip/mz_strm.h>
-#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -40,7 +37,6 @@
 struct AAssetManager {};
 struct AAsset {
   std::string path;
-  std::string apk_entry;
   std::vector<unsigned char> data;
   bool transcoded = false;
   size_t offset = 0;
@@ -51,24 +47,17 @@ namespace {
 
 AAssetManager g_asset_manager;
 
-const char* GetEnvNonEmpty(const char* name) {
-  const char* value = std::getenv(name);
-  return value != nullptr && value[0] != '\0' ? value : nullptr;
-}
-
 bool TraceEnabled() {
   static const bool enabled =
-      GetEnvNonEmpty("MOCKTAIL_ANDROID_STUB_TRACE") != nullptr ||
-      GetEnvNonEmpty("MOCKTAIL_WINDOW_TRACE") != nullptr ||
-      GetEnvNonEmpty("MOCKTAIL_FULL_TRACE") != nullptr;
+      StubAnyEnvSet({"MOCKTAIL_ANDROID_STUB_TRACE", "MOCKTAIL_WINDOW_TRACE",
+                     "MOCKTAIL_FULL_TRACE"});
   return enabled;
 }
 
 bool AssetTraceEnabled() {
   static const bool enabled =
-      GetEnvNonEmpty("MOCKTAIL_ASSET_TRACE") != nullptr ||
-      GetEnvNonEmpty("MOCKTAIL_TRACE_ALL") != nullptr ||
-      GetEnvNonEmpty("MOCKTAIL_FULL_TRACE") != nullptr;
+      StubAnyEnvSet({"MOCKTAIL_ASSET_TRACE", "MOCKTAIL_TRACE_ALL",
+                     "MOCKTAIL_FULL_TRACE"});
   return enabled;
 }
 
@@ -134,11 +123,11 @@ std::string NormalizeAssetRequest(std::string_view path) {
 // MOCKTAIL_ASSET_PATH so asset lookups work during early startup, before the
 // engine calls back into MocktailSetAssetPath.
 std::string DefaultAssetRoot() {
-  const char* root = GetEnvNonEmpty("MOCKTAIL_ASSET_ROOT");
+  const char* root = StubGetEnvNonEmpty("MOCKTAIL_ASSET_ROOT");
   if (root != nullptr) {
     return root;
   }
-  const char* content = GetEnvNonEmpty("MOCKTAIL_ASSET_PATH");
+  const char* content = StubGetEnvNonEmpty("MOCKTAIL_ASSET_PATH");
   if (content != nullptr) {
     std::string assets(content);
     while (assets.size() > 1 && assets.back() == '/') {
@@ -288,106 +277,36 @@ bool LoadFile(const std::string& path, std::vector<unsigned char>* data) {
   return true;
 }
 
-std::string ApkEntryName(const char* filename) {
-  std::string_view requested = StripAssetUriPrefix(filename);
-  constexpr const char* kAssetsPrefix = "assets/";
-  if (requested.rfind(kAssetsPrefix, 0) == 0) {
-    requested.remove_prefix(std::strlen(kAssetsPrefix));
-  }
-  return "assets/" + std::string(requested);
-}
-
-bool OpenStoredApkEntryDescriptor(const std::string& entry_name, int* fd,
-                                  off_t* start, off_t* length) {
-  const char* apk_path = GetEnvNonEmpty("MOCKTAIL_ASSET_APK_PATH");
-  if (apk_path == nullptr || fd == nullptr || start == nullptr ||
-      length == nullptr) {
-    return false;
-  }
-  unzFile archive = unzOpen64(apk_path);
-  if (archive == nullptr ||
-      unzLocateFile(archive, entry_name.c_str(), 1) != UNZ_OK) {
-    if (archive != nullptr) {
-      unzClose(archive);
-    }
-    return false;
-  }
-  unz_file_info64 info{};
-  if (unzGetCurrentFileInfo64(archive, &info, nullptr, 0, nullptr, 0, nullptr,
-                              0) != UNZ_OK ||
-      info.compression_method != 0 || unzOpenCurrentFile(archive) != UNZ_OK) {
-    unzClose(archive);
-    return false;
-  }
-  ZPOS64_T data_offset = 0;
-#if defined(MOCKTAIL_MINIZIP_HAS_ZSTREAM_POS)
-  data_offset = unzGetCurrentFileZStreamPos64(archive);
-#elif defined(MOCKTAIL_MINIZIP_HAS_STREAM_TELL)
-  const int64_t stream_offset = mz_stream_tell(unzGetStream(archive));
-  if (stream_offset < 0) {
-    unzCloseCurrentFile(archive);
-    unzClose(archive);
-    return false;
-  }
-  data_offset = static_cast<ZPOS64_T>(stream_offset);
-#endif
-  unzCloseCurrentFile(archive);
-  unzClose(archive);
-  if (data_offset > static_cast<ZPOS64_T>(INT64_MAX) ||
-      info.uncompressed_size > static_cast<ZPOS64_T>(INT64_MAX)) {
-    return false;
-  }
-  const int apk_fd = ::open(apk_path, O_RDONLY | O_CLOEXEC);
-  if (apk_fd < 0) {
-    return false;
-  }
-  *fd = apk_fd;
-  *start = static_cast<off_t>(data_offset);
-  *length = static_cast<off_t>(info.uncompressed_size);
-  return true;
-}
-
-template <typename Fn>
-Fn ResolveCached(Fn* slot, const char* name) {
-  Fn fn = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
-  if (__builtin_expect(fn == nullptr, 0)) {
-    fn = reinterpret_cast<Fn>(dlsym(RTLD_DEFAULT, name));
-    if (fn != nullptr) {
-      __atomic_store_n(slot, fn, __ATOMIC_RELEASE);
-    }
-  }
-  return fn;
-}
 
 void* MocktailNativeWindow() {
   using Fn = void* (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_native_window");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_native_window");
   return fn != nullptr ? fn() : nullptr;
 }
 
 int MocktailWindowWidth() {
   using Fn = int (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_window_width");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_width");
   return fn != nullptr ? fn() : 1280;
 }
 
 int MocktailWindowHeight() {
   using Fn = int (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_window_height");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_height");
   return fn != nullptr ? fn() : 720;
 }
 
 bool MocktailUsesDirectVulkan() {
   using Fn = bool (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_window_uses_direct_vulkan");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_uses_direct_vulkan");
   if (fn != nullptr) {
     return fn();
   }
-  const char* backend = GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND");
+  const char* backend = StubGetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND");
   return backend != nullptr && std::strcmp(backend, "direct-vulkan") == 0;
 }
 
@@ -405,15 +324,14 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename,
     if (AssetTraceEnabled()) {
       std::fprintf(stderr, "[asset] open MISS %s (root=%s)\n",
                    filename ? filename : "(null)",
-                   GetEnvNonEmpty("MOCKTAIL_ASSET_ROOT") != nullptr
-                       ? GetEnvNonEmpty("MOCKTAIL_ASSET_ROOT")
+                   StubGetEnvNonEmpty("MOCKTAIL_ASSET_ROOT") != nullptr
+                       ? StubGetEnvNonEmpty("MOCKTAIL_ASSET_ROOT")
                        : "rbx_bin/assets");
     }
     return nullptr;
   }
   auto* asset = new AAsset;
   asset->path = path;
-  asset->apk_entry = ApkEntryName(filename);
   if (!LoadFile(path, &asset->data)) {
     if (AssetTraceEnabled()) {
       std::fprintf(stderr, "[asset] read-failed %s -> %s\n", filename,
@@ -545,10 +463,7 @@ int AAsset_openFileDescriptor(AAsset* asset, off_t* outStart,
   int fd = -1;
   off_t start = 0;
   off_t descriptor_length = static_cast<off_t>(asset->data.size());
-  if (!OpenStoredApkEntryDescriptor(asset->apk_entry, &fd, &start,
-                                    &descriptor_length)) {
-    fd = ::open(asset->path.c_str(), O_RDONLY | O_CLOEXEC);
-  }
+  fd = ::open(asset->path.c_str(), O_RDONLY | O_CLOEXEC);
   if (fd < 0) {
     return -1;
   }

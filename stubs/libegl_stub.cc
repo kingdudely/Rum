@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
+#include "stub_helpers.h"
 
 using EGLBoolean = uint32_t;
 using EGLint = int32_t;
@@ -55,28 +56,8 @@ thread_local EGLSurface g_current_read_surface = nullptr;
 thread_local EGLint g_last_error = kEglSuccess;
 
 bool TraceEnabled() {
-  return std::getenv("MOCKTAIL_EGL_TRACE") != nullptr ||
-         std::getenv("MOCKTAIL_GL_TRACE") != nullptr ||
-         std::getenv("MOCKTAIL_TRACE_ALL") != nullptr ||
-         std::getenv("MOCKTAIL_FULL_TRACE") != nullptr;
-}
-
-bool TestGraphicsStubsEnabled() {
-  const char* value = std::getenv("MOCKTAIL_ENABLE_TEST_GRAPHICS_STUBS");
-  return value != nullptr && std::strcmp(value, "1") == 0;
-}
-
-template <typename Fn>
-Fn ResolveCached(Fn* slot, const char* name) {
-  Fn fn = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
-  if (__builtin_expect(fn == nullptr, 0)) {
-    void* symbol = dlsym(RTLD_DEFAULT, name);
-    fn = reinterpret_cast<Fn>(symbol);
-    if (fn != nullptr) {
-      __atomic_store_n(slot, fn, __ATOMIC_RELEASE);
-    }
-  }
-  return fn;
+  return StubAnyEnvSet({"MOCKTAIL_EGL_TRACE", "MOCKTAIL_GL_TRACE",
+                        "MOCKTAIL_TRACE_ALL", "MOCKTAIL_FULL_TRACE"});
 }
 
 EGLDisplay FallbackDisplay() {
@@ -98,70 +79,70 @@ EGLSurface FallbackSurface() {
 EGLDisplay WindowDisplay() {
   using Fn = void* (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_egl_display");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_egl_display");
   return fn != nullptr ? fn() : nullptr;
 }
 
 EGLConfig WindowConfig() {
   using Fn = void* (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_egl_config");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_egl_config");
   return fn != nullptr ? fn() : nullptr;
 }
 
 EGLContext WindowContext() {
   using Fn = void* (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_egl_context");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_egl_context");
   return fn != nullptr ? fn() : nullptr;
 }
 
 EGLSurface WindowSurface() {
   using Fn = void* (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_egl_surface");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_egl_surface");
   return fn != nullptr ? fn() : nullptr;
 }
 
 bool MakeWindowCurrent() {
   using Fn = bool (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_window_make_current");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_make_current");
   return fn != nullptr && fn();
 }
 
 bool ReleaseWindowCurrent() {
   using Fn = bool (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_window_release_current");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_release_current");
   return fn != nullptr && fn();
 }
 
 bool SwapWindowBuffers() {
   using Fn = bool (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_window_swap_buffers");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_swap_buffers");
   return fn != nullptr && fn();
 }
 
 void* WindowGlProcAddress(const char* name) {
   using Fn = void* (*)(const char*);
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_gl_proc_address");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_gl_proc_address");
   return fn != nullptr ? fn(name) : nullptr;
 }
 
 int WindowWidth() {
   using Fn = int (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_window_width");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_width");
   return fn != nullptr ? fn() : 1280;
 }
 
 int WindowHeight() {
   using Fn = int (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = ResolveCached(&cached_fn, "mocktail_window_height");
+  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_height");
   return fn != nullptr ? fn() : 720;
 }
 
@@ -169,28 +150,28 @@ EGLDisplay ActiveDisplay() {
   EGLDisplay display = WindowDisplay();
   return display != nullptr
              ? display
-             : (TestGraphicsStubsEnabled() ? FallbackDisplay() : nullptr);
+             : (StubTestGraphicsStubsEnabled() ? FallbackDisplay() : nullptr);
 }
 
 EGLConfig ActiveConfig() {
   EGLConfig config = WindowConfig();
   return config != nullptr
              ? config
-             : (TestGraphicsStubsEnabled() ? FallbackConfig() : nullptr);
+             : (StubTestGraphicsStubsEnabled() ? FallbackConfig() : nullptr);
 }
 
 EGLContext ActiveContext() {
   EGLContext context = WindowContext();
   return context != nullptr
              ? context
-             : (TestGraphicsStubsEnabled() ? FallbackContext() : nullptr);
+             : (StubTestGraphicsStubsEnabled() ? FallbackContext() : nullptr);
 }
 
 EGLSurface ActiveSurface() {
   EGLSurface surface = WindowSurface();
   return surface != nullptr
              ? surface
-             : (TestGraphicsStubsEnabled() ? FallbackSurface() : nullptr);
+             : (StubTestGraphicsStubsEnabled() ? FallbackSurface() : nullptr);
 }
 
 bool IsActiveDisplay(EGLDisplay display) {
@@ -329,7 +310,7 @@ EGLSurface eglCreatePbufferSurface(EGLDisplay display, EGLConfig config,
     SetError(kEglBadDisplay);
     return nullptr;
   }
-  if (!TestGraphicsStubsEnabled()) {
+  if (!StubTestGraphicsStubsEnabled()) {
     SetError(kEglNotInitialized);
     return nullptr;
   }

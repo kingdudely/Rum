@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include "stub_helpers.h"
 
 using GLbitfield = uint32_t;
 using GLboolean = uint8_t;
@@ -44,13 +45,8 @@ GLuint g_next_object = 1;
 thread_local GLenum g_last_error = kGlNoError;
 thread_local GLint g_viewport[4] = {0, 0, 1280, 720};
 
-bool TestGraphicsStubsEnabled() {
-  const char* value = std::getenv("MOCKTAIL_ENABLE_TEST_GRAPHICS_STUBS");
-  return value != nullptr && std::strcmp(value, "1") == 0;
-}
-
 bool RequireTestGraphicsStub() {
-  if (TestGraphicsStubsEnabled()) {
+  if (StubTestGraphicsStubsEnabled()) {
     return true;
   }
   g_last_error = kGlInvalidOperation;

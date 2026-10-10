@@ -45,43 +45,10 @@ add_library(stub_android SHARED
 )
 configure_stub(stub_android "libandroid.so")
 target_include_directories(stub_android PUBLIC ${CMAKE_SOURCE_DIR}/include)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MINIZIP REQUIRED IMPORTED_TARGET minizip)
 target_link_libraries(stub_android PRIVATE
-  PkgConfig::MINIZIP
   Threads::Threads
   ${CMAKE_DL_LIBS}
 )
-
-include(CheckCXXSourceCompiles)
-include(CMakePushCheckState)
-cmake_push_check_state(RESET)
-set(CMAKE_REQUIRED_INCLUDES ${MINIZIP_INCLUDE_DIRS})
-set(CMAKE_REQUIRED_LIBRARIES PkgConfig::MINIZIP)
-check_cxx_source_compiles("#include <minizip/unzip.h>
-int main() {
-  unzFile file = nullptr;
-  return unzGetCurrentFileZStreamPos64(file) == 0;
-}"
-  MOCKTAIL_MINIZIP_HAS_ZSTREAM_POS)
-check_cxx_source_compiles("#include <minizip/unzip.h>
-#include <minizip/mz_strm.h>
-int main() {
-  unzFile file = nullptr;
-  return mz_stream_tell(unzGetStream(file)) < 0;
-}"
-  MOCKTAIL_MINIZIP_HAS_STREAM_TELL)
-cmake_pop_check_state()
-
-if(MOCKTAIL_MINIZIP_HAS_ZSTREAM_POS)
-  target_compile_definitions(stub_android PRIVATE
-    MOCKTAIL_MINIZIP_HAS_ZSTREAM_POS=1)
-elseif(MOCKTAIL_MINIZIP_HAS_STREAM_TELL)
-  target_compile_definitions(stub_android PRIVATE
-    MOCKTAIL_MINIZIP_HAS_STREAM_TELL=1)
-else()
-  message(FATAL_ERROR "The installed minizip cannot report ZIP entry offsets")
-endif()
 
 add_library(stub_log SHARED liblog_stub.cc)
 configure_stub(stub_log "liblog.so")

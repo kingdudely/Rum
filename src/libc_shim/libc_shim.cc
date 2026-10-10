@@ -43,11 +43,6 @@ constexpr std::array<const char*, 8> kAndroidCaBundlePaths = {
     "rbx_bin/assets/content/ssl/cacert.pem",
 };
 
-bool IsEnabled(const char* name) {
-  const char* value = std::getenv(name);
-  return value != nullptr && value[0] != '\0' && value[0] != '0';
-}
-
 const char* GetEnvNonEmpty(const char* name) {
   const char* value = std::getenv(name);
   return value != nullptr && value[0] != '\0' ? value : nullptr;
