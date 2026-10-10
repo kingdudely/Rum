@@ -40,7 +40,6 @@
 #include "runtime/runtime_paths.h"
 #include "runtime/session_log.h"
 #include "runtime/support_bundle.h"
-#include "runtime/system_proxy.h"
 #include "services/auth_service.h"
 #include "services/client_settings_service.h"
 #include "services/http_client.h"
@@ -164,40 +163,6 @@ StepResult LoadRuntimeConfiguration(
     }
     return StepResult::kExitFailure;
   }
-  if (runtime_config->use_system_proxy()) {
-    const mocktail::runtime::SystemProxyResult system_proxy =
-        mocktail::runtime::ResolveSystemProxy();
-    const std::string proxy_host = system_proxy.proxy.has_value()
-                                       ? system_proxy.proxy->host
-                                       : std::string();
-    const std::string proxy_port =
-        system_proxy.proxy.has_value()
-            ? std::to_string(system_proxy.proxy->port)
-            : std::string();
-    const std::string proxy_scheme = system_proxy.proxy.has_value()
-                                         ? system_proxy.proxy->scheme
-                                         : std::string();
-    if (!system_proxy ||
-        setenv("MOCKTAIL_HTTP_PROXY_HOST", proxy_host.c_str(), 1) != 0 ||
-        setenv("MOCKTAIL_HTTP_PROXY_PORT", proxy_port.c_str(), 1) != 0 ||
-        setenv("MOCKTAIL_HTTP_PROXY_SCHEME", proxy_scheme.c_str(), 1) != 0) {
-      std::cerr << "[FATAL] Cannot resolve host system proxy";
-      if (!system_proxy.error.empty()) {
-        std::cerr << ": " << system_proxy.error;
-      }
-      std::cerr << '\n';
-      return StepResult::kExitFailure;
-    }
-    if (!mocktail::runtime::LoadRuntimeConfigFromEnvironment(
-            environment, runtime_config, error)) {
-      std::cerr << "[FATAL] Cannot apply host system proxy";
-      if (error != nullptr && !error->empty()) {
-        std::cerr << ": " << *error;
-      }
-      std::cerr << '\n';
-      return StepResult::kExitFailure;
-    }
-  }
   if (IsRunning(options) &&
       runtime_config->has_unsafe_detached_thread_overrides()) {
     std::cerr << "[FATAL] Unsupported detached legacy thread overrides:\n";
@@ -274,15 +239,11 @@ void ReportStartupSummary(const ProcessEnvironment& environment,
     mocktail::runtime::LogProcessDiagnostics(
         mocktail::runtime::ProcessDiagnosticStage::kStartup);
   }
-  if (IsRunning(options) && config.use_system_proxy()) {
-    if (config.network_proxy().has_value()) {
-      std::cout << "  [network] system proxy="
-                << mocktail::runtime::BuildNetworkProxyUrl(
-                       *config.network_proxy())
-                << '\n';
-    } else {
-      std::cout << "  [network] system proxy=direct\n";
-    }
+  if (IsRunning(options) && config.network_proxy().has_value()) {
+    std::cout << "  [network] proxy="
+              << mocktail::runtime::BuildNetworkProxyUrl(
+                     *config.network_proxy())
+              << '\n';
   }
   if (memory_plan.enabled && memory_plan.cgroup.active()) {
     std::cout << "  [memory] hard process-tree limit active: "

@@ -268,8 +268,6 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
       "MOCKTAIL_AUDIO_INPUT_DEVICE", config.audio_input_device_);
   config.audio_input_device_valid_ =
       IsValidDeviceProfileValue(config.audio_input_device_, 512);
-  config.use_system_proxy_ =
-      LegacyEnabled(environment, "MOCKTAIL_USE_SYSTEM_PROXY");
   config.network_proxy_ = ReadNetworkProxy(environment);
   if (const std::optional<std::string> ca_bundle =
           environment.Get("MOCKTAIL_CA_BUNDLE");
@@ -454,9 +452,7 @@ bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
       SetEnvironmentValue("MOCKTAIL_AUDIO_OUTPUT_DEVICE",
                           config.audio_output_device(), error) &&
       SetEnvironmentValue("MOCKTAIL_AUDIO_INPUT_DEVICE",
-                          config.audio_input_device(), error) &&
-      SetEnvironmentValue("MOCKTAIL_USE_SYSTEM_PROXY",
-                          config.use_system_proxy() ? "1" : "0", error);
+                          config.audio_input_device(), error);
   if (!base_exported) {
     return false;
   }

@@ -114,7 +114,6 @@ if(NOT TARGET nlohmann_json::nlohmann_json)
   find_package(nlohmann_json CONFIG REQUIRED)
 endif()
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 
 add_library(mocktail_legacy_jnivm STATIC
   src/jnivm/jnivm.cc
@@ -172,7 +171,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/session_log.cc
   src/runtime/startup_state_machine.cc
   src/runtime/support_bundle.cc
-  src/runtime/system_proxy.cc
   src/runtime/texture_memory_policy.cc
 )
 add_library(Mocktail::Runtime ALIAS mocktail_runtime)
@@ -204,7 +202,6 @@ target_link_libraries(mocktail_runtime PRIVATE
   OpenSSL::Crypto
   CURL::libcurl
   nlohmann_json::nlohmann_json
-  PkgConfig::GIO
   ${CMAKE_DL_LIBS}
 )
 

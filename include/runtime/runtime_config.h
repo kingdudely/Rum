@@ -99,7 +99,6 @@ class RuntimeConfig {
   const std::optional<std::filesystem::path>& ca_bundle() const {
     return ca_bundle_;
   }
-  bool use_system_proxy() const { return use_system_proxy_; }
   bool ca_bundle_valid() const { return ca_bundle_valid_; }
 
   // These legacy opt-ins create workers that do not own their VM/JNI state.
@@ -131,7 +130,6 @@ class RuntimeConfig {
   bool audio_output_device_valid_ = true;
   std::string audio_input_device_ = "default";
   bool audio_input_device_valid_ = true;
-  bool use_system_proxy_ = false;
   std::optional<NetworkProxyConfig> network_proxy_;
   std::optional<std::filesystem::path> ca_bundle_;
   bool ca_bundle_valid_ = true;
