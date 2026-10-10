@@ -35,6 +35,7 @@
 #include "runtime/process_launch_policy.h"
 #include "runtime/roblox_desktop_app_policy.h"
 #include "runtime/roblox_experience_launch_bridge.h"
+#include "runtime/roblox_launch_uri.h"
 #include "runtime/runtime_config_bootstrap.h"
 #include "runtime/runtime_config_file.h"
 #include "runtime/runtime_paths.h"
@@ -70,14 +71,6 @@ struct AndroidWindowBridgeContext {};
 
 using mocktail::platform::SecureErase;
 
-void SecureEraseArguments(std::vector<std::string>* arguments) {
-  if (arguments == nullptr) return;
-  for (std::string& argument : *arguments) {
-    SecureErase(argument.data(), argument.size());
-  }
-  arguments->clear();
-}
-
 bool QueueAndroidWindowFlags(void*, int flags, int mask) {
   return mocktail::window::RequestFullscreenFromAndroidWindowFlags(flags, mask);
 }
@@ -95,74 +88,6 @@ mocktail::Status ShutdownPlatformBridges(jnivm::VM* vm) {
   return !voice_status.ok() ? voice_status : playback_status;
 }
 
-void PromptFirstLaunchSignIn(
-    const ProcessEnvironment& environment, const RuntimePaths& paths,
-    mocktail::services::AuthService& auth_service,
-    const std::shared_ptr<mocktail::services::HttpClient>& http_client,
-    mocktail::runtime::AuthRuntimeComposition* composition) {
-  // Runs only when no usable session exists. A fresh install has no cookie
-  // file at all, which composes to kInvalidCredentials rather than kGuest, so
-  // gating on kGuest (as the WebKit flow used to) made this unreachable.
-  if (composition == nullptr ||
-      composition->status == mocktail::runtime::AuthRuntimeStatus::kAuthenticated ||
-      composition->status == mocktail::runtime::AuthRuntimeStatus::kGuest) {
-    return;
-  }
-  if (environment.Get("MOCKTAIL_SKIP_FIRST_LAUNCH_LOGIN") == "1") {
-    return;
-  }
-
-  std::cout << "\n======================================================\n"
-            << "  First-Time Setup: Roblox Sign-In\n"
-            << "======================================================\n"
-            << "  Open https://www.roblox.com/login in your browser, sign in,\n"
-            << "  then copy the .ROBLOSECURITY cookie value from your browser's\n"
-            << "  developer tools. Paste it below and press Enter to continue,\n"
-            << "  or just press Enter to play as guest.\n\n";
-  std::cout << "  .ROBLOSECURITY cookie: " << std::flush;
-  std::string cookie;
-  std::getline(std::cin, cookie);
-  // Strip surrounding quotes/whitespace and any ".ROBLOSECURITY=" prefix.
-  auto is_space = [](unsigned char c) { return c == ' ' || c == '\t' || c == '\r'; };
-  while (!cookie.empty() && is_space(cookie.front())) cookie.erase(cookie.begin());
-  while (!cookie.empty() && is_space(cookie.back())) cookie.pop_back();
-  constexpr std::string_view kPrefix = ".ROBLOSECURITY=";
-  if (cookie.compare(0, kPrefix.size(), kPrefix) == 0) {
-    cookie.erase(0, kPrefix.size());
-  }
-  if (cookie.empty()) {
-    // Guest mode only composes when the no-cookie LuaApp path is enabled, and
-    // that same switch is what the engine runtime enables for itself later.
-    // Turn it on now so the offer above is truthful instead of falling
-    // through to the preflight failure.
-    setenv("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP", "1", 1);
-    mocktail::runtime::AuthRuntimeComposition guest_comp =
-        mocktail::runtime::ComposeAuthRuntime(environment, paths,
-                                              auth_service, http_client);
-    if (guest_comp.status == mocktail::runtime::AuthRuntimeStatus::kGuest) {
-      *composition = std::move(guest_comp);
-      std::cout << "  [auth] continuing as guest\n";
-    } else {
-      std::cerr << "  [auth] guest session unavailable: " << guest_comp.error
-                << '\n';
-    }
-    return;
-  }
-  if (mocktail::runtime::PersistRobloxCookie(paths.cookie_file(), cookie)) {
-    mocktail::runtime::AuthRuntimeComposition new_comp =
-        mocktail::runtime::ComposeAuthRuntime(environment, paths,
-                                              auth_service, http_client);
-    if (new_comp.status ==
-        mocktail::runtime::AuthRuntimeStatus::kAuthenticated) {
-      *composition = std::move(new_comp);
-      std::cout << "  [auth] cookie saved; launching authenticated session\n";
-    } else {
-      std::cerr << "  [auth] cookie could not be verified; launching as guest\n";
-    }
-  } else {
-    std::cerr << "  [auth] could not save cookie; launching as guest\n";
-  }
-}
 
 void ConfigureHostDriverEnvironment() {
   auto set_if_unset = [](const char* name, const char* value) {
@@ -187,20 +112,34 @@ bool IsRunning(const CommandLineOptions& options) {
 }
 
 // ---------------------------------------------------------------------------
-// Step: resolve the website launch request carried on the command line.
+// Step: resolve the place launch carried on the command line into the request
+// the experience composition queues.
 // ---------------------------------------------------------------------------
 StepResult ResolveLaunchRequest(
     const CommandLineOptions& options,
     std::optional<RobloxExperienceLaunchRequest>* launch_request) {
-  if (options.launch_request_json.empty()) {
+  if (options.place_id != 0) {
+    launch_request->emplace();
+    const std::string document =
+        "{\"placeId\":" + std::to_string(options.place_id) + "}";
+    const mocktail::Status status =
+        mocktail::runtime::ParseRobloxExperienceLaunchJson(
+            document, &**launch_request);
+    if (!status.ok()) {
+      std::cerr << "[FATAL] Invalid --place-id launch request\n";
+      return StepResult::kExitFailure;
+    }
+    return StepResult::kContinue;
+  }
+  if (options.raw_launch_argument.empty()) {
     return StepResult::kContinue;
   }
   launch_request->emplace();
   const mocktail::Status status =
-      mocktail::runtime::ParseRobloxExperienceLaunchJson(
-          options.launch_request_json, &**launch_request);
+      mocktail::runtime::ParseRobloxLaunchUri(options.raw_launch_argument,
+                                              &**launch_request);
   if (!status.ok()) {
-    std::cerr << "[FATAL] Invalid controlled website launch request\n";
+    std::cerr << "[FATAL] Invalid Roblox launch URI\n";
     return StepResult::kExitFailure;
   }
   return StepResult::kContinue;
@@ -307,8 +246,7 @@ struct MemoryLimitPlan {
 
 MemoryLimitPlan PlanMemoryLimit(int argc, char* argv[],
                                 const CommandLineOptions& options,
-                                const RuntimeConfig& config,
-                                const std::vector<std::string>& reexec_arguments) {
+                                const RuntimeConfig& config) {
   MemoryLimitPlan plan;
   plan.enabled = IsRunning(options) && config.performance().memory_limit_enabled();
   if (!plan.enabled) {
@@ -316,7 +254,7 @@ MemoryLimitPlan PlanMemoryLimit(int argc, char* argv[],
   }
   plan.bytes = config.performance().memory_limit_bytes();
   plan.cgroup = mocktail::runtime::MaybeReexecWithCgroupMemoryLimit(
-      argc, argv, plan.bytes, &reexec_arguments);
+      argc, argv, plan.bytes);
   return plan;
 }
 
@@ -674,7 +612,7 @@ StepResult ApplyClientSettingsPolicy(const ProcessEnvironment& environment,
 StepResult BuildRuntimeDependencies(
     const ProcessEnvironment& environment, const RuntimePaths& paths,
     const CommandLineOptions& options, const RuntimeConfig& config,
-    const std::filesystem::path& app_storage_file, bool has_launch_request,
+    const std::filesystem::path& app_storage_file,
     std::string* error, mocktail::legacy::RuntimeDependencies* dependencies) {
   if (!IsRunning(options)) {
     return StepResult::kContinue;
@@ -682,15 +620,7 @@ StepResult BuildRuntimeDependencies(
   auto http_client = std::make_shared<mocktail::services::CurlHttpClient>();
   mocktail::services::AuthService auth_service(*http_client);
   mocktail::runtime::AuthRuntimeComposition composition =
-      mocktail::runtime::ComposeAuthRuntime(environment, paths, auth_service,
-                                            http_client);
-  // A website launch already carries its destination, so it must not be
-  // interrupted by an interactive sign-in prompt.
-  if (!has_launch_request &&
-      options.window_mode != mocktail::runtime::WindowMode::kHeadless) {
-    PromptFirstLaunchSignIn(environment, paths, auth_service, http_client,
-                            &composition);
-  }
+      mocktail::runtime::ComposeAuthRuntime(environment, auth_service);
   if (!composition) {
     std::cerr << "[FATAL] Typed Roblox authentication preflight failed: "
               << composition.error;
@@ -715,14 +645,6 @@ StepResult BuildRuntimeDependencies(
       std::string(device_profile.device_sku),
       std::string(device_profile.soc_model),
   });
-  if (composition.rejected_credential_retired) {
-    constexpr std::string_view kSignedOutMessage =
-        "Your saved Roblox session is no longer valid. Sign in again to "
-        "continue.";
-    std::cout << "  [auth] saved Roblox session expired; continuing with "
-                 "native sign-in\n";
-    (void)mocktail::runtime::ShowWarningDialog(environment, kSignedOutMessage);
-  }
   const bool authenticated =
       composition.status == mocktail::runtime::AuthRuntimeStatus::kAuthenticated;
   if (authenticated) {
@@ -870,15 +792,6 @@ int main(int argc, char* argv[]) {
   if (ResolveLaunchRequest(options, &launch_request) == StepResult::kExitFailure) {
     return EXIT_FAILURE;
   }
-
-  // Built before the command line is scrubbed, then erased: these arguments
-  // are the input to a possible cgroup re-exec and must not outlive it.
-  std::vector<std::string> cgroup_reexec_arguments;
-  if (!mocktail::runtime::BuildCommandLineReexecArguments(
-          options, argc, argv, &cgroup_reexec_arguments, &error)) {
-    std::cerr << "[FATAL] " << error << '\n';
-    return EXIT_FAILURE;
-  }
   mocktail::runtime::ScrubCommandLineLaunchArguments(&command_line.options, argc, argv);
 
   // Lifetime objects. Declared here so their destructors run in reverse order
@@ -898,8 +811,7 @@ int main(int argc, char* argv[]) {
   }
 
   const MemoryLimitPlan memory_plan =
-      PlanMemoryLimit(argc, argv, options, runtime_config.config,
-                      cgroup_reexec_arguments);
+      PlanMemoryLimit(argc, argv, options, runtime_config.config);
   ReportStartupSummary(environment, paths, options, runtime_config.config,
                        created_config_file, memory_plan, &session_log,
                        process_started_at, process_launch_diagnostics);
@@ -923,8 +835,6 @@ int main(int argc, char* argv[]) {
               << runtime_config.config.performance().memory_limit_mb
               << " MiB\n";
   }
-  SecureEraseArguments(&cgroup_reexec_arguments);
-
   std::filesystem::path app_storage_file;
   if (BindRuntimeStorage(environment, paths, options, runtime_config.config,
                          &app_storage_file, &error) ==
@@ -945,7 +855,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (BuildRuntimeDependencies(environment, paths, options, runtime_config.config,
-                               app_storage_file, launch_request.has_value(),
+                               app_storage_file,
                                &error, &dependencies) ==
       StepResult::kExitFailure) {
     return EXIT_FAILURE;

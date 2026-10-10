@@ -79,27 +79,20 @@ struct AuthRuntimeComposition {
   jnivm::RobloxAuthIdentity account_identity;
   SecureRobloxCredential credential;
   long http_status = 0;
-  bool rejected_credential_retired = false;
   std::string error;
 
   explicit operator bool() const { return jni_vm != nullptr; }
 };
 
-// A VM requires authentication or explicit guest mode. HTTP 401/403 clears
-// only Mocktail's managed credential.
+// A VM requires authentication or explicit guest mode. The credential comes
+// only from MOCKTAIL_ROBLOSECURITY and is never written to disk.
 AuthRuntimeComposition ComposeAuthRuntime(const Environment& environment,
-                                          const RuntimePaths& paths,
                                           services::AuthService& auth_service);
 
-// Retains HTTP transport for native sign-in and validates persisted credentials.
+// Retains HTTP transport for native sign-in and validates the credential.
 AuthRuntimeComposition ComposeAuthRuntime(
-    const Environment& environment, const RuntimePaths& paths,
-    services::AuthService& auth_service,
+    const Environment& environment, services::AuthService& auth_service,
     std::shared_ptr<services::HttpClient> live_auth_http_client);
-
-// Persists a raw or prefixed Roblox credential to the given cookie file atomically.
-bool PersistRobloxCookie(const std::filesystem::path& path,
-                         std::string_view cookie_value);
 
 }  // namespace runtime
 }  // namespace mocktail

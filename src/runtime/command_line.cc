@@ -1,5 +1,7 @@
 #include "runtime/command_line.h"
 
+#include <cerrno>
+#include <cstdint>
 #include <cstdlib>
 #include <sstream>
 #include <string>
@@ -38,6 +40,30 @@ bool SetEnvironment(const char* name, const std::string& value,
 }
 
 using platform::SecureErase;
+
+bool HaveLaunch(const CommandLineOptions& options) {
+  return options.place_id != 0 || !options.raw_launch_argument.empty() ||
+         !options.engine_launch_uri.empty();
+}
+
+// Accepts a bare cookie value or a ".ROBLOSECURITY=<value>" header the way
+// browsers show it. Anything else is rejected so a mistyped flag fails here
+// instead of surfacing as an anonymous session later.
+std::string NormalizeCookieValue(std::string value) {
+  const auto is_space = [](unsigned char c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+  };
+  while (!value.empty() && is_space(value.front())) value.erase(value.begin());
+  while (!value.empty() && is_space(value.back())) value.pop_back();
+  constexpr std::string_view kPrefix = ".ROBLOSECURITY=";
+  if (value.compare(0, kPrefix.size(), kPrefix) == 0) {
+    value.erase(0, kPrefix.size());
+  }
+  if (value.empty() || value.find_first_of(";\t\r\n ") != std::string::npos) {
+    return {};
+  }
+  return value;
+}
 
 }  // namespace
 
@@ -97,8 +123,44 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
                            &result.error)) {
         return result;
       }
+    } else if (argument == "--place-id") {
+      if (HaveLaunch(result.options)) {
+        result.error = "duplicate option: --place-id";
+        return result;
+      }
+      std::string value;
+      if (!ReadOptionValue(argc, argv, &index, argument, &value,
+                           &result.error)) {
+        return result;
+      }
+      errno = 0;
+      char* end = nullptr;
+      const long long place_id =
+          std::strtoll(value.c_str(), &end, 10);
+      if (errno == ERANGE || end == value.c_str() || *end != '\0' ||
+          place_id <= 0) {
+        result.error = "invalid --place-id: expected a positive place ID";
+        return result;
+      }
+      result.options.place_id = static_cast<int64_t>(place_id);
+    } else if (argument == "--roblosecurity") {
+      if (!result.options.roblosecurity.empty()) {
+        result.error = "duplicate option: --roblosecurity";
+        return result;
+      }
+      std::string value;
+      if (!ReadOptionValue(argc, argv, &index, argument, &value,
+                           &result.error)) {
+        return result;
+      }
+      result.options.roblosecurity = NormalizeCookieValue(value);
+      if (result.options.roblosecurity.empty()) {
+        result.error = "invalid --roblosecurity: expected a cookie value";
+        return result;
+      }
+      result.options.roblosecurity_argument_index = index;
     } else if (argument == "--launch-uri") {
-      if (!result.options.launch_request_json.empty()) {
+      if (HaveLaunch(result.options)) {
         result.error = "duplicate option: --launch-uri";
         return result;
       }
@@ -122,30 +184,9 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
         result.error = "invalid Roblox launch URI: " + launch_status.message();
         return result;
       }
-      result.options.launch_request_json = launch_request.canonical_json;
-      result.options.launch_argument_index = index;
-    } else if (argument == "--launch-request-json") {
-      if (!result.options.launch_request_json.empty()) {
-        result.error = "duplicate controlled launch request";
-        return result;
-      }
-      std::string document;
-      if (!ReadOptionValue(argc, argv, &index, argument, &document,
-                           &result.error)) {
-        return result;
-      }
-      RobloxExperienceLaunchRequest launch_request;
-      const Status launch_status =
-          ParseRobloxExperienceLaunchJson(document, &launch_request);
-      if (!launch_status.ok()) {
-        result.error = "invalid controlled launch request";
-        return result;
-      }
-      result.options.raw_launch_argument = std::move(document);
-      result.options.launch_request_json = launch_request.canonical_json;
       result.options.launch_argument_index = index;
     } else if (!argument.empty() && argument.front() != '-' &&
-               result.options.launch_request_json.empty()) {
+               !HaveLaunch(result.options)) {
       RobloxExperienceLaunchRequest launch_request;
       const Status launch_status =
           ParseRobloxLaunchUri(argument, &launch_request);
@@ -160,7 +201,6 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
         return result;
       }
       result.options.raw_launch_argument = argument;
-      result.options.launch_request_json = launch_request.canonical_json;
       result.options.launch_argument_index = index;
     } else {
       result.error = !argument.empty() && argument.front() != '-'
@@ -170,60 +210,6 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
     }
   }
   return result;
-}
-
-bool BuildCommandLineReexecArguments(const CommandLineOptions& options,
-                                     int argc, const char* const argv[],
-                                     std::vector<std::string>* arguments,
-                                     std::string* error) {
-  if (arguments == nullptr || argc < 0 || (argc > 0 && argv == nullptr)) {
-    if (error != nullptr) *error = "cannot prepare cgroup re-exec arguments";
-    return false;
-  }
-  arguments->clear();
-  arguments->reserve(static_cast<std::size_t>(argc) + 1);
-  // engine_launch_uri is deliberately left alone: it is a bearer value, so it
-  // must never be rewritten into a command line. A re-exec (currently
-  // disabled) drops it, which only costs a cold-start sign-in.
-  const bool replace_raw_launch = !options.raw_launch_argument.empty();
-  if (replace_raw_launch &&
-      (options.launch_request_json.empty() ||
-       options.launch_argument_index <= 0 ||
-       options.launch_argument_index >= argc ||
-       argv[options.launch_argument_index] == nullptr ||
-       options.raw_launch_argument != argv[options.launch_argument_index])) {
-    if (error != nullptr) *error = "cannot normalize cgroup launch request";
-    return false;
-  }
-  bool replaced = false;
-  for (int index = 1; index < argc; ++index) {
-    if (argv[index] == nullptr) {
-      arguments->clear();
-      if (error != nullptr) *error = "cannot prepare cgroup re-exec arguments";
-      return false;
-    }
-    if (replace_raw_launch && index + 1 == options.launch_argument_index &&
-        (std::string_view(argv[index]) == "--launch-uri" ||
-         std::string_view(argv[index]) == "--launch-request-json")) {
-      arguments->emplace_back("--launch-request-json");
-      arguments->push_back(options.launch_request_json);
-      ++index;
-      replaced = true;
-    } else if (replace_raw_launch && index == options.launch_argument_index) {
-      arguments->emplace_back("--launch-request-json");
-      arguments->push_back(options.launch_request_json);
-      replaced = true;
-    } else {
-      arguments->emplace_back(argv[index]);
-    }
-  }
-  if (replace_raw_launch && !replaced) {
-    arguments->clear();
-    if (error != nullptr) *error = "cannot normalize cgroup launch request";
-    return false;
-  }
-  if (error != nullptr) error->clear();
-  return true;
 }
 
 void ScrubEngineLaunchUri(CommandLineOptions* options) {
@@ -236,29 +222,31 @@ void ScrubEngineLaunchUri(CommandLineOptions* options) {
 void ScrubCommandLineLaunchArguments(CommandLineOptions* options, int argc,
                                      char* argv[]) {
   if (options == nullptr) return;
-  if (options->raw_launch_argument.empty() && options->engine_launch_uri.empty()) {
-    return;
+  // A web-login ticket moves out of raw_launch_argument into
+  // engine_launch_uri at parse time, but its argv slot is the same one.
+  const bool is_ticket = options->raw_launch_argument.empty() &&
+                         !options->engine_launch_uri.empty();
+  const std::string& launched =
+      is_ticket ? options->engine_launch_uri : options->raw_launch_argument;
+  if (!launched.empty() && options->launch_argument_index > 0 &&
+      options->launch_argument_index < argc && argv != nullptr &&
+      argv[options->launch_argument_index] != nullptr) {
+    SecureErase(argv[options->launch_argument_index], launched.size());
   }
-  const int argument_index = options->launch_argument_index;
-  const std::size_t length = options->raw_launch_argument.empty()
-                                 ? options->engine_launch_uri.size()
-                                 : options->raw_launch_argument.size();
-  if (argv != nullptr && argument_index > 0 && argument_index < argc &&
-      argv[argument_index] != nullptr) {
-    SecureErase(argv[argument_index], length);
-  }
-  if (options->raw_launch_argument.empty()) {
-    // A web-login ticket: argv is erased now, but the copy the engine consumes
-    // survives until ScrubEngineLaunchUri runs after native startup.
-    return;
+  if (!options->roblosecurity.empty() &&
+      options->roblosecurity_argument_index > 0 &&
+      options->roblosecurity_argument_index < argc && argv != nullptr &&
+      argv[options->roblosecurity_argument_index] != nullptr) {
+    SecureErase(argv[options->roblosecurity_argument_index],
+                options->roblosecurity.size());
   }
   SecureErase(options->raw_launch_argument.data(),
               options->raw_launch_argument.size());
   options->raw_launch_argument.clear();
-  SecureErase(options->launch_request_json.data(),
-              options->launch_request_json.size());
-  options->launch_request_json.clear();
   options->launch_argument_index = -1;
+  SecureErase(options->roblosecurity.data(), options->roblosecurity.size());
+  options->roblosecurity.clear();
+  options->roblosecurity_argument_index = -1;
 }
 
 bool ApplyCommandLineEnvironment(const CommandLineOptions& options,
@@ -269,6 +257,11 @@ bool ApplyCommandLineEnvironment(const CommandLineOptions& options,
   }
   if (!options.graphics_backend.empty() &&
       !SetEnvironment("MOCKTAIL_GRAPHICS_BACKEND", options.graphics_backend,
+                      error)) {
+    return false;
+  }
+  if (!options.roblosecurity.empty() &&
+      !SetEnvironment("MOCKTAIL_ROBLOSECURITY", options.roblosecurity,
                       error)) {
     return false;
   }
@@ -299,13 +292,15 @@ std::string CommandLineUsage(const std::string& program_name) {
       << "  --windowed             Force windowed startup (default)\n"
       << "  --graphics <backend>   direct-vulkan | opengl | system | "
          "angle-vulkan (default: direct-vulkan)\n"
-      << "  --launch-uri <uri>     A roblox:// website link: placeId=... to join,\n"
-         "                           or single-sign-on/login?auth=... to sign in\n"
+      << "  --launch-uri <uri>     A roblox:// link: placeId=... to join.\n"
+      << "  --place-id <id>        Join a place without a roblox:// link.\n"
+      << "  --roblosecurity <v>    Sign in with a .ROBLOSECURITY value.\n"
+      << "                           Never written to disk; erased from the\n"
+      << "                           command line once startup consumes it.\n"
       << "  --help, -h             Show this help\n\n"
       << "Auth:\n"
-      << "  With no saved session, paste your .ROBLOSECURITY cookie at the\n"
-      << "  first-run prompt (get it from your browser after signing in to\n"
-      << "  roblox.com), or play as guest. New credentials are stored privately.\n\n"
+      << "  Pass --roblosecurity (or set MOCKTAIL_ROBLOSECURITY) to play as\n"
+      << "  yourself. Without it, Roblox starts as a guest.\n\n"
       << "Additional runtime options are available as MOCKTAIL_* environment variables.\n";
   return usage.str();
 }

@@ -14,10 +14,10 @@ struct ResolvedFollowUserPlace {
   std::string game_instance_id;  // Roblox's "gameId" for the running session.
 };
 
-// Reads the session cookie mocktail already persists at
-// ~/.local/share/mocktail/auth/roblox.cookie (or $XDG_DATA_HOME
-// equivalent). Returns an empty string if no session is stored.
-std::string ReadStoredRoblosecurityCookie();
+// Reads the session cookie from MOCKTAIL_ROBLOSECURITY (or the
+// --roblosecurity flag that sets it). Returns an empty string when no
+// session was passed.
+std::string ReadRoblosecurityCookie();
 
 // Calls Roblox's presence API to find what place/instance a user is
 // currently in. `auth_cookie` is the runtime's already-authenticated

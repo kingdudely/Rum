@@ -66,10 +66,6 @@ RuntimePaths RuntimePaths::FromEnvironment(const Environment& environment) {
       environment.HasNonEmpty("MOCKTAIL_STATE_ROOT")
           ? std::filesystem::path(environment.GetOr("MOCKTAIL_STATE_ROOT", ""))
           : xdg_state_home / "mocktail";
-  paths.auth_root_ =
-      environment.HasNonEmpty("MOCKTAIL_AUTH_ROOT")
-          ? std::filesystem::path(environment.GetOr("MOCKTAIL_AUTH_ROOT", ""))
-          : paths.data_root_ / "auth";
   paths.logs_root_ = paths.state_root_ / "logs";
   paths.android_runtime_root_ = paths.data_root_ / "android";
   paths.android_cache_root_ = paths.cache_root_ / "android";
@@ -78,7 +74,6 @@ RuntimePaths RuntimePaths::FromEnvironment(const Environment& environment) {
   paths.config_file_ = paths.config_root_ / "config.yaml";
   paths.active_payload_manifest_ = paths.data_root_ / "current.json";
 
-  paths.cookie_file_ = paths.auth_root_ / "roblox.cookie";
   return paths;
 }
 

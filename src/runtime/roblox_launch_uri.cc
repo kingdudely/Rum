@@ -568,7 +568,7 @@ Status MakeRequest(const LaunchFields& fields_in,
   if (fields.place_id <= 0 && is_follow_user) {
     ResolvedFollowUserPlace resolved;
     const Status resolve_status = ResolveFollowUserPlace(
-        fields.user_id, ReadStoredRoblosecurityCookie(), &resolved);
+        fields.user_id, ReadRoblosecurityCookie(), &resolved);
     if (!resolve_status.ok()) {
       return resolve_status;
     }

@@ -18,7 +18,6 @@ class RuntimePaths {
   const std::filesystem::path& config_root() const { return config_root_; }
   const std::filesystem::path& data_root() const { return data_root_; }
   const std::filesystem::path& state_root() const { return state_root_; }
-  const std::filesystem::path& auth_root() const { return auth_root_; }
   const std::filesystem::path& logs_root() const { return logs_root_; }
   const std::filesystem::path& android_runtime_root() const {
     return android_runtime_root_;
@@ -33,7 +32,6 @@ class RuntimePaths {
   const std::filesystem::path& active_payload_manifest() const {
     return active_payload_manifest_;
   }
-  const std::filesystem::path& cookie_file() const { return cookie_file_; }
 
   std::filesystem::path DefaultAssetPath() const;
 
@@ -46,14 +44,12 @@ class RuntimePaths {
   std::filesystem::path config_root_;
   std::filesystem::path data_root_;
   std::filesystem::path state_root_;
-  std::filesystem::path auth_root_;
   std::filesystem::path logs_root_;
   std::filesystem::path android_runtime_root_;
   std::filesystem::path android_cache_root_;
   std::filesystem::path vulkan_shader_cache_file_;
   std::filesystem::path config_file_;
   std::filesystem::path active_payload_manifest_;
-  std::filesystem::path cookie_file_;
 };
 
 // Publishes the XDG-backed host paths consumed by the transitional Bionic

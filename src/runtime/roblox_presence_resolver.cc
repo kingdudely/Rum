@@ -3,7 +3,6 @@
 #include <curl/curl.h>
 
 #include <cstdlib>
-#include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <string_view>
@@ -23,39 +22,17 @@ size_t WriteToString(char* data, size_t size, size_t nmemb, void* userdata) {
 
 }  // namespace
 
-// Reads mocktail's own persisted session cookie from
-// $XDG_DATA_HOME/mocktail/auth/roblox.cookie (default
-// ~/.local/share/mocktail/auth/roblox.cookie), matching the format
-// mocktail's own auth code already writes there: a single line of the
-// form ".ROBLOSECURITY=<value>". Strips the prefix so callers get just
-// the bare value. Returns an empty string if no session is stored yet.
-std::string ReadStoredRoblosecurityCookie() {
-  const char* home = std::getenv("HOME");
-  if (home == nullptr || home[0] == '\0') {
-    return std::string();
-  }
-  const char* xdg_data_home = std::getenv("XDG_DATA_HOME");
-  const std::string base =
-      (xdg_data_home != nullptr && xdg_data_home[0] != '\0')
-          ? std::string(xdg_data_home)
-          : std::string(home) + "/.local/share";
-  const std::string path = base + "/mocktail/auth/roblox.cookie";
-
-  std::ifstream file(path);
-  if (!file.is_open()) {
-    return std::string();
-  }
-  std::string line;
-  std::getline(file, line);
-  while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
-    line.pop_back();
-  }
+// Reads the session cookie from MOCKTAIL_ROBLOSECURITY (or the
+// --roblosecurity flag that sets it). Returns an empty string when no
+// session was passed on this launch.
+std::string ReadRoblosecurityCookie() {
+  const char* cookie = std::getenv("MOCKTAIL_ROBLOSECURITY");
+  std::string value = cookie != nullptr ? std::string(cookie) : std::string();
   constexpr std::string_view kPrefix = ".ROBLOSECURITY=";
-  if (line.size() > kPrefix.size() &&
-      line.compare(0, kPrefix.size(), kPrefix) == 0) {
-    return line.substr(kPrefix.size());
+  if (value.compare(0, kPrefix.size(), kPrefix) == 0) {
+    value.erase(0, kPrefix.size());
   }
-  return line;
+  return value;
 }
 
 Status ResolveFollowUserPlace(int64_t user_id, const std::string& auth_cookie,

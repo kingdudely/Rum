@@ -617,35 +617,6 @@ std::string TrimString(const std::string& value) {
   return value.substr(begin, end - begin);
 }
 
-std::string ReadTextFile(const std::string& path) {
-  if (path.empty()) {
-    return {};
-  }
-  std::ifstream file(path);
-  if (!file) {
-    return {};
-  }
-  std::string content;
-  std::string line;
-  while (std::getline(file, line)) {
-    if (!content.empty()) {
-      content.push_back('\n');
-    }
-    content += line;
-  }
-  return content;
-}
-
-std::string HomePath(const char* suffix) {
-  const char* home = std::getenv("HOME");
-  if (!home || home[0] == '\0') {
-    return {};
-  }
-  std::string path = home;
-  path += suffix ? suffix : "";
-  return path;
-}
-
 std::string CookieValueAfterEquals(const std::string& text,
                                    std::size_t name_pos) {
   std::size_t equals = text.find('=', name_pos);
@@ -715,14 +686,6 @@ void ClearLegacyCookieStore() {
   g_cookie_store_loaded = false;
 }
 
-std::string MocktailConfigRoot() {
-  const char* root = std::getenv("MOCKTAIL_CONFIG_ROOT");
-  if (root && root[0] != '\0') {
-    return root;
-  }
-  return HomePath("/.config/mocktail");
-}
-
 void EnsureCookieStoreLoadedLocked() {
   if (g_cookie_store_loaded) {
     return;
@@ -731,16 +694,6 @@ void EnsureCookieStoreLoadedLocked() {
 
   const char* env_cookie = std::getenv("MOCKTAIL_ROBLOX_COOKIES");
   g_cookie_header = NormalizeCookieHeader(env_cookie ? env_cookie : "");
-  if (g_cookie_header.empty()) {
-    const char* cookie_file = std::getenv("MOCKTAIL_COOKIE_FILE");
-    if (cookie_file && cookie_file[0] != '\0') {
-      g_cookie_header = NormalizeCookieHeader(ReadTextFile(cookie_file));
-    }
-  }
-  if (g_cookie_header.empty()) {
-    g_cookie_header =
-        NormalizeCookieHeader(ReadTextFile(MocktailConfigRoot() + "/cookie"));
-  }
   if (TraceEnabled()) {
     std::cout << "  [JNI] cookie store loaded bytes="
               << g_cookie_header.size() << '\n';
