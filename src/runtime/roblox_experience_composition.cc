@@ -12,7 +12,6 @@
 #include "jnivm/jnivm.h"
 #include "mocktail/platform/posix_primitives.h"
 #include "runtime/auth_runtime_composition.h"
-#include "runtime/external_launch_broker.h"
 #include "window/window.h"
 
 namespace mocktail {
@@ -428,7 +427,7 @@ Status RobloxExperienceComposition::OnLuaAppReady(
                      ? std::getenv("MOCKTAIL_RESOLVED_THEME_INTERNAL")
                      : "Dark");
   }
-  return status.ok() ? DrainExternalLaunchRequests() : status;
+  return status;
 }
 
 Status RobloxExperienceComposition::DispatchLaunch(
@@ -640,23 +639,6 @@ Status RobloxExperienceComposition::Dispatch(
   return Status::Ok();
 }
 
-Status RobloxExperienceComposition::DrainExternalLaunchRequests() {
-  std::size_t available = 0;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!subscribed_ || controller_ == nullptr || objects_ == nullptr) {
-      return FailedPrecondition("experience composition is not subscribed");
-    }
-    available = kMaxPendingLaunchRequests - pending_launch_requests_.size();
-  }
-  Status status = DrainActiveExternalLaunchRequests(
-      ExternalLaunchSink{this, &RobloxExperienceComposition::DispatchLaunch},
-      available);
-  // A MessageBus race can fill the queue; leave the request at the broker's
-  // front and retry on the next drain.
-  return status.code() == StatusCode::kUnavailable ? Status::Ok() : status;
-}
-
 void RobloxExperienceComposition::NotifyLuaAppDidReturn() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (subscribed_)
@@ -724,10 +706,6 @@ Status RobloxExperienceComposition::DrainLaunchRequests() {
     }
     NotifyPresence(RobloxExperiencePresencePhase::kBrowsing, nullptr);
   }
-
-  Status external_launch_status = DrainExternalLaunchRequests();
-  if (!external_launch_status.ok())
-    return external_launch_status;
 
   bool switch_active_game = false;
   std::optional<RobloxExperienceLaunchRequest> joining_request;

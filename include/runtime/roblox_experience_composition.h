@@ -140,6 +140,10 @@ class RobloxExperienceComposition final {
 
   bool subscribed() const;
   GameSessionSnapshot Snapshot() const;
+  // Enqueues a launch request from the command line. The deleted launch
+  // broker used to own this; now the first request travels with the process
+  // and Run dispatches it once the composition subscribes.
+  Status Dispatch(const RobloxExperienceLaunchRequest& request);
 
  private:
   struct GlobalObjects;
@@ -148,10 +152,8 @@ class RobloxExperienceComposition final {
 
   static Status DispatchLaunch(void* context,
                                const RobloxExperienceLaunchRequest& request);
-  Status DrainExternalLaunchRequests();
   static void GamePresented(void* context, uint64_t frame_serial);
   static void* RunLaunchWorker(void* context);
-  Status Dispatch(const RobloxExperienceLaunchRequest& request);
   Status PromoteAuthenticatedSession();
   static void NotifyLateLuaAppDidReturn(void* context);
   Status RefreshLateSurface();

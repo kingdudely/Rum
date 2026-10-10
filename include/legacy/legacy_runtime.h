@@ -2,11 +2,13 @@
 #define MOCKTAIL_LEGACY_LEGACY_RUNTIME_H_
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "mocktail/status.h"
 #include "runtime/auth_runtime_composition.h"
 #include "runtime/command_line.h"
+#include "runtime/roblox_experience_launch_bridge.h"
 
 namespace jnivm {
 class VM;
@@ -38,6 +40,7 @@ class RuntimeDependencies final {
       : jni_vm_(std::move(other.jni_vm_)),
         account_identity_(std::move(other.account_identity_)),
         roblox_credential_(std::move(other.roblox_credential_)),
+        initial_launch_request_(std::move(other.initial_launch_request_)),
         shutdown_before_platform_(
             std::exchange(other.shutdown_before_platform_, nullptr)) {}
   RuntimeDependencies& operator=(RuntimeDependencies&& other) noexcept {
@@ -50,6 +53,7 @@ class RuntimeDependencies final {
     jni_vm_ = std::move(other.jni_vm_);
     account_identity_ = std::move(other.account_identity_);
     roblox_credential_ = std::move(other.roblox_credential_);
+    initial_launch_request_ = std::move(other.initial_launch_request_);
     shutdown_before_platform_ =
         std::exchange(other.shutdown_before_platform_, nullptr);
     return *this;
@@ -61,6 +65,17 @@ class RuntimeDependencies final {
   }
   const runtime::SecureRobloxCredential& roblox_credential() const {
     return roblox_credential_;
+  }
+  // The command-line place launch, if any. Carried here instead of over the
+  // deleted launch broker, and dispatched once the experience composition
+  // subscribes.
+  void set_initial_launch_request(
+      runtime::RobloxExperienceLaunchRequest request) {
+    initial_launch_request_ = std::move(request);
+  }
+  const std::optional<runtime::RobloxExperienceLaunchRequest>&
+  initial_launch_request() const {
+    return initial_launch_request_;
   }
   // Transitional teardown boundary. Runtime-owned subsystems release
   // SDL resources here after guest workers stop and before window shutdown.
@@ -74,6 +89,7 @@ class RuntimeDependencies final {
   std::shared_ptr<jnivm::VM> jni_vm_;
   jnivm::RobloxAuthIdentity account_identity_;
   runtime::SecureRobloxCredential roblox_credential_;
+  std::optional<runtime::RobloxExperienceLaunchRequest> initial_launch_request_;
   ShutdownBeforePlatformCallback shutdown_before_platform_ = nullptr;
 };
 

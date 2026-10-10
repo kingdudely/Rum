@@ -25,7 +25,6 @@
 #include "runtime/command_line.h"
 #include "runtime/crash_report_policy.h"
 #include "runtime/environment.h"
-#include "runtime/external_launch_broker.h"
 #include "runtime/failure_dialog.h"
 #include "runtime/game_mode.h"
 #include "runtime/graphics_launch_policy.h"
@@ -40,7 +39,6 @@
 #include "runtime/runtime_config_file.h"
 #include "runtime/runtime_paths.h"
 #include "runtime/session_log.h"
-#include "runtime/single_instance_lock.h"
 #include "runtime/support_bundle.h"
 #include "runtime/system_proxy.h"
 #include "services/auth_service.h"
@@ -69,28 +67,6 @@ enum class StepResult {
 };
 
 struct AndroidWindowBridgeContext {};
-
-class ExternalLaunchBrokerScope final {
- public:
-  ~ExternalLaunchBrokerScope() { (void)Shutdown(); }
-
-  std::shared_ptr<mocktail::runtime::ExternalLaunchBroker>& broker() {
-    return broker_;
-  }
-
-  mocktail::Status Shutdown() {
-    if (broker_ == nullptr) {
-      return mocktail::Status::Ok();
-    }
-    mocktail::runtime::ClearActiveExternalLaunchBroker(broker_.get());
-    mocktail::Status status = broker_->Shutdown();
-    broker_.reset();
-    return status;
-  }
-
- private:
-  std::shared_ptr<mocktail::runtime::ExternalLaunchBroker> broker_;
-};
 
 using mocktail::platform::SecureErase;
 
@@ -228,55 +204,6 @@ StepResult ResolveLaunchRequest(
     return StepResult::kExitFailure;
   }
   return StepResult::kContinue;
-}
-
-// ---------------------------------------------------------------------------
-// Step: take ownership of the launch, or hand it to the instance that already
-// owns it. A website join aimed at a live client is forwarded over the broker
-// socket and this process exits successfully without starting the engine.
-// ---------------------------------------------------------------------------
-StepResult AcquireLaunchOwnership(
-    const ProcessEnvironment& environment, const RuntimePaths& paths,
-    const CommandLineOptions& options,
-    const std::optional<RobloxExperienceLaunchRequest>& launch_request,
-    bool isolated_canary,
-    const mocktail::runtime::ExternalLaunchBrokerOptions& broker_options,
-    std::optional<mocktail::runtime::SingleInstanceLock>* instance_lock,
-    mocktail::runtime::FailureSupportBundleGuard* support_bundle_guard) {
-  if (!IsRunning(options)) {
-    return StepResult::kContinue;
-  }
-  instance_lock->emplace(
-      mocktail::runtime::SingleInstanceLock::AcquireForLaunch(environment, paths));
-  if ((*instance_lock)->acquired()) {
-    return StepResult::kContinue;
-  }
-  if (!isolated_canary && (*instance_lock)->already_running() &&
-      launch_request.has_value()) {
-    const mocktail::Status forward_status =
-        mocktail::runtime::ExternalLaunchBroker::ForwardToOwner(
-            broker_options, *launch_request);
-    if (forward_status.ok()) {
-      std::cout << "  [launch] sent website join to the running client\n";
-      support_bundle_guard->SetExitCode(EXIT_SUCCESS);
-      return StepResult::kExitSuccess;
-    }
-    std::cerr << "[FATAL] Cannot send website join to running client: "
-              << forward_status.message() << '\n';
-    (void)mocktail::runtime::ShowFailureDialog(
-        environment,
-        "Roblox is already running, but the requested experience could not be "
-        "sent to it.");
-  } else if ((*instance_lock)->already_running()) {
-    std::cerr << "[FATAL] Roblox is already running for this user\n";
-    (void)mocktail::runtime::ShowFailureDialog(
-        environment, "An instance of Roblox is already running.");
-  } else {
-    std::cerr << "[FATAL] " << (*instance_lock)->error() << '\n';
-    (void)mocktail::runtime::ShowFailureDialog(
-        environment, "Roblox could not acquire its launch lock.");
-  }
-  return StepResult::kExitFailure;
 }
 
 // ---------------------------------------------------------------------------
@@ -871,35 +798,6 @@ StepResult BuildRuntimeDependencies(
 }
 
 // ---------------------------------------------------------------------------
-// Step: start listening for website launches aimed at this instance. This runs
-// only after preflight and bridge setup, so an ACK can never precede a known
-// startup failure. Isolated canaries expose no endpoint.
-// ---------------------------------------------------------------------------
-StepResult StartLaunchBroker(const CommandLineOptions& options, bool isolated_canary,
-                             std::optional<RobloxExperienceLaunchRequest>* launch_request,
-                             ExternalLaunchBrokerScope* broker) {
-  if (!IsRunning(options) || isolated_canary) {
-    return StepResult::kContinue;
-  }
-  mocktail::runtime::ExternalLaunchBrokerOptions broker_options;
-  mocktail::Status status =
-      mocktail::runtime::ExternalLaunchBroker::StartOwnerAfterLockAcquired(
-          broker_options, &broker->broker(),
-          launch_request->has_value() ? &**launch_request : nullptr);
-  if (status.ok()) {
-    launch_request->reset();
-    status = mocktail::runtime::InstallActiveExternalLaunchBroker(
-        broker->broker());
-  }
-  if (!status.ok()) {
-    std::cerr << "[FATAL] Cannot activate website launch bridge: "
-              << status.message() << '\n';
-    return StepResult::kExitFailure;
-  }
-  return StepResult::kContinue;
-}
-
-// ---------------------------------------------------------------------------
 // Step: tear the pipeline down in reverse ownership order and pick the process
 // exit status.
 // ---------------------------------------------------------------------------
@@ -907,14 +805,7 @@ int FinishRuntime(const CommandLineOptions& options, int runtime_status,
                   mocktail::runtime::FailureDialogMonitor* failure_dialog,
                   mocktail::runtime::FailureSupportBundleGuard* support_bundle_guard,
                   mocktail::runtime::MemoryLimitWatchdog* memory_limit_watchdog,
-                  mocktail::runtime::GameModeSession* game_mode_session,
-                  ExternalLaunchBrokerScope* broker) {
-  const mocktail::Status broker_shutdown_status = broker->Shutdown();
-  if (!broker_shutdown_status.ok()) {
-    std::cerr << "  [launch] website bridge shutdown failed: "
-              << broker_shutdown_status.message() << '\n';
-    runtime_status = EXIT_FAILURE;
-  }
+                  mocktail::runtime::GameModeSession* game_mode_session) {
   if (runtime_status != EXIT_SUCCESS) {
     failure_dialog->SetMessage("Roblox stopped with error code " +
                                std::to_string(runtime_status) + ".");
@@ -974,15 +865,9 @@ int main(int argc, char* argv[]) {
 
   const ProcessEnvironment environment;
   const RuntimePaths paths = RuntimePaths::FromEnvironment(environment);
-  const bool isolated_canary = environment.GetOr("MOCKTAIL_ISOLATED_CANARY", "0") == "1";
 
   std::optional<RobloxExperienceLaunchRequest> launch_request;
   if (ResolveLaunchRequest(options, &launch_request) == StepResult::kExitFailure) {
-    return EXIT_FAILURE;
-  }
-  if (isolated_canary && launch_request.has_value()) {
-    std::cerr << "[FATAL] Website launches are unavailable inside isolated "
-                 "canary\n";
     return EXIT_FAILURE;
   }
 
@@ -1001,20 +886,9 @@ int main(int argc, char* argv[]) {
   mocktail::runtime::SessionLog session_log;
   mocktail::runtime::FailureSupportBundleGuard support_bundle_guard(
       environment, paths, IsRunning(options));
-  std::optional<mocktail::runtime::SingleInstanceLock> instance_lock;
-  ExternalLaunchBrokerScope launch_broker;
   mocktail::runtime::FailureDialogMonitor failure_dialog;
   mocktail::runtime::MemoryLimitWatchdog memory_limit_watchdog;
   mocktail::legacy::RuntimeDependencies dependencies;
-
-  const mocktail::runtime::ExternalLaunchBrokerOptions broker_options;
-  const StepResult ownership =
-      AcquireLaunchOwnership(environment, paths, options, launch_request,
-                             isolated_canary, broker_options, &instance_lock,
-                             &support_bundle_guard);
-  if (ownership != StepResult::kContinue) {
-    return ownership == StepResult::kExitSuccess ? EXIT_SUCCESS : EXIT_FAILURE;
-  }
 
   RuntimeConfigLoadResult runtime_config;
   bool created_config_file = false;
@@ -1076,9 +950,9 @@ int main(int argc, char* argv[]) {
       StepResult::kExitFailure) {
     return EXIT_FAILURE;
   }
-  if (StartLaunchBroker(options, isolated_canary, &launch_request, &launch_broker) ==
-      StepResult::kExitFailure) {
-    return EXIT_FAILURE;
+  if (launch_request.has_value()) {
+    dependencies.set_initial_launch_request(std::move(*launch_request));
+    launch_request.reset();
   }
 
   failure_dialog.SetMessage(
@@ -1100,5 +974,5 @@ int main(int argc, char* argv[]) {
   }
   return FinishRuntime(options, runtime_status, &failure_dialog,
                        &support_bundle_guard, &memory_limit_watchdog,
-                       &game_mode_session, &launch_broker);
+                       &game_mode_session);
 }

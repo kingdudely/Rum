@@ -6354,6 +6354,17 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                   << experience_status.message() << '\n';
         return EXIT_FAILURE;
       }
+      if (dependencies.initial_launch_request().has_value()) {
+        const mocktail::Status initial_launch_status =
+            experience_composition->Dispatch(
+                *dependencies.initial_launch_request());
+        if (!initial_launch_status.ok()) {
+          std::cerr << "[FATAL] Could not queue the requested experience "
+                       "launch: "
+                    << initial_launch_status.message() << '\n';
+          return EXIT_FAILURE;
+        }
+      }
       experience_lifecycle_target = std::make_shared<ExperienceLifecycleTarget>(
           ExperienceLifecycleTarget{experience_composition});
       jni_vm->SetRobloxExperienceLifecycleCallbacks(
@@ -6362,6 +6373,11 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       std::cout << "  [experience] subscribed to dynamic launch requests\n"
                 << std::flush;
     } else if (experience_composition != nullptr) {
+      if (dependencies.initial_launch_request().has_value()) {
+        std::cerr << "[FATAL] A place launch needs a signed-in session, but "
+                     "this run is anonymous\n";
+        return EXIT_FAILURE;
+      }
       std::cout << "  [experience] dynamic launch subscription awaits an "
                    "authenticated identity\n"
                 << std::flush;

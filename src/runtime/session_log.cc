@@ -550,8 +550,7 @@ SessionLog SessionLog::Start(const Environment& environment,
                              std::chrono::system_clock::time_point started_at) {
   SessionLog result;
   result.started_at_ = started_at;
-  if (Enabled(environment, "MOCKTAIL_DISABLE_SESSION_LOG") ||
-      Enabled(environment, "MOCKTAIL_ISOLATED_CANARY")) {
+  if (Enabled(environment, "MOCKTAIL_DISABLE_SESSION_LOG")) {
     return result;
   }
   result.attempted_ = true;
