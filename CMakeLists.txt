@@ -114,9 +114,6 @@ if(NOT TARGET nlohmann_json::nlohmann_json)
   find_package(nlohmann_json CONFIG REQUIRED)
 endif()
 find_package(PkgConfig REQUIRED)
-if(NOT TARGET PkgConfig::LIBYAML)
-  pkg_check_modules(LIBYAML REQUIRED IMPORTED_TARGET yaml-0.1)
-endif()
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 
 add_library(mocktail_legacy_jnivm STATIC
@@ -171,8 +168,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/process_launch_policy.cc
   src/runtime/process_diagnostics.cc
   src/runtime/runtime_config.cc
-  src/runtime/runtime_config_bootstrap.cc
-  src/runtime/runtime_config_file.cc
   src/runtime/runtime_paths.cc
   src/runtime/session_log.cc
   src/runtime/startup_state_machine.cc
@@ -210,7 +205,6 @@ target_link_libraries(mocktail_runtime PRIVATE
   CURL::libcurl
   nlohmann_json::nlohmann_json
   PkgConfig::GIO
-  PkgConfig::LIBYAML
   ${CMAKE_DL_LIBS}
 )
 

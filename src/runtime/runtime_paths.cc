@@ -71,7 +71,6 @@ RuntimePaths RuntimePaths::FromEnvironment(const Environment& environment) {
   paths.android_cache_root_ = paths.cache_root_ / "android";
   paths.vulkan_shader_cache_file_ =
       paths.cache_root_ / "graphics/shadercachevk.bin";
-  paths.config_file_ = paths.config_root_ / "config.yaml";
   paths.active_payload_manifest_ = paths.data_root_ / "current.json";
 
   return paths;

@@ -305,5 +305,240 @@ GraphicsBackend RuntimeConfig::ParseGraphicsBackend(std::string_view name) {
   return GraphicsBackend::kUnknown;
 }
 
+namespace {
+
+std::string FrameRateValue(const FrameRatePolicy& policy) {
+  if (policy.mode == FrameRateLimitMode::kUnmanaged) {
+    return "-1";
+  }
+  if (policy.mode == FrameRateLimitMode::kUnlimited) {
+    return "unlimited";
+  }
+  if (policy.mode == FrameRateLimitMode::kFixed) {
+    return std::to_string(policy.fixed_fps);
+  }
+  return "display";
+}
+
+bool SetEnvironmentValue(const char* name, const std::string& value,
+                         std::string* error) {
+  if (setenv(name, value.c_str(), 1) == 0) {
+    return true;
+  }
+  if (error != nullptr) {
+    *error = std::string("cannot export resolved runtime setting: ") + name;
+  }
+  return false;
+}
+
+bool UnsetEnvironmentValue(const char* name, std::string* error) {
+  if (unsetenv(name) == 0) {
+    return true;
+  }
+  if (error != nullptr) {
+    *error = std::string("cannot clear resolved runtime setting: ") + name;
+  }
+  return false;
+}
+
+}  // namespace
+
+bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
+                                    std::string* error) {
+  if (!config.device_profile_valid()) {
+    if (error != nullptr) {
+      *error = "cannot export an invalid device profile";
+    }
+    return false;
+  }
+  if (!config.audio_output_device_valid()) {
+    if (error != nullptr) {
+      *error = "cannot export an invalid audio output device";
+    }
+    return false;
+  }
+  if (!config.audio_input_device_valid()) {
+    if (error != nullptr) {
+      *error = "cannot export an invalid audio input device";
+    }
+    return false;
+  }
+  if (!config.performance().memory_limit_valid) {
+    if (error != nullptr) {
+      *error = "cannot export an invalid memory-limit policy";
+    }
+    return false;
+  }
+  if (!config.performance().game_mode_valid) {
+    if (error != nullptr) {
+      *error = "cannot export an invalid GameMode policy";
+    }
+    return false;
+  }
+  if (!config.performance().physics_worker_mode_valid) {
+    if (error != nullptr) {
+      *error = "cannot export an invalid physics worker policy";
+    }
+    return false;
+  }
+  if (!config.ca_bundle_valid()) {
+    if (error != nullptr) {
+      *error = "cannot export an invalid CA bundle path";
+    }
+    return false;
+  }
+  const DeviceProfile& device = config.device_profile();
+  const bool base_exported =
+      SetEnvironmentValue("MOCKTAIL_HEADLESS", config.headless() ? "1" : "0",
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_PROFILE", std::string(device.name),
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_CLASS",
+                          std::string(DeviceClassName(device.device_class)),
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_PLATFORM_NAME",
+                          std::string(device.platform_name), error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_NAME",
+                          std::string(device.display_name), error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_MANUFACTURER",
+                          std::string(device.manufacturer), error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_MODEL", std::string(device.model),
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_BRAND", std::string(device.brand),
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_CODE",
+                          std::string(device.device_code), error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_SKU", std::string(device.device_sku),
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_DEVICE_SOC_MODEL",
+                          std::string(device.soc_model), error) &&
+      SetEnvironmentValue("ROBLOX_LIB_PATH",
+                          config.roblox_library_path().string(), error) &&
+      SetEnvironmentValue("MOCKTAIL_GRAPHICS_BACKEND",
+                          config.graphics_backend_name(), error) &&
+      SetEnvironmentValue("MOCKTAIL_THEME", config.theme_mode(), error) &&
+      SetEnvironmentValue("MOCKTAIL_WIN_WIDTH",
+                          std::to_string(config.window().width), error) &&
+      SetEnvironmentValue("MOCKTAIL_WIN_HEIGHT",
+                          std::to_string(config.window().height), error) &&
+      SetEnvironmentValue("MOCKTAIL_WIN_TITLE", config.window().title, error) &&
+      SetEnvironmentValue("MOCKTAIL_WIN_HIGH_DPI",
+                          config.window().high_dpi ? "1" : "0", error) &&
+      SetEnvironmentValue(
+          "MOCKTAIL_TOUCH_MODE",
+          config.input_capabilities().touch_enabled ? "on" : "off", error) &&
+      SetEnvironmentValue(
+          "MOCKTAIL_MOUSE_MODE",
+          config.input_capabilities().mouse_enabled ? "on" : "off", error) &&
+      SetEnvironmentValue(
+          "MOCKTAIL_KEYBOARD_MODE",
+          config.input_capabilities().keyboard_enabled ? "on" : "off", error) &&
+      SetEnvironmentValue("MOCKTAIL_DESKTOP_PLAYABILITY",
+                          config.desktop_playability() ? "1" : "0", error) &&
+      SetEnvironmentValue("MOCKTAIL_FRAME_RATE_LIMIT",
+                          FrameRateValue(config.frame_rate()), error) &&
+      SetEnvironmentValue("MOCKTAIL_VSYNC", config.vsync_mode(), error) &&
+      SetEnvironmentValue(
+          "MOCKTAIL_MULTITHREADED_RENDERING",
+          config.performance().multithreaded_rendering ? "1" : "0", error) &&
+      SetEnvironmentValue("MOCKTAIL_PHYSICS_WORKER_MODE",
+                          std::string(PhysicsWorkerModeName(
+                              config.performance().physics_worker_mode)),
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_MEMORY_LIMIT_MB",
+                          std::to_string(config.performance().memory_limit_mb),
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_GAMEMODE",
+                          GameModePolicyName(config.performance().game_mode),
+                          error) &&
+      SetEnvironmentValue("MOCKTAIL_AUDIO_OUTPUT_DEVICE",
+                          config.audio_output_device(), error) &&
+      SetEnvironmentValue("MOCKTAIL_AUDIO_INPUT_DEVICE",
+                          config.audio_input_device(), error) &&
+      SetEnvironmentValue("MOCKTAIL_USE_SYSTEM_PROXY",
+                          config.use_system_proxy() ? "1" : "0", error);
+  if (!base_exported) {
+    return false;
+  }
+  if (config.ca_bundle().has_value()) {
+    if (!SetEnvironmentValue("MOCKTAIL_CA_BUNDLE",
+                             config.ca_bundle()->string(), error)) {
+      return false;
+    }
+  } else if (!UnsetEnvironmentValue("MOCKTAIL_CA_BUNDLE", error)) {
+    return false;
+  }
+  if (config.roblox_http_user_agent().has_value() &&
+      !SetEnvironmentValue("MOCKTAIL_USER_AGENT",
+                           *config.roblox_http_user_agent(), error)) {
+    return false;
+  }
+  if (!config.roblox_http_user_agent().has_value() &&
+      !UnsetEnvironmentValue("MOCKTAIL_USER_AGENT", error)) {
+    return false;
+  }
+  if (!config.network_proxy().has_value()) {
+    return base_exported;
+  }
+  return SetEnvironmentValue("MOCKTAIL_HTTP_PROXY_HOST",
+                             config.network_proxy()->host, error) &&
+         SetEnvironmentValue("MOCKTAIL_HTTP_PROXY_PORT",
+                             std::to_string(config.network_proxy()->port),
+                             error) &&
+         SetEnvironmentValue("MOCKTAIL_HTTP_PROXY_SCHEME",
+                             config.network_proxy()->scheme, error) &&
+         SetEnvironmentValue("MOCKTAIL_NATIVE_SET_HTTP_CLIENT_PROXY", "1",
+                             error);
+}
+
+bool LoadRuntimeConfigFromEnvironment(const Environment& environment,
+                                      RuntimeConfig* config,
+                                      std::string* error) {
+  if (config == nullptr) {
+    if (error != nullptr) {
+      *error = "runtime config output is null";
+    }
+    return false;
+  }
+  *config = RuntimeConfig::FromEnvironment(environment);
+  const auto fail = [&](std::string message) {
+    if (error != nullptr) {
+      *error = std::move(message);
+    }
+    return false;
+  };
+  if (!config->frame_rate().valid()) {
+    return fail("frame-rate policy is invalid");
+  } else if (!config->device_profile_valid()) {
+    return fail("device profile is invalid");
+  } else if (!config->input_capabilities().touch_enabled &&
+             !config->input_capabilities().mouse_enabled &&
+             !config->input_capabilities().keyboard_enabled) {
+    return fail("device must expose at least one usable input capability");
+  } else if (config->graphics_backend() == GraphicsBackend::kUnknown) {
+    return fail("graphics backend is invalid");
+  } else if (!config->theme_mode_valid()) {
+    return fail("theme mode is invalid");
+  } else if (!config->window().high_dpi_valid) {
+    return fail("window high-DPI policy is invalid");
+  } else if (config->vsync_mode() != "auto" && config->vsync_mode() != "on" &&
+             config->vsync_mode() != "off") {
+    return fail("VSync policy is invalid");
+  } else if (!config->audio_output_device_valid()) {
+    return fail("audio output device is invalid");
+  } else if (!config->audio_input_device_valid()) {
+    return fail("audio input device is invalid");
+  } else if (!config->performance().memory_limit_valid) {
+    return fail("memory-limit policy is invalid");
+  } else if (!config->performance().game_mode_valid) {
+    return fail("GameMode policy is invalid");
+  } else if (!config->performance().physics_worker_mode_valid) {
+    return fail("physics worker policy is invalid");
+  } else if (!config->ca_bundle_valid()) {
+    return fail("CA bundle path is invalid");
+  }
+  return true;
+}
+
 }  // namespace runtime
 }  // namespace mocktail

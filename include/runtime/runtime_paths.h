@@ -28,7 +28,6 @@ class RuntimePaths {
   const std::filesystem::path& vulkan_shader_cache_file() const {
     return vulkan_shader_cache_file_;
   }
-  const std::filesystem::path& config_file() const { return config_file_; }
   const std::filesystem::path& active_payload_manifest() const {
     return active_payload_manifest_;
   }
@@ -48,7 +47,6 @@ class RuntimePaths {
   std::filesystem::path android_runtime_root_;
   std::filesystem::path android_cache_root_;
   std::filesystem::path vulkan_shader_cache_file_;
-  std::filesystem::path config_file_;
   std::filesystem::path active_payload_manifest_;
 };
 

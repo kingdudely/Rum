@@ -1488,10 +1488,6 @@ jstring NewStringFromEnvDefault(JNIEnv* env, const char* env_name,
   return env->NewStringUTF(value);
 }
 
-std::string MocktailCookiePath() {
-  return MocktailConfigRoot() + "/cookie";
-}
-
 bool CookieHasAttribute(const std::string& cookie, const char* attribute) {
   std::string lower_cookie = cookie;
   std::string lower_attribute = attribute ? attribute : "";
@@ -2345,8 +2341,7 @@ NativeSettingsValues ResolveNativeSettingsValues(
     std::cout << "  [engine] no Roblox cookie found; proceeding without login\n"
               << std::flush;
   } else {
-    std::cout << "  [engine] WARNING: no Roblox cookie found at "
-              << MocktailCookiePath() << '\n'
+    std::cout << "  [engine] no Roblox credential found; proceeding without login\n"
               << std::flush;
   }
   std::string android_id =

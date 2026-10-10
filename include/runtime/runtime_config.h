@@ -138,6 +138,19 @@ class RuntimeConfig {
   std::vector<std::string> unsafe_detached_thread_overrides_;
 };
 
+// Builds the config from the process environment only and validates it.
+// Replaces the deleted YAML-file layer; the environment was already the
+// winning layer, so this changes no default.
+bool LoadRuntimeConfigFromEnvironment(const Environment& environment,
+                                      RuntimeConfig* config,
+                                      std::string* error);
+
+// The legacy runtime still consumes the supported settings through
+// environment variables, so the composition root exports one
+// already-resolved RuntimeConfig before entering that boundary.
+bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
+                                    std::string* error = nullptr);
+
 }  // namespace runtime
 }  // namespace mocktail
 

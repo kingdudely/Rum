@@ -27,20 +27,6 @@ else()
 endif()
 
 find_package(PkgConfig REQUIRED)
-if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/libyaml/CMakeLists.txt")
-  set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-  add_subdirectory("${CMAKE_SOURCE_DIR}/third_party/libyaml"
-                   "${CMAKE_BINARY_DIR}/third_party/libyaml"
-                   EXCLUDE_FROM_ALL)
-  set_target_properties(yaml PROPERTIES POSITION_INDEPENDENT_CODE ON)
-  if(NOT TARGET PkgConfig::LIBYAML)
-    add_library(PkgConfig::LIBYAML ALIAS yaml)
-  endif()
-  message(STATUS "Mocktail: using bundled libyaml")
-else()
-  pkg_check_modules(LIBYAML REQUIRED IMPORTED_TARGET yaml-0.1)
-endif()
-
 if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/utf8proc/CMakeLists.txt")
   set(UTF8PROC_INSTALL OFF CACHE BOOL "" FORCE)
   add_subdirectory("${CMAKE_SOURCE_DIR}/third_party/utf8proc"

@@ -36,8 +36,7 @@
 #include "runtime/roblox_desktop_app_policy.h"
 #include "runtime/roblox_experience_launch_bridge.h"
 #include "runtime/roblox_launch_uri.h"
-#include "runtime/runtime_config_bootstrap.h"
-#include "runtime/runtime_config_file.h"
+#include "runtime/runtime_config.h"
 #include "runtime/runtime_paths.h"
 #include "runtime/session_log.h"
 #include "runtime/support_bundle.h"
@@ -58,7 +57,6 @@ using mocktail::runtime::CommandMode;
 using mocktail::runtime::ProcessEnvironment;
 using mocktail::runtime::RobloxExperienceLaunchRequest;
 using mocktail::runtime::RuntimeConfig;
-using mocktail::runtime::RuntimeConfigLoadResult;
 using mocktail::runtime::RuntimePaths;
 
 enum class StepResult {
@@ -151,33 +149,22 @@ StepResult ResolveLaunchRequest(
 // configuration input.
 // ---------------------------------------------------------------------------
 StepResult LoadRuntimeConfiguration(
-    const ProcessEnvironment& environment, const RuntimePaths& paths,
-    const CommandLineOptions& options,
-    RuntimeConfigLoadResult* runtime_config, bool* created_config_file) {
-  const mocktail::runtime::RuntimeConfigBootstrapResult config_bootstrap =
-      mocktail::runtime::EnsureRuntimeConfigFile(paths.config_file());
-  *created_config_file = config_bootstrap.created();
-  if (!config_bootstrap) {
-    std::cerr << "[FATAL] Cannot prepare " << paths.config_file() << ": "
-              << config_bootstrap.error << '\n';
-    if (IsRunning(options)) {
-      (void)mocktail::runtime::ShowFailureDialog(
-          environment, "Roblox could not prepare its configuration.");
+    const ProcessEnvironment& environment, const CommandLineOptions& options,
+    RuntimeConfig* runtime_config, std::string* error) {
+  if (!mocktail::runtime::LoadRuntimeConfigFromEnvironment(
+          environment, runtime_config, error)) {
+    std::cerr << "[FATAL] Cannot load runtime configuration";
+    if (error != nullptr && !error->empty()) {
+      std::cerr << ": " << *error;
     }
-    return StepResult::kExitFailure;
-  }
-  *runtime_config = mocktail::runtime::LoadRuntimeConfig(
-      environment, paths.config_file());
-  if (!*runtime_config) {
-    std::cerr << "[FATAL] Cannot load " << paths.config_file() << ": "
-              << runtime_config->error << '\n';
+    std::cerr << '\n';
     if (IsRunning(options)) {
       (void)mocktail::runtime::ShowFailureDialog(
           environment, "Roblox could not load its configuration.");
     }
     return StepResult::kExitFailure;
   }
-  if (runtime_config->config.use_system_proxy()) {
+  if (runtime_config->use_system_proxy()) {
     const mocktail::runtime::SystemProxyResult system_proxy =
         mocktail::runtime::ResolveSystemProxy();
     const std::string proxy_host = system_proxy.proxy.has_value()
@@ -201,19 +188,21 @@ StepResult LoadRuntimeConfiguration(
       std::cerr << '\n';
       return StepResult::kExitFailure;
     }
-    *runtime_config = mocktail::runtime::LoadRuntimeConfig(
-        environment, paths.config_file());
-    if (!*runtime_config) {
-      std::cerr << "[FATAL] Cannot apply host system proxy: "
-                << runtime_config->error << '\n';
+    if (!mocktail::runtime::LoadRuntimeConfigFromEnvironment(
+            environment, runtime_config, error)) {
+      std::cerr << "[FATAL] Cannot apply host system proxy";
+      if (error != nullptr && !error->empty()) {
+        std::cerr << ": " << *error;
+      }
+      std::cerr << '\n';
       return StepResult::kExitFailure;
     }
   }
   if (IsRunning(options) &&
-      runtime_config->config.has_unsafe_detached_thread_overrides()) {
+      runtime_config->has_unsafe_detached_thread_overrides()) {
     std::cerr << "[FATAL] Unsupported detached legacy thread overrides:\n";
     for (const std::string& name :
-         runtime_config->config.unsafe_detached_thread_overrides()) {
+         runtime_config->unsafe_detached_thread_overrides()) {
       std::cerr << "  - " << name << '\n';
     }
     std::cerr << "  Supported runtime requires synchronous or owned worker "
@@ -224,11 +213,11 @@ StepResult LoadRuntimeConfiguration(
         "enabled.");
     return StepResult::kExitFailure;
   }
-  std::string error;
+  std::string graphics_error;
   if (IsRunning(options) &&
-      !mocktail::runtime::ApplyGraphicsLaunchPolicy(runtime_config->config,
-                                                     &error)) {
-    std::cerr << "[FATAL] " << error << '\n';
+      !mocktail::runtime::ApplyGraphicsLaunchPolicy(*runtime_config,
+                                                     &graphics_error)) {
+    std::cerr << "[FATAL] " << graphics_error << '\n';
     return StepResult::kExitFailure;
   }
   return StepResult::kContinue;
@@ -264,7 +253,7 @@ MemoryLimitPlan PlanMemoryLimit(int argc, char* argv[],
 void ReportStartupSummary(const ProcessEnvironment& environment,
                           const RuntimePaths& paths,
                           const CommandLineOptions& options,
-                          const RuntimeConfig& config, bool created_config_file,
+                          const RuntimeConfig& config,
                           const MemoryLimitPlan& memory_plan,
                           mocktail::runtime::SessionLog* session_log,
                           std::chrono::system_clock::time_point process_started_at,
@@ -284,10 +273,6 @@ void ReportStartupSummary(const ProcessEnvironment& environment,
     mocktail::runtime::InstallCpuLimitDiagnostics();
     mocktail::runtime::LogProcessDiagnostics(
         mocktail::runtime::ProcessDiagnosticStage::kStartup);
-  }
-  if (created_config_file) {
-    std::cout << "  [runtime] created first-run configuration: "
-              << paths.config_file() << '\n';
   }
   if (IsRunning(options) && config.use_system_proxy()) {
     if (config.network_proxy().has_value()) {
@@ -803,21 +788,21 @@ int main(int argc, char* argv[]) {
   mocktail::runtime::MemoryLimitWatchdog memory_limit_watchdog;
   mocktail::legacy::RuntimeDependencies dependencies;
 
-  RuntimeConfigLoadResult runtime_config;
-  bool created_config_file = false;
-  if (LoadRuntimeConfiguration(environment, paths, options, &runtime_config,
-                               &created_config_file) == StepResult::kExitFailure) {
+  RuntimeConfig runtime_config;
+  std::string config_error;
+  if (LoadRuntimeConfiguration(environment, options, &runtime_config,
+                               &config_error) == StepResult::kExitFailure) {
     return EXIT_FAILURE;
   }
 
   const MemoryLimitPlan memory_plan =
-      PlanMemoryLimit(argc, argv, options, runtime_config.config);
-  ReportStartupSummary(environment, paths, options, runtime_config.config,
-                       created_config_file, memory_plan, &session_log,
+      PlanMemoryLimit(argc, argv, options, runtime_config);
+  ReportStartupSummary(environment, paths, options, runtime_config,
+                       memory_plan, &session_log,
                        process_started_at, process_launch_diagnostics);
 
   mocktail::runtime::GameModeSession game_mode_session =
-      StartGameModeSession(options, runtime_config.config);
+      StartGameModeSession(options, runtime_config);
 
   if (IsRunning(options)) {
     failure_dialog = mocktail::runtime::FailureDialogMonitor::Start(
@@ -832,16 +817,16 @@ int main(int argc, char* argv[]) {
       return EXIT_FAILURE;
     }
     std::cout << "  [memory] RSS+swap watchdog active at "
-              << runtime_config.config.performance().memory_limit_mb
+              << runtime_config.performance().memory_limit_mb
               << " MiB\n";
   }
   std::filesystem::path app_storage_file;
-  if (BindRuntimeStorage(environment, paths, options, runtime_config.config,
+  if (BindRuntimeStorage(environment, paths, options, runtime_config,
                          &app_storage_file, &error) ==
       StepResult::kExitFailure) {
     return EXIT_FAILURE;
   }
-  if (ApplyClientSettingsPolicy(environment, paths, options, runtime_config.config,
+  if (ApplyClientSettingsPolicy(environment, paths, options, runtime_config,
                                 &error) == StepResult::kExitFailure) {
     return EXIT_FAILURE;
   }
@@ -854,7 +839,7 @@ int main(int argc, char* argv[]) {
     return 2;
   }
 
-  if (BuildRuntimeDependencies(environment, paths, options, runtime_config.config,
+  if (BuildRuntimeDependencies(environment, paths, options, runtime_config,
                                app_storage_file,
                                &error, &dependencies) ==
       StepResult::kExitFailure) {

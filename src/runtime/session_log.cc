@@ -690,8 +690,7 @@ std::string SessionLog::Header(const Environment& environment,
          << "\" gpu_driver=\"" << graphics.drivers
          << "\" display=" << DisplayServer(environment) << " graphics="
          << (graphics_backend.empty() ? "unknown" : graphics_backend) << '\n'
-         << "[mocktail] executable=" << DisplayPath(executable, paths)
-         << " config=" << DisplayPath(paths.config_file(), paths) << '\n'
+         << "[mocktail] executable=" << DisplayPath(executable, paths) << '\n'
          << "[mocktail] log=" << DisplayPath(path_, paths) << '\n';
   if (!warning_.empty()) output << "[mocktail] warning=" << warning_ << '\n';
   return output.str();
