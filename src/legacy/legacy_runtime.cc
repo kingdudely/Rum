@@ -580,7 +580,6 @@ void ApplyRuntimeDefaults() {
   // glue currently stalls V2 init on surface flags; leave it available opt-in.
   // GameActivity lifecycle callbacks can block on android_app_set_activity_state
   // in some Linux shims; keep them opt-in to avoid startup dead-ends.
-  SetEnvDefault("MOCKTAIL_NATIVE_SET_USER_ID", "0");
   SetEnvDefault("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "0");
   SetEnvDefault("MOCKTAIL_IGNORE_WINDOW_CLOSE", "0");
   SetEnvDefault("MOCKTAIL_WIN_TITLE", "Roblox");

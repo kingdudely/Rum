@@ -558,11 +558,6 @@ StepResult BuildRuntimeDependencies(
   const bool authenticated =
       composition.status == mocktail::runtime::AuthRuntimeStatus::kAuthenticated;
   if (authenticated) {
-    if (setenv("MOCKTAIL_NATIVE_SET_USER_ID", "1", 1) != 0) {
-      std::cerr << "[FATAL] Cannot enable authenticated NativeSettings "
-                   "identity\n";
-      return StepResult::kExitFailure;
-    }
     std::cout << "  [auth] typed Roblox identity resolved for production VM\n";
   } else {
     std::cout << "  [auth] explicit guest identity selected for production VM\n";
