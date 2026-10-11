@@ -102,7 +102,7 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
       result.options.mode = CommandMode::kHelp;
       return result;
     }
-    if (argument == "--roblox-lib") {
+    if (argument == "--lib") {
       if (!ReadOptionValue(argc, argv, &index, argument,
                            &result.options.roblox_library_path,
                            &result.error)) {
@@ -273,7 +273,7 @@ std::string CommandLineUsage(const std::string& program_name) {
       << "files. Defaults to libroblox.so and assets/content next to this\n"
       << "executable.\n\n"
       << "Options:\n"
-      << "  --roblox-lib <path>    Path to libroblox.so\n"
+      << "  --lib <path>           Path to libroblox.so\n"
       << "                           (default: <exe dir>/libroblox.so)\n"
       << "  --assets <path>        Roblox assets directory; either <assets> or\n"
       << "                           <assets/content> is accepted\n"

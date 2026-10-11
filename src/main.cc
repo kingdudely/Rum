@@ -311,7 +311,7 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
   if (roblox_library.empty() ||
       !std::filesystem::is_regular_file(roblox_library)) {
     std::cerr << "[FATAL] No libroblox.so. Place it next to this executable, "
-                 "or pass --roblox-lib <path>\n";
+                 "or pass --lib <path>\n";
     return StepResult::kExitFailure;
   }
   // The guest ABI is fixed at build time, so a library for another

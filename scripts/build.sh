@@ -27,7 +27,7 @@ Usage() {
 Usage: scripts/build.sh [OPTIONS]
 
 Builds the native runtime. Place libroblox.so and assets/content next
-to the resulting executable, or pass --roblox-lib/--assets at launch.
+to the resulting executable, or pass --lib/--assets at launch.
 
 Options:
   --build-dir PATH    CMake build directory (default: build).
