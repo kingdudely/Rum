@@ -150,7 +150,6 @@ std::string BuildNetworkProxyUrl(const NetworkProxyConfig& proxy) {
 
 RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
   RuntimeConfig config;
-  config.headless_ = LegacyEnabled(environment, "MOCKTAIL_HEADLESS");
   config.roblox_library_path_ = environment.GetOr(
       "ROBLOX_LIB_PATH", config.roblox_library_path_.string());
   if (config.roblox_library_path_.empty()) {
@@ -380,8 +379,6 @@ bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
   }
   const DeviceProfile& device = config.device_profile();
   const bool base_exported =
-      SetEnvironmentValue("MOCKTAIL_HEADLESS", config.headless() ? "1" : "0",
-                          error) &&
       SetEnvironmentValue("MOCKTAIL_DEVICE_PROFILE", std::string(device.name),
                           error) &&
       SetEnvironmentValue("MOCKTAIL_DEVICE_CLASS",

@@ -58,7 +58,6 @@ class RuntimeConfig {
  public:
   static RuntimeConfig FromEnvironment(const Environment& environment);
 
-  bool headless() const { return headless_; }
   const std::filesystem::path& roblox_library_path() const {
     return roblox_library_path_;
   }
@@ -113,7 +112,6 @@ class RuntimeConfig {
   static GraphicsBackend ParseGraphicsBackend(std::string_view name);
 
  private:
-  bool headless_ = false;
   std::filesystem::path roblox_library_path_ = DefaultRobloxLibraryPath();
   GraphicsBackend graphics_backend_ = GraphicsBackend::kVulkan;
   std::string graphics_backend_name_ = "direct-vulkan";

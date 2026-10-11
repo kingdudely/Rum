@@ -13,15 +13,8 @@ enum class CommandMode {
   kHelp,
 };
 
-enum class WindowMode {
-  kUnspecified,
-  kHeadless,
-  kWindowed,
-};
-
 struct CommandLineOptions {
   CommandMode mode = CommandMode::kRun;
-  WindowMode window_mode = WindowMode::kUnspecified;
   std::string program_name = "mocktail";
   std::string roblox_library_path;
   std::string assets_path;

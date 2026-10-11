@@ -108,10 +108,6 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
                            &result.error)) {
         return result;
       }
-    } else if (argument == "--headless") {
-      result.options.window_mode = WindowMode::kHeadless;
-    } else if (argument == "--windowed") {
-      result.options.window_mode = WindowMode::kWindowed;
     } else if (argument == "--graphics") {
       if (!ReadOptionValue(argc, argv, &index, argument,
                            &result.options.graphics_backend, &result.error)) {
@@ -265,12 +261,6 @@ bool ApplyCommandLineEnvironment(const CommandLineOptions& options,
                       error)) {
     return false;
   }
-  if (options.window_mode == WindowMode::kHeadless) {
-    return SetEnvironment("MOCKTAIL_HEADLESS", "1", error);
-  }
-  if (options.window_mode == WindowMode::kWindowed) {
-    return SetEnvironment("MOCKTAIL_HEADLESS", "0", error);
-  }
   return true;
 }
 
@@ -288,8 +278,6 @@ std::string CommandLineUsage(const std::string& program_name) {
       << "  --assets <path>        Roblox assets directory; either <assets> or\n"
       << "                           <assets/content> is accepted\n"
       << "                           (default: <exe dir>/assets/content)\n"
-      << "  --headless             Run without creating an SDL window\n"
-      << "  --windowed             Force windowed startup (default)\n"
       << "  --graphics <backend>   direct-vulkan | opengl | system | "
          "angle-vulkan (default: direct-vulkan)\n"
       << "  --launch-uri <uri>     A roblox:// link: placeId=... to join.\n"

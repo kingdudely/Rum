@@ -565,7 +565,6 @@ void* OpenRealGlesLibrary() {
 
 void ApplyRuntimeDefaults() {
   SetEnvDefault("MOCKTAIL_OFFLINE_SETTINGS", "1");
-  SetEnvDefault("MOCKTAIL_HEADLESS", "0");
   // Startup worker ownership is joined. Returning while it still references
   // JNI, runtime, or stack state is never supported.
   SetEnvDefault("MOCKTAIL_ENGINE_DETACH", "0");
@@ -589,7 +588,6 @@ void ApplyRuntimeDefaults() {
   // ordering and avoids racing heap-sensitive V2 startup state.
   SetEnvDefault("MOCKTAIL_START_LUA_APP_DM_THREAD", "0");
   SetEnvDefault("MOCKTAIL_START_LUA_APP_DM_DELAY_MS", "500");
-  SetEnvDefault("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS", "0");
   SetEnvDefault("MOCKTAIL_PLACE_ID", "0");
   SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT", "1");
   SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT_THREAD", "0");
@@ -619,10 +617,6 @@ void ApplyRuntimeDefaults() {
   SetEnvDefault("MOCKTAIL_IGNORE_WINDOW_CLOSE", "0");
   SetEnvDefault("MOCKTAIL_WIN_TITLE", "Roblox");
   SetEnvDefault("MOCKTAIL_GRAPHICS_BACKEND", "angle-vulkan");
-}
-
-bool IsHeadlessMode() {
-  return IsEnabled("MOCKTAIL_HEADLESS");
 }
 
 int GetEnvInt(const char* name, int default_value) {
@@ -1734,7 +1728,7 @@ void InstallNativeGlJavaImplementation(JNIEnv* env, jclass native_gl_java_class)
             << std::flush;
 }
 
-jobject BuildPlatformParams(JNIEnv* env, jobject surface, bool is_headless);
+jobject BuildPlatformParams(JNIEnv* env, jobject surface);
 
 mocktail::runtime::DisplaySize HostDisplaySize() {
   return mocktail::runtime::ParseDisplaySize(
@@ -1813,7 +1807,7 @@ jobject BuildDeviceParams(JNIEnv* env) {
 
 jobject BuildAppBridgeInitParams(JNIEnv* env, jstring client_settings,
                                  jstring fast_flags, jstring app_params,
-                                 jstring asset_path, bool is_headless) {
+                                 jstring asset_path) {
   jobject params =
       NewObject(env, "com/roblox/engine/jni/autovalue/InitParams");
   if (!params) {
@@ -1829,7 +1823,7 @@ jobject BuildAppBridgeInitParams(JNIEnv* env, jstring client_settings,
   jobject window = NewObject(env, "android/view/Window");
   jobject display = NewObject(env, "android/view/Display");
   jobject surface = NewObject(env, "android/view/Surface");
-  jobject platform_params = BuildPlatformParams(env, surface, is_headless);
+  jobject platform_params = BuildPlatformParams(env, surface);
   jobject device_params = BuildDeviceParams(env);
   jobject surface_holder = NewObject(env, "android/view/SurfaceHolder");
   jobject view = NewObject(env, "android/view/View");
@@ -1912,9 +1906,8 @@ jobject BuildAppBridgeInitParams(JNIEnv* env, jstring client_settings,
   SetIntField(env, params, "screenHeight", init_display.height);
   SetIntField(env, params, "densityDpi", 160);
   SetIntField(env, params, "sdkVersion", 33);
-  jboolean headless = is_headless ? JNI_TRUE : JNI_FALSE;
-  SetBooleanField(env, params, "headless", headless);
-  SetBooleanField(env, params, "isHeadless", headless);
+  SetBooleanField(env, params, "headless", JNI_FALSE);
+  SetBooleanField(env, params, "isHeadless", JNI_FALSE);
   SetBooleanField(env, params, "isFirstInstall", JNI_FALSE);
   SetBooleanField(env, params, "isLowMemoryDevice", JNI_FALSE);
 
@@ -1929,7 +1922,7 @@ jobject BuildApplicationExitInfoList(JNIEnv* env) {
   return list;
 }
 
-jobject BuildPlatformParams(JNIEnv* env, jobject surface, bool is_headless) {
+jobject BuildPlatformParams(JNIEnv* env, jobject surface) {
   jobject params =
       NewObject(env, "com/roblox/engine/jni/model/PlatformParams");
   if (!params) {
@@ -1972,9 +1965,8 @@ jobject BuildPlatformParams(JNIEnv* env, jobject surface, bool is_headless) {
   SetBooleanField(env, params, "isLuaGamesPageEnabled", JNI_TRUE);
   SetBooleanField(env, params, "isLuaChatEnabled", JNI_TRUE);
   SetBooleanField(env, params, "isTablet", JNI_FALSE);
-  jboolean headless = is_headless ? JNI_TRUE : JNI_FALSE;
-  SetBooleanField(env, params, "headless", headless);
-  SetBooleanField(env, params, "isHeadless", headless);
+  SetBooleanField(env, params, "headless", JNI_FALSE);
+  SetBooleanField(env, params, "isHeadless", JNI_FALSE);
   return params;
 }
 
@@ -2510,7 +2502,7 @@ JNIEnv* EnsureStartupEnv(EngineStartupContext* context, JNIEnv*& env) {
 
 // Tells the engine what the display can do: first its current refresh rate, then
 // optionally the full list of supported rates. Both are optional in their own
-// right, and both are no-ops in headless mode.
+// right.
 void ReportDisplayRefreshRates(EngineStartupContext* context, JNIEnv*& env,
                             jclass native_gl_class) {
 const mocktail::platform::DisplayRefreshCapabilities display_refresh =
@@ -2720,9 +2712,8 @@ void* EngineStartupThread(void* arg) {
                               "GoogleAndroidApp");
   jstring fast_flags =
       NewStringFromEnvDefault(env, "MOCKTAIL_FAST_FLAGS_JSON", "{}");
-  const bool is_headless = IsHeadlessMode();
   const char* launch_mode = std::getenv("MOCKTAIL_LAUNCH_MODE");
-  const char* default_launch_mode = is_headless ? "headless" : "normal";
+  const char* default_launch_mode = "normal";
   std::string default_app_params =
       std::string("{\"launchMode\":\"") + (launch_mode != nullptr &&
                                                   launch_mode[0] != '\0'
@@ -2741,13 +2732,6 @@ void* EngineStartupThread(void* arg) {
     asset_path_value = DefaultAssetPath();
     asset_path = env->NewStringUTF(asset_path_value.c_str());
   }
-  const bool app_bridge_init_headless =
-      is_headless || IsEnabled("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS");
-  if (app_bridge_init_headless != is_headless) {
-    std::cout << "  [engine] AppBridge init uses headless params while "
-              << "windowed surface/start stay enabled\n"
-              << std::flush;
-  }
   if (IsEnabled("MOCKTAIL_ENGINE_TRACE")) {
     std::cout << "  [engine] asset path prepared: " << asset_path_value
               << '\n'
@@ -2762,7 +2746,7 @@ void* EngineStartupThread(void* arg) {
   jobject game_activity_asset_manager =
       NewObject(env, "android/content/res/AssetManager");
   jobject game_activity_config = BuildConfiguration(env);
-  jobject platform_params = BuildPlatformParams(env, surface, is_headless);
+  jobject platform_params = BuildPlatformParams(env, surface);
   jobject device_params = BuildDeviceParams(env);
   const jnivm::RobloxAuthIdentity& account_identity =
       context->account_identity;
@@ -3004,7 +2988,7 @@ void* EngineStartupThread(void* arg) {
     if (context->call_real_init_with_params) {
       jobject init_params =
           BuildAppBridgeInitParams(env, client_settings, fast_flags, app_params,
-                                   asset_path, app_bridge_init_headless);
+                                   asset_path);
       if (sigsetjmp(g_init_with_params_jmp_buf, 1) == 0) {
         g_init_with_params_recovery_in_progress = 1;
         context->native_init_with_params(env, native_gl_class, init_params);
@@ -3949,19 +3933,18 @@ void ReportResolvedEngineSymbols(const RobloxEngineSymbols& symbols) {
   }
 }
 
-// Creates the host window unless running headless, exports the display and
-// viewport sizes the engine reads through the environment, resolves the
-// theme, and auto-enables the startup steps that only make sense with a
-// window. Returns whether a usable window exists.
+// Creates the host window, exports the display and viewport sizes the
+// engine reads through the environment, and resolves the theme. Returns
+// whether a usable window exists.
 bool InitializeHostWindow(
-    bool is_headless, const mocktail::runtime::RuntimeConfig& runtime_config,
+    const mocktail::runtime::RuntimeConfig& runtime_config,
     const mocktail::legacy::RuntimeDependencies& dependencies,
     bool user_overrode_main_thread_message_pump,
     bool user_overrode_call_start_app) {
   // Create SDL/EGL before loading Android stubs so SDL binds the host graphics
   // backend. The window stays hidden until the first real frame.
   bool window_initialised = false;
-  if (!is_headless) {
+  {
     const int win_w = runtime_config.window().width;
     const int win_h = runtime_config.window().height;
     const char* win_title = runtime_config.window().title.c_str();
@@ -3978,7 +3961,8 @@ bool InitializeHostWindow(
         return EXIT_FAILURE;
       }
       std::cerr
-          << "  [window] WARNING: window init failed, continuing headless\n"
+          << "  [window] WARNING: window init failed; continuing without a "
+             "window\n"
           << std::flush;
     } else {
       std::cout << "  [window] Window ready; waiting for Roblox frames\n"
@@ -4116,48 +4100,10 @@ void FinishWindowShutdown(mocktail::legacy::RuntimeDependencies& dependencies,
   }
 }
 
-// Holds a headless run open for MOCKTAIL_KEEPALIVE_MS, or indefinitely under
-// MOCKTAIL_KEEPALIVE, so the engine can be inspected without a window. Under
-// MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP or MOCKTAIL_HEADLESS_KEEPALIVE_PUMP the wait is
-// chunked, so main-thread work still runs while it drains.
-void RunHeadlessKeepalive() {
-  int keepalive_ms = GetEnvInt("MOCKTAIL_KEEPALIVE_MS", 0);
-  if (keepalive_ms > 0) {
-    std::cout << "  [main] headless keepalive: " << keepalive_ms << " ms\n"
-              << std::flush;
-    if (IsEnabled("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP") ||
-        IsEnabled("MOCKTAIL_HEADLESS_KEEPALIVE_PUMP")) {
-      int waited_ms = 0;
-      constexpr int kHeadlessKeepalivePumpIntervalMs = 10;
-      while (waited_ms < keepalive_ms) {
-        RunPendingMainThreadTaskSchedulerForeground();
-        PumpRobloxMainThreadMessagesOnce();
-        const int chunk_ms = std::min(kHeadlessKeepalivePumpIntervalMs,
-                                      keepalive_ms - waited_ms);
-        usleep(static_cast<useconds_t>(chunk_ms) * 1000);
-        waited_ms += chunk_ms;
-      }
-    } else {
-      usleep(static_cast<useconds_t>(keepalive_ms) * 1000);
-    }
-    std::cout << "  [main] headless keepalive returned\n" << std::flush;
-  } else if (IsEnabled("MOCKTAIL_KEEPALIVE")) {
-    std::cout << "  [main] headless keepalive: forever\n" << std::flush;
-    while (true) {
-      pause();
-    }
-  }
-}
-
 // Reports whether the run reached what it claims to have reached: a real presented
 // frame, a completed Roblox lifecycle shutdown, and no rejected surface, input or
 // resize step. Reports the first failure and returns false.
-bool ValidateRunCompletion(bool is_headless, const RunCompletionState& completion) {
-  if (is_headless) {
-    std::cerr << "[FATAL] Headless LuaApp readiness evidence is not wired into "
-                 "the supported runtime yet.\n";
-    return false;
-  }
+bool ValidateRunCompletion(const RunCompletionState& completion) {
   if (!completion.real_frame_presented) {
     std::cerr << "[FATAL] Windowed runtime exited without a real presented "
                  "frame.\n";
@@ -4849,8 +4795,7 @@ bool StartupSymbolsMissing(const RobloxEngineSymbols& symbols,
 }
 
 // Brings up the typed production-input runtime and the text-input bridge over
-// it. A headless run has no host window and therefore no input, which is not
-// a failure. Returns false only after reporting which stage refused to start.
+// it. Returns false only after reporting which stage refused to start.
 bool InitializeTypedInput(
     JavaVM* raw_vm, const std::shared_ptr<jnivm::VM>& jni_vm,
     const mocktail::runtime::RobloxInputSymbols& input_symbols,
@@ -5205,11 +5150,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
 #endif
 
   std::cout << "  [compat] signal-recovery handler disabled\n";
-  const bool is_headless = runtime_config.headless();
-  if (!HasEnvValue("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS")) {
-    setenv("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS", is_headless ? "1" : "0",
-           1);
-  }
   PrintStage(1, "Initialising Bionic linker + Pseudo-JVM");
 
 #ifdef MOCKTAIL_USE_BIONIC_LINKER
@@ -5230,7 +5170,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   RegisterAndroidSdkJniClasses(jni_vm);
 
   const bool has_window = InitializeHostWindow(
-      is_headless, runtime_config, dependencies,
+      runtime_config, dependencies,
       user_overrode_main_thread_message_pump, user_overrode_call_start_app);
   PrintStage(3, "Building Bionic symbol table from stubs");
 
@@ -5479,8 +5419,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       text_input_bridge;
   mocktail::window::ScopedPresentObserver game_present_observer;
   if (!IsDisabled("MOCKTAIL_START_ENGINE")) {
-    PrintStage(6, is_headless ? "Invoking headless Roblox startup entry points"
-                              : "Invoking Roblox startup entry points");
+    PrintStage(6, "Invoking Roblox startup entry points");
 
     const mocktail::runtime::RobloxSymbolLookup capability_lookup(
         &ResolveRobloxCapabilitySymbol, &roblox_handle);
@@ -5679,10 +5618,8 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     if (!started_with_launch_uri) {
       std::cout
           << "  [main] note: no --launch-uri was given, so the engine has no\n"
-             "         place to render and the window will stay blank. A\n"
-             "         roblox:// link forwarded from another invocation still\n"
-             "         works; otherwise start with a place, e.g.\n"
-             "           --launch-uri roblox://placeId=1818\n"
+             "         place to render and the window will stay blank. Start\n"
+             "         with a place, e.g. --launch-uri roblox://placeId=1818\n"
           << std::flush;
     }
     std::cout << "  [main] entering SDL event loop (close the window to quit)\n"
@@ -5701,10 +5638,11 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                              experience_destroyed_app, &completion);
     FinishWindowShutdown(dependencies, &completion);
   } else {
-    RunHeadlessKeepalive();
+    std::cerr << "[FATAL] Windowed runtime exited without a usable window.\n";
+    return EXIT_FAILURE;
   }
 
-  if (!ValidateRunCompletion(is_headless, completion)) {
+  if (!ValidateRunCompletion(completion)) {
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
