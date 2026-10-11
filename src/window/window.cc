@@ -118,10 +118,7 @@ struct WindowState {
   bool visible = false;
   bool software_window = false;
   bool direct_vulkan = false;
-  bool fullscreen_readiness_requested = false;
-  bool fullscreen_readiness_return_requested = false;
   bool restored_fullscreen_sync_pending = false;
-  int fullscreen_readiness_present_baseline = 0;
   bool state_persistence_active = false;
   bool state_persistence_dirty = false;
   uint64_t state_persistence_change_ticks_ns = 0;
@@ -236,9 +233,7 @@ bool IsDisabledEnv(const char* name) {
 }
 
 bool WindowStatePersistenceSuppressed() {
-  return IsEnabledEnv("MOCKTAIL_FULLSCREEN_READINESS") ||
-         IsEnabledEnv("MOCKTAIL_INPUT_READINESS") ||
-         IsEnabledEnv("MOCKTAIL_AUTO_EXIT_AFTER_PRESENT_MS");
+  return IsEnabledEnv("MOCKTAIL_AUTO_EXIT_AFTER_PRESENT_MS");
 }
 
 bool IsWaylandVideoDriver() {
@@ -909,9 +904,6 @@ bool Init(int width, int height, const char* title) {
   }
   g_state.width = width;
   g_state.height = height;
-  g_state.fullscreen_readiness_requested = false;
-  g_state.fullscreen_readiness_return_requested = false;
-  g_state.fullscreen_readiness_present_baseline = 0;
   g_fullscreen_request_gate.Reset();
   g_fullscreen_menu_request_gate.Reset();
   g_real_swap_count.store(0, std::memory_order_relaxed);
@@ -1677,37 +1669,6 @@ bool HandleFullscreenShortcut(const SDL_Event& event) {
   return true;
 }
 
-void MaybeRequestFullscreenReadiness() {
-  const char* mode = GetEnvNonEmpty("MOCKTAIL_FULLSCREEN_READINESS");
-  const bool single_transition = StringEquals(mode, "1");
-  const bool round_trip = StringEquals(mode, "roundtrip");
-  if ((!single_transition && !round_trip) || !HasPresentedFrame()) {
-    return;
-  }
-  const int present_count = g_real_swap_count.load(std::memory_order_acquire);
-  if (!g_state.fullscreen_readiness_requested) {
-    g_state.fullscreen_readiness_requested = true;
-    g_state.fullscreen_readiness_present_baseline = present_count;
-    if (!RequestFullscreenToggle("readiness")) {
-      g_state.quit_requested = true;
-    }
-    return;
-  }
-  constexpr int kRoundTripStablePresents = 60;
-  const bool currently_fullscreen =
-      g_state.sdl_window != nullptr &&
-      (SDL_GetWindowFlags(g_state.sdl_window) & SDL_WINDOW_FULLSCREEN) != 0;
-  if (!round_trip || g_state.fullscreen_readiness_return_requested ||
-      !currently_fullscreen ||
-      present_count - g_state.fullscreen_readiness_present_baseline <
-          kRoundTripStablePresents) {
-    return;
-  }
-  g_state.fullscreen_readiness_return_requested = true;
-  if (!RequestFullscreenToggle("readiness-return")) {
-    g_state.quit_requested = true;
-  }
-}
 
 void MaybeRecoverVulkanSurface() {
   if (!g_state.direct_vulkan || !g_window_surface_lifecycle.active()) {
@@ -1805,7 +1766,6 @@ bool PumpEvents() {
   MaybeSynchronizeRestoredFullscreenState();
   MaybeApplyRobloxFullscreenMenuRequest();
   MaybeApplyAndroidFullscreenRequest();
-  MaybeRequestFullscreenReadiness();
   if (!g_pre_text_input_pump_gate.Invoke()) {
     fprintf(stderr, "  [input] main-thread text command drain failed\n");
   }
@@ -2106,10 +2066,7 @@ void Shutdown() {
   g_state.software_window = false;
   g_state.direct_vulkan = false;
   g_state.display_refresh = {};
-  g_state.fullscreen_readiness_requested = false;
-  g_state.fullscreen_readiness_return_requested = false;
   g_state.restored_fullscreen_sync_pending = false;
-  g_state.fullscreen_readiness_present_baseline = 0;
   g_state.state_persistence_active = false;
   g_state.state_persistence_dirty = false;
   g_state.state_persistence_change_ticks_ns = 0;
