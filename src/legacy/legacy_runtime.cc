@@ -450,9 +450,7 @@ SymbolResolveResult ResolveSymbolForBionic(const char* name, bool has_window,
                                           void* real_gles_handle,
                                           const std::vector<void*>& stub_handles) {
   const bool is_gl_symbol = IsGlSymbol(name);
-  const bool prefer_real_gles =
-      has_window && !IsEnabled("MOCKTAIL_GLES_FORCE_STUB") &&
-      !IsEnabled("MOCKTAIL_GLES_NOOP_DRAW_CALLS");
+  const bool prefer_real_gles = has_window;
   SymbolResolveResult result;
 
   if (is_gl_symbol && prefer_real_gles) {
@@ -590,16 +588,13 @@ void ApplyRuntimeDefaults() {
   // Keep the background worker path opt-in so the default mirrors release
   // ordering and avoids racing heap-sensitive V2 startup state.
   SetEnvDefault("MOCKTAIL_START_LUA_APP_DM_THREAD", "0");
-  SetEnvDefault("MOCKTAIL_START_LUA_APP_DM_AFTER_START_APP", "1");
   SetEnvDefault("MOCKTAIL_START_LUA_APP_DM_DELAY_MS", "500");
   SetEnvDefault("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS", "0");
   SetEnvDefault("MOCKTAIL_PLACE_ID", "0");
   SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT", "1");
   SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT_THREAD", "0");
   SetEnvDefault("MOCKTAIL_APP_BRIDGE_INIT_THREAD_TIMEOUT_MS", "1500");
-  SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_START", "1");
   SetEnvDefault("MOCKTAIL_START_GAME_WITH_PARAM", "0");
-  SetEnvDefault("MOCKTAIL_SET_APP_BRIDGE_NOTIFICATION_LISTENER", "1");
   // APK ASMA calls nativeAppBridgeV2StartAppWithParams synchronously before
   // driving post-start surface/Lua callbacks. Keep the worker path opt-in so
   // those follow-up callbacks cannot race native StartApp construction.
@@ -613,37 +608,21 @@ void ApplyRuntimeDefaults() {
   SetEnvDefault("MOCKTAIL_SYNC_START_APP_WITH_GAME", "1");
   // APK ASMA publishes queued ready events after the Lua app startup path has
   // run. Keep this inline by default; the detached worker can outlive teardown.
-  SetEnvDefault("MOCKTAIL_SEND_APP_READY", "1");
   SetEnvDefault("MOCKTAIL_SEND_APP_READY_THREAD", "0");
   SetEnvDefault("MOCKTAIL_UPDATE_SCREEN_ORIENTATION", "0");
-  SetEnvDefault("MOCKTAIL_STEP_UPDATE_SURFACE_APP", "0");
   // Keep the ASMA/V2 NativeGL path as the default. GameActivity's native app
   // glue currently stalls V2 init on surface flags; leave it available opt-in.
-  SetEnvDefault("MOCKTAIL_STEP_GAME_ACTIVITY_INIT", "0");
-  SetEnvDefault("MOCKTAIL_STEP_GAME_ACTIVITY_SURFACE", "0");
   // GameActivity lifecycle callbacks can block on android_app_set_activity_state
   // in some Linux shims; keep them opt-in to avoid startup dead-ends.
-  SetEnvDefault("MOCKTAIL_GAME_ACTIVITY_LIFECYCLE_CALLBACKS", "0");
   SetEnvDefault("MOCKTAIL_NATIVE_SET_USER_ID", "0");
   SetEnvDefault("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "0");
   SetEnvDefault("MOCKTAIL_IGNORE_WINDOW_CLOSE", "0");
   SetEnvDefault("MOCKTAIL_WIN_TITLE", "Roblox");
   SetEnvDefault("MOCKTAIL_GRAPHICS_BACKEND", "angle-vulkan");
-  SetEnvDefault("MOCKTAIL_REQUIRE_REAL_GRAPHICS", "0");
 }
 
 bool IsHeadlessMode() {
   return IsEnabled("MOCKTAIL_HEADLESS");
-}
-
-bool ShouldRunStartupStep(const char* step_env, bool default_value) {
-  if (IsEnabled(step_env)) {
-    return true;
-  }
-  if (IsDisabled(step_env)) {
-    return false;
-  }
-  return default_value;
 }
 
 int GetEnvInt(const char* name, int default_value) {
@@ -1342,23 +1321,6 @@ void EngineLogPtr(const char* name, const void* ptr) {
   }
 }
 
-void PrintStepDecision(const char* name, bool enabled) {
-  if (!VerboseOutputEnabled()) {
-    return;
-  }
-  std::cout << "  [engine] " << (enabled ? "run  " : "skip ") << name << '\n'
-            << std::flush;
-}
-
-void PrintNativeBypass(const char* name, const char* flag) {
-  if (!VerboseOutputEnabled()) {
-    return;
-  }
-  std::cout << "  [engine] bypass native " << name << " (set " << flag
-            << "=1 to call Roblox entrypoint)\n"
-            << std::flush;
-}
-
 
 void PrintBacktraceNoSig(const char* prefix) { (void)prefix; }
 
@@ -2016,109 +1978,6 @@ jobject BuildPlatformParams(JNIEnv* env, jobject surface, bool is_headless) {
   return params;
 }
 
-jobject BuildStartAppParams(JNIEnv* env, jstring app_params,
-                           jobject platform_params, jobject surface,
-                           bool is_headless, const char* launch_mode,
-                           const jnivm::RobloxAuthIdentity& identity) {
-  jobject params =
-      NewObject(env, "com/roblox/engine/jni/autovalue/StartAppParams");
-  if (!params) {
-    return nullptr;
-  }
-
-  jobject activity = NewObject(env, "com/roblox/client/RobloxActivity");
-  jobject context = NewObject(env, "android/content/Context");
-  jobject asset_manager = NewObject(env, "android/content/res/AssetManager");
-  jobject resources = NewObject(env, "android/content/res/Resources");
-  jobject class_loader = NewObject(env, "java/lang/ClassLoader");
-  jobject package_manager = NewObject(env, "android/content/pm/PackageManager");
-  jobject window = NewObject(env, "android/view/Window");
-  jobject display = NewObject(env, "android/view/Display");
-  jobject surface_holder = NewObject(env, "android/view/SurfaceHolder");
-  jobject view = NewObject(env, "android/view/View");
-
-  SetObjectField(env, params, "surface", "Landroid/view/Surface;", surface);
-  SetObjectField(env, params, "platformParams",
-                 "Lcom/roblox/engine/jni/model/PlatformParams;",
-                 platform_params);
-  SetStringField(env, params, "appStarterPlace",
-                 "rbxasset://places/Mobile.rbxl");
-  SetStringField(env, params, "appStarterScript", "LuaAppStarterScript");
-  SetLongField(env, params, "appUserId", identity.user_id);
-  SetBooleanField(env, params, "isUnder13", JNI_FALSE);
-  SetStringField(env, params, "username", identity.username.c_str());
-  SetIntField(env, params, "membershipType",
-              GetEnvInt("MOCKTAIL_ROBLOX_MEMBERSHIP_TYPE", 0));
-  const char* theme = std::getenv("MOCKTAIL_RESOLVED_THEME_INTERNAL");
-  SetStringField(env, params, "selectedTheme",
-                 theme != nullptr ? theme : "Dark");
-  SetObjectField(env, params, "vrContext", "Landroid/app/Activity;",
-                 activity);
-
-  SetObjectField(env, params, "appParams", "Ljava/lang/String;", app_params);
-  SetObjectField(env, params, "appParamsJson", "Ljava/lang/String;",
-                 app_params);
-  SetObjectField(env, params, "launchParams", "Ljava/lang/String;",
-                 app_params);
-  SetObjectField(env, params, "activity", "Lcom/roblox/client/RobloxActivity;",
-                 activity);
-  SetObjectField(env, params, "robloxActivity",
-                 "Lcom/roblox/client/RobloxActivity;", activity);
-  SetObjectField(env, params, "mainActivity",
-                 "Lcom/roblox/client/RobloxActivity;", activity);
-  SetObjectField(env, params, "context", "Landroid/content/Context;", context);
-  SetObjectField(env, params, "applicationContext",
-                 "Landroid/content/Context;", context);
-  SetObjectField(env, params, "assetManager",
-                 "Landroid/content/res/AssetManager;", asset_manager);
-  SetObjectField(env, params, "assets",
-                 "Landroid/content/res/AssetManager;", asset_manager);
-  SetObjectField(env, params, "resources",
-                 "Landroid/content/res/Resources;", resources);
-  SetObjectField(env, params, "classLoader", "Ljava/lang/ClassLoader;",
-                 class_loader);
-  SetObjectField(env, params, "packageManager",
-                 "Landroid/content/pm/PackageManager;", package_manager);
-  SetObjectField(env, params, "window", "Landroid/view/Window;", window);
-  SetObjectField(env, params, "display", "Landroid/view/Display;", display);
-  SetObjectField(env, params, "surfaceHolder", "Landroid/view/SurfaceHolder;",
-                 surface_holder);
-  SetObjectField(env, params, "view", "Landroid/view/View;", view);
-  SetObjectField(env, params, "decorView", "Landroid/view/View;", view);
-  SetObjectField(env, params, "rootView", "Landroid/view/View;", view);
-  const char* mode = launch_mode;
-  if (mode == nullptr || mode[0] == '\0') {
-    mode = is_headless ? "headless" : "normal";
-  }
-  SetStringField(env, params, "launchMode", mode);
-  SetStringField(env, params, "joinData", "{}");
-  SetStringField(env, params, "packageName", "com.roblox.client");
-  SetStringField(env, params, "platformName", "Android");
-  const std::string start_app_version =
-      GetEnvString("MOCKTAIL_ROBLOX_VERSION", "unknown");
-  SetStringField(env, params, "appVersion", start_app_version.c_str());
-  const std::string start_device_name =
-      GetEnvString("MOCKTAIL_DEVICE_NAME", "Pixel 7");
-  SetStringField(env, params, "deviceName", start_device_name.c_str());
-  SetStringField(env, params, "locale", "en_us");
-  SetRobloxServiceUrlFields(env, params);
-  const mocktail::runtime::DisplaySize start_window = HostWindowPixelSize();
-  const mocktail::runtime::DisplaySize start_display = HostDisplaySize();
-  SetIntField(env, params, "width", start_window.width);
-  SetIntField(env, params, "height", start_window.height);
-  SetIntField(env, params, "screenWidth", start_display.width);
-  SetIntField(env, params, "screenHeight", start_display.height);
-  SetIntField(env, params, "densityDpi", 160);
-  SetIntField(env, params, "sdkVersion", 33);
-  SetIntField(env, params, "placeId", 0);
-  jboolean headless = is_headless ? JNI_TRUE : JNI_FALSE;
-  SetBooleanField(env, params, "headless", headless);
-  SetBooleanField(env, params, "isHeadless", headless);
-  SetBooleanField(env, params, "isFirstInstall", JNI_FALSE);
-  SetBooleanField(env, params, "isLowMemoryDevice", JNI_FALSE);
-  return params;
-}
-
 jobject BuildStartGameParams(JNIEnv* env, jobject platform_params,
                             jobject device_params, jobject surface,
                             jobject vr_context, const char* launch_data_env,
@@ -2424,8 +2283,6 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   jstring external_base_string = env->NewStringUTF(values.external_base.c_str());
   jstring external_dir_string = env->NewStringUTF(values.external_dir.c_str());
   jstring preferences_file_string = env->NewStringUTF(values.preferences_file.c_str());
-  jstring default_policy_file_string =
-      env->NewStringUTF(values.default_policy_file.c_str());
   jstring base_url_string = env->NewStringUTF(values.base_url.c_str());
   jstring api_url_string = env->NewStringUTF(values.api_url.c_str());
   jstring roblox_channel_string = env->NewStringUTF(values.roblox_channel.c_str());
@@ -2434,17 +2291,9 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
   jstring roblox_version_string = env->NewStringUTF(values.roblox_version.c_str());
   jstring exception_reason_filename_string =
       env->NewStringUTF(values.exception_reason_filename.c_str());
-  jstring http_proxy_host_string = env->NewStringUTF(values.http_proxy_host.c_str());
   jstring cookie_base_url_string = env->NewStringUTF(values.cookie_base_url.c_str());
-  jstring cookie_domain_string = env->NewStringUTF(values.cookie_domain.c_str());
   jstring roblox_cookies_string = env->NewStringUTF(
       values.credential != nullptr ? values.credential->c_str() : "");
-  jstring cookie_manager_cookies_string =
-      env->NewStringUTF(values.cookie_manager_cookies.c_str());
-  jstring android_id_string = env->NewStringUTF(values.android_id.c_str());
-  jstring advertising_id_string = env->NewStringUTF(values.advertising_id.c_str());
-  jstring googleplay_string = env->NewStringUTF("googleplay");
-  jstring user_id_string = env->NewStringUTF(values.account_user_id.c_str());
   auto run_native_setting = [](const char* name, auto call) -> bool {
     if (sigsetjmp(g_native_settings_jmp_buf, 1) == 0) {
       g_native_settings_recovery_name = name;
@@ -2462,20 +2311,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
     return false;
   };
 
-  if (context->native_set_http_client_proxy &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_HTTP_CLIENT_PROXY", false)) {
-    std::cout << "  [engine] NativeSettings httpClientProxy host="
-              << values.http_proxy_host << " port=" << values.http_proxy_port << '\n'
-              << std::flush;
-    run_native_setting("httpClientProxy", [&]() {
-      context->native_set_http_client_proxy(env, settings_class,
-                                            http_proxy_host_string,
-                                            values.http_proxy_port);
-    });
-  }
-  if (context->native_set_exception_reason_filename &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_EXCEPTION_REASON_FILENAME",
-                           true)) {
+  if (context->native_set_exception_reason_filename) {
     std::cout << "  [engine] NativeSettings exceptionReasonFilename="
               << values.exception_reason_filename << '\n'
               << std::flush;
@@ -2484,8 +2320,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
           env, settings_class, exception_reason_filename_string);
     });
   }
-  if (context->native_set_base_url &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_BASE_URL", true)) {
+  if (context->native_set_base_url) {
     std::cout << "  [engine] NativeSettings baseUrl=" << values.base_url
               << " apiUrl=" << values.api_url << '\n' << std::flush;
     run_native_setting("baseUrl", [&]() {
@@ -2493,8 +2328,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
                                    api_url_string);
     });
   }
-  if (context->native_set_roblox_channel &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_ROBLOX_CHANNEL", true)) {
+  if (context->native_set_roblox_channel) {
     std::cout << "  [engine] NativeSettings robloxChannel=" << values.roblox_channel
               << '\n'
               << std::flush;
@@ -2503,9 +2337,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
                                          roblox_channel_string);
     });
   }
-  if (context->native_override_channel_platform_name &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_OVERRIDE_CHANNEL_PLATFORM_NAME",
-                           true)) {
+  if (context->native_override_channel_platform_name) {
     std::cout << "  [engine] NativeSettings channelPlatformName="
               << values.channel_platform_name << '\n' << std::flush;
     run_native_setting("channelPlatformName", [&]() {
@@ -2513,8 +2345,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
           env, settings_class, channel_platform_name_string);
     });
   }
-  if (context->native_set_roblox_version &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_ROBLOX_VERSION", true)) {
+  if (context->native_set_roblox_version) {
     std::cout << "  [engine] NativeSettings robloxVersion=" << values.roblox_version
               << '\n' << std::flush;
     run_native_setting("robloxVersion", [&]() {
@@ -2522,8 +2353,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
                                          roblox_version_string);
     });
   }
-  if (context->native_set_device_info &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_DEVICE_INFO", true)) {
+  if (context->native_set_device_info) {
     std::cout << "  [engine] NativeSettings deviceInfo\n" << std::flush;
     jobject device_params = BuildDeviceParams(env);
     run_native_setting("deviceInfo", [&]() {
@@ -2531,103 +2361,41 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
     });
   }
 
-  if (ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_BASE_DATA_DIRS", true)) {
-    run_native_setting("baseDataDirectories", [&]() {
-      context->native_set_base_data_directories(env, settings_class,
-                                                data_dir_string,
-                                                external_base_string);
-    });
-  }
-  if (ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_CACHE_DIR", true)) {
-    run_native_setting("cacheDirectory", [&]() {
-      context->native_set_cache_directory(env, settings_class,
-                                          settings_cache_dir_string);
-    });
-  }
-  if (ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_FILES_DIR", true)) {
-    run_native_setting("filesDirectory", [&]() {
-      context->native_set_files_directory(env, settings_class,
-                                          files_dir_string);
-    });
-  }
-  if (ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_EXTERNAL_DIR", true)) {
-    run_native_setting("externalDirectory", [&]() {
-      context->native_set_external_directory(env, settings_class,
-                                             external_dir_string);
-    });
-  }
-  if (ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_PREFERENCES_FILE", true)) {
-    run_native_setting("preferencesFile", [&]() {
-      context->native_set_preferences_file(env, settings_class,
-                                           preferences_file_string);
-    });
-  }
-  if (ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_DEFAULT_POLICY_FILE", false)) {
-    run_native_setting("defaultPolicyFile", [&]() {
-      context->native_set_default_app_policy_file(env, settings_class,
-                                                  default_policy_file_string);
-    });
-  }
-  if (context->native_init_fast_log &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_INIT_FAST_LOG", true)) {
+  run_native_setting("baseDataDirectories", [&]() {
+    context->native_set_base_data_directories(env, settings_class,
+                                              data_dir_string,
+                                              external_base_string);
+  });
+  run_native_setting("cacheDirectory", [&]() {
+    context->native_set_cache_directory(env, settings_class,
+                                        settings_cache_dir_string);
+  });
+  run_native_setting("filesDirectory", [&]() {
+    context->native_set_files_directory(env, settings_class,
+                                        files_dir_string);
+  });
+  run_native_setting("externalDirectory", [&]() {
+    context->native_set_external_directory(env, settings_class,
+                                           external_dir_string);
+  });
+  run_native_setting("preferencesFile", [&]() {
+    context->native_set_preferences_file(env, settings_class,
+                                         preferences_file_string);
+  });
+  if (context->native_init_fast_log) {
     std::cout << "  [engine] NativeSettings initFastLog\n" << std::flush;
     run_native_setting("initFastLog", [&]() {
       context->native_init_fast_log(env, settings_class);
     });
   }
 
-  jclass cookie_manager_class = nullptr;
-  auto find_cookie_manager_class = [&]() -> jclass {
-    if (cookie_manager_class == nullptr) {
-      cookie_manager_class =
-          env->FindClass("com/roblox/universalapp/cookie/JNICookieManager");
-    }
-    return cookie_manager_class;
-  };
-  if (context->native_cookie_manager_set_cookie &&
-      !values.cookie_manager_cookies.empty() &&
-      // This native path expects Roblox's full cookie backend singleton. In
-      // Mocktail it currently reaches heap function pointers, so keep it opt-in.
-      ShouldRunStartupStep("MOCKTAIL_JNI_COOKIE_MANAGER_SET_COOKIE", false)) {
-    jclass cls = find_cookie_manager_class();
-    if (cls != nullptr) {
-      std::cout << "  [engine] JNICookieManager.setCookie domain="
-                << values.cookie_domain << " bytes=" << values.cookie_manager_cookies.size()
-                << '\n' << std::flush;
-      if (IsEnabled("MOCKTAIL_UNSAFE_NATIVE_COOKIE_SETTER")) {
-        if (sigsetjmp(g_cookie_setter_jmp_buf, 1) == 0) {
-          g_cookie_setter_recovery_in_progress = 1;
-          context->native_cookie_manager_set_cookie(
-              env, cls, cookie_domain_string, cookie_manager_cookies_string);
-          g_cookie_setter_recovery_in_progress = 0;
-          std::cout << "  [engine] JNICookieManager.setCookie returned\n"
-                    << std::flush;
-        } else {
-          g_cookie_setter_recovery_in_progress = 0;
-          std::cerr << "  [engine] JNICookieManager.setCookie recovered; "
-                    << "native cookie singleton is not ready\n"
-                    << std::flush;
-        }
-      } else {
-        std::cerr << "  [engine] JNICookieManager.setCookie blocked; set "
-                  << "MOCKTAIL_UNSAFE_NATIVE_COOKIE_SETTER=1 to run the "
-                  << "known-crashing native path\n"
-                  << std::flush;
-      }
-    }
-  } else if (!values.cookie_manager_cookies.empty() &&
-             context->native_cookie_manager_set_cookie != nullptr) {
-    std::cout << "  [engine] JNICookieManager.setCookie skipped; set "
-              << "MOCKTAIL_JNI_COOKIE_MANAGER_SET_COOKIE=1 to force\n"
-              << std::flush;
-  } else if (!values.cookie_manager_cookies.empty() &&
-             context->native_cookie_manager_set_cookie == nullptr) {
+  if (!values.cookie_manager_cookies.empty() &&
+      context->native_cookie_manager_set_cookie == nullptr) {
     std::cout << "  [engine] WARNING: JNICookieManager.setCookie unavailable\n"
               << std::flush;
   }
 
-  if (context->native_set_multiple_cookies && !values.roblox_cookies.empty() &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_MULTIPLE_COOKIES", true)) {
+  if (context->native_set_multiple_cookies && !values.roblox_cookies.empty()) {
     std::cout << "  [engine] NativeSettings multipleCookies base="
               << values.cookie_base_url << " bytes=" << values.roblox_cookies.size() << '\n'
               << std::flush;
@@ -2638,25 +2406,6 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
     });
     std::cout << "  [engine] NativeSettings multipleCookies returned\n"
               << std::flush;
-  }
-  if (context->native_set_platform_headers_with_idfa &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_PLATFORM_HEADERS", false)) {
-    std::cout << "  [engine] NativeSettings platformHeaders androidId="
-              << values.android_id << '\n'
-              << std::flush;
-    run_native_setting("platformHeaders", [&]() {
-      context->native_set_platform_headers_with_idfa(
-          env, settings_class, android_id_string, googleplay_string,
-          advertising_id_string);
-    });
-  }
-  if (context->native_set_user_id &&
-      ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_USER_ID", false)) {
-    std::cout << "  [engine] NativeSettings userId=" << values.account_user_id << '\n'
-              << std::flush;
-    run_native_setting("userId", [&]() {
-      context->native_set_user_id(env, settings_class, user_id_string);
-    });
   }
   mocktail::platform::SecureClear(&values.cookie_manager_cookies);
 }
@@ -2693,8 +2442,7 @@ void ConfigureLocalStorage(JNIEnv* env, const EngineStartupContext* context) {
     return asset_manager;
   };
 
-  if (context->native_init_asset_manager &&
-      ShouldRunStartupStep("MOCKTAIL_JNI_ASSET_MANAGER_SETUP", true)) {
+  if (context->native_init_asset_manager) {
     jclass asset_manager_setup_class =
         env->FindClass("com/roblox/client/JNIAAssetManagerSetup");
     std::cout << "  [engine] JNIAAssetManagerSetup.initNative\n"
@@ -2705,38 +2453,7 @@ void ConfigureLocalStorage(JNIEnv* env, const EngineStartupContext* context) {
               << std::flush;
   }
 
-  if (context->native_local_storage_set_platform_impl &&
-      ShouldRunStartupStep("MOCKTAIL_LOCAL_STORAGE_SET_PLATFORM_IMPL", false)) {
-    jobject platform_handler = NewObject(
-        env,
-        "com/roblox/protocols/localstorageplatforminterface/generated/"
-        "IPlatformLocalStorageHandler");
-    jobject shared_preferences =
-        NewObject(env, "android/content/SharedPreferences");
-    const std::string shared_prefs_file =
-        data_dir + "/shared_prefs/LOCAL_STORAGE_SHARED_PREFS.xml";
-    SetObjectField(env, platform_handler, "sharedPreferences",
-                   "Landroid/content/SharedPreferences;", shared_preferences);
-    SetStringField(env, platform_handler, "sharedPrefsFile",
-                   shared_prefs_file.c_str());
-    SetStringField(env, platform_handler, "dataDir", data_dir.c_str());
-
-    jclass core_class = env->FindClass(
-        "com/roblox/protocols/localstorageplatforminterface/generated/"
-        "ILocalStorageHandlerCore");
-    std::cout << "  [engine] LocalStorage setPlatformImpl sharedPrefs="
-              << shared_prefs_file << '\n'
-              << std::flush;
-    jobject core = context->native_local_storage_set_platform_impl(
-        env, core_class, platform_handler);
-    std::cout << "  [engine] LocalStorage setPlatformImpl returned " << core
-              << '\n'
-              << std::flush;
-  }
-
-  if (!context->native_init_storage_manager ||
-      !ShouldRunStartupStep("MOCKTAIL_LOCAL_STORAGE_INIT_STORAGE_MANAGER",
-                            true)) {
+  if (!context->native_init_storage_manager) {
     return;
   }
 
@@ -2821,8 +2538,7 @@ if (context->run_display_refresh_rate && display_refresh.valid() &&
 }
 
 if (context->run_display_refresh_rate && display_refresh.valid() &&
-    context->native_pass_supported_refresh_rates &&
-    IsEnabled("MOCKTAIL_PASS_SUPPORTED_REFRESH_RATES")) {
+    context->native_pass_supported_refresh_rates) {
   env = EnsureStartupEnv(context, env);
   std::cout << "  [engine] NativeGLInterface.nativePassSupportedRefreshRates"
             << " count=" << display_refresh.supported_hz.size() << '\n'
@@ -2856,8 +2572,7 @@ if (context->run_display_refresh_rate && display_refresh.valid() &&
 // faulting call still lets startup continue to the next step.
 void NotifyAppReadyAndGameLoaded(EngineStartupContext* context, JNIEnv*& env,
                                 jclass native_gl_class) {
-if (context->native_send_app_ready &&
-    ShouldRunStartupStep("MOCKTAIL_SEND_APP_READY", false)) {
+if (context->native_send_app_ready) {
   env = EnsureStartupEnv(context, env);
   volatile sig_atomic_t send_app_ready_recovered = 0;
   std::cout << "  [engine] nativeAppBridgeV2SendAppEventOnAppReady\n"
@@ -2906,12 +2621,7 @@ void* EngineStartupThread(void* arg) {
             << " shared_vm=" << context->vm << '\n' << std::flush;
   bool attached_to_thread = false;
   JNIEnv* env = nullptr;
-  const bool skip_attach = IsEnabled("MOCKTAIL_ENGINE_SKIP_ATTACH");
-  if (skip_attach) {
-    std::cout << "  [engine] skipping AttachCurrentThread (MOCKTAIL_ENGINE_SKIP_ATTACH)\n"
-              << std::flush;
-    EngineLog("AttachCurrentThread skipped");
-  } else if (context->java_vm) {
+  if (context->java_vm) {
     std::cout << "  [engine] entering AttachCurrentThread\n" << std::flush;
     EngineLog("AttachCurrentThread");
     void* raw_env = nullptr;
@@ -2999,14 +2709,6 @@ void* EngineStartupThread(void* arg) {
   EngineLog("FindClass returned");
   EngineLog("NewStringUTF args");
   jstring empty_string = env->NewStringUTF("");
-  jstring base_url = env->NewStringUTF("https://www.roblox.com/");
-  jstring user_agent = NewStringFromEnvDefault(
-      env, "MOCKTAIL_USER_AGENT",
-      "Roblox/unknown (Linux; Android 33)");
-  jstring android_id =
-      NewStringFromEnvDefault(env, "MOCKTAIL_ANDROID_ID", "0000000000000000");
-  jstring launch_source =
-      NewStringFromEnvDefault(env, "MOCKTAIL_LAUNCH_SOURCE", "AppAndroidV");
   jstring client_settings = NewClientSettingsString(env);
   jstring client_settings_overrides =
       NewStringFromEnvDefault(env, "MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON",
@@ -3053,10 +2755,7 @@ void* EngineStartupThread(void* arg) {
   }
   jobject surface = BuildMockSurface(env);
   jobject game_activity = NewObject(env, "com/roblox/client/startup/MainGameActivity");
-  jobject game_surface_activity =
-      IsEnabled("MOCKTAIL_PASS_ACTIVITY_TO_GAME_SURFACE_PARAMS")
-          ? game_activity
-          : nullptr;
+  jobject game_surface_activity = nullptr;
   jobject app_bridge_notification_listener =
       NewObject(env,
                 "com/roblox/engine/jni/OnAppBridgeNotificationListener");
@@ -3071,9 +2770,6 @@ void* EngineStartupThread(void* arg) {
       BuildStartGameParams(env, platform_params, device_params, surface,
                            game_activity, "MOCKTAIL_GAME_PARAMS_JSON",
                            account_identity);
-  jobject start_app_params = BuildStartAppParams(env, app_params, platform_params,
-                                                 surface, is_headless,
-                                                 launch_mode, account_identity);
   InstallNativeGlJavaImplementation(env, native_gl_java_class);
   EngineLog("NewStringUTF returned");
 
@@ -3230,28 +2926,6 @@ void* EngineStartupThread(void* arg) {
     std::cout << "  [engine] nativeUpdateAdapterInit returned\n" << std::flush;
   }
 
-  if (context->run_update_screen_orientation &&
-      context->native_update_screen_orientation != nullptr) {
-    env = EnsureStartupEnv(context, env);
-    if (sigsetjmp(g_update_screen_orientation_jmp_buf, 1) == 0) {
-      const jint orientation =
-          static_cast<jint>(GetEnvInt("MOCKTAIL_SCREEN_ORIENTATION", 2));
-      std::cout << "  [engine] nativeUpdateScreenOrientation orientation="
-                << orientation << '\n'
-                << std::flush;
-      g_update_screen_orientation_recovery_in_progress = 1;
-      context->native_update_screen_orientation(env, native_input_class,
-                                                orientation);
-      g_update_screen_orientation_recovery_in_progress = 0;
-      std::cout << "  [engine] nativeUpdateScreenOrientation returned\n"
-                << std::flush;
-    } else {
-      g_update_screen_orientation_recovery_in_progress = 0;
-      std::cerr << "  [engine] nativeUpdateScreenOrientation recovered\n"
-                << std::flush;
-    }
-  }
-
   if (context->run_init_client_settings) {
     env = EnsureStartupEnv(context, env);
     std::cout << "  [engine] nativeInitClientSettings\n" << std::flush;
@@ -3297,9 +2971,7 @@ void* EngineStartupThread(void* arg) {
       std::cout << "  [engine] nativeInitClientSettings returned "
                 << settings_result << " via " << variant << '\n'
                 << std::flush;
-      if (context->run_native_settings &&
-          ShouldRunStartupStep("MOCKTAIL_REAPPLY_NATIVE_SETTINGS_AFTER_INIT",
-                               true)) {
+      if (context->run_native_settings) {
         std::cout << "  [engine] reapplying NativeSettings after "
                   << "nativeInitClientSettings\n"
                   << std::flush;
@@ -3311,81 +2983,7 @@ void* EngineStartupThread(void* arg) {
     }
   }
 
-  if (context->run_post_client_settings) {
-    env = EnsureStartupEnv(context, env);
-    std::cout << "  [engine] nativePostClientSettingsLoadedInitialization3\n"
-              << std::flush;
-    if (IsEnabled("MOCKTAIL_TRACE_POST_CLIENT_SETTINGS_JNI")) {
-      setenv("MOCKTAIL_JNI_TRACE", "1", 1);
-    }
-    if (sigsetjmp(g_post_client_settings_jmp_buf, 1) == 0) {
-      g_post_client_settings_recovery_in_progress = 1;
-      jobject application_exit_info_list = BuildApplicationExitInfoList(env);
-      context->native_post_client_settings(env, native_gl_class,
-                                           application_exit_info_list);
-      g_post_client_settings_recovery_in_progress = 0;
-    } else {
-      g_post_client_settings_recovery_in_progress = 0;
-      std::cerr << "  [engine] nativePostClientSettingsLoadedInitialization3 recovered\n"
-                << std::flush;
-    }
-    std::cout
-        << "  [engine] nativePostClientSettingsLoadedInitialization3 returned\n"
-        << std::flush;
-  }
-
-  if (context->native_initialize_native_flags != nullptr &&
-      ShouldRunStartupStep("MOCKTAIL_INITIALIZE_NATIVE_FLAGS", false)) {
-    env = EnsureStartupEnv(context, env);
-    std::cout << "  [engine] nativeInitializeNativeFlags\n" << std::flush;
-    jclass flag_jni_class =
-        env->FindClass("com/roblox/client/flags/FlagJniInterface");
-    jclass string_class = env->FindClass("java/lang/String");
-    jobjectArray native_flag_keys =
-        env->NewObjectArray(0, string_class, nullptr);
-    if (sigsetjmp(g_initialize_native_flags_jmp_buf, 1) == 0) {
-      g_initialize_native_flags_recovery_in_progress = 1;
-      jobject init_result = context->native_initialize_native_flags(
-          env, flag_jni_class, native_flag_keys);
-      g_initialize_native_flags_recovery_in_progress = 0;
-      std::cout << "  [engine] nativeInitializeNativeFlags returned "
-                << init_result << '\n'
-                << std::flush;
-    } else {
-      g_initialize_native_flags_recovery_in_progress = 0;
-      std::cerr << "  [engine] nativeInitializeNativeFlags recovered\n"
-                << std::flush;
-    }
-  }
-
-  if (context->run_set_init_params) {
-    env = EnsureStartupEnv(context, env);
-    if (!context->run_native_settings && context->native_set_device_info &&
-        ShouldRunStartupStep("MOCKTAIL_NATIVE_SET_DEVICE_INFO", true)) {
-      std::cout << "  [engine] NativeSettings deviceInfo\n" << std::flush;
-      jobject device_params = BuildDeviceParams(env);
-      context->native_set_device_info(env, native_settings_class,
-                                      device_params);
-      std::cout << "  [engine] NativeSettings deviceInfo returned\n"
-                << std::flush;
-    }
-    std::cout << "  [engine] nativeAppBridgeSetInitParams\n" << std::flush;
-    jobject init_params =
-        BuildAppBridgeInitParams(env, client_settings, fast_flags, app_params,
-                                 asset_path, is_headless);
-    context->native_set_init_params(env, startup_activity_class, init_params);
-    std::cout << "  [engine] nativeAppBridgeSetInitParams returned\n"
-              << std::flush;
-    if (context->native_retry_init && IsEnabled("MOCKTAIL_RETRY_INIT")) {
-      std::cout << "  [engine] nativeRetryInit\n" << std::flush;
-      context->native_retry_init(env, startup_activity_class);
-      std::cout << "  [engine] nativeRetryInit returned\n" << std::flush;
-    }
-  }
-
-  if (!context->run_app_bridge_app_start &&
-      IsEnabled("MOCKTAIL_SET_APP_BRIDGE_NOTIFICATION_LISTENER") &&
-      native_gl_java_class && app_bridge_notification_listener) {
+  if (native_gl_java_class && app_bridge_notification_listener) {
     env = EnsureStartupEnv(context, env);
     std::cout << "  [engine] NativeGLJavaInterface."
               << "setAppBridgeNotificationListener\n"
@@ -3397,52 +2995,6 @@ void* EngineStartupThread(void* arg) {
                               app_bridge_notification_listener);
     std::cout << "  [engine] NativeGLJavaInterface."
               << "setAppBridgeNotificationListener returned\n"
-              << std::flush;
-  }
-
-  if (context->run_app_bridge_app_start &&
-      context->native_app_bridge_app_start) {
-    env = EnsureStartupEnv(context, env);
-    if (IsEnabled("MOCKTAIL_TRACE_APP_BRIDGE_APP_START_JNI")) {
-      setenv("MOCKTAIL_JNI_TRACE", "1", 1);
-    }
-    if (context->native_set_is_first_install) {
-      std::cout << "  [engine] NativeAppBridgeInterface.setIsFirstInstall\n"
-                << std::flush;
-      context->native_set_is_first_install(env, native_app_bridge_class,
-                                           JNI_FALSE);
-      std::cout << "  [engine] NativeAppBridgeInterface.setIsFirstInstall "
-                << "returned\n"
-                << std::flush;
-    }
-    if (native_gl_java_class && app_bridge_notification_listener &&
-        ShouldRunStartupStep("MOCKTAIL_SET_APP_BRIDGE_NOTIFICATION_LISTENER",
-                             true)) {
-      std::cout << "  [engine] NativeGLJavaInterface."
-                << "setAppBridgeNotificationListener\n"
-                << std::flush;
-      jmethodID set_listener = env->GetStaticMethodID(
-          native_gl_java_class, "setAppBridgeNotificationListener",
-          "(Lcom/roblox/engine/jni/OnAppBridgeNotificationListener;)V");
-      env->CallStaticVoidMethod(native_gl_java_class, set_listener,
-                                app_bridge_notification_listener);
-      std::cout << "  [engine] NativeGLJavaInterface."
-                << "setAppBridgeNotificationListener returned\n"
-                << std::flush;
-    }
-    std::cout << "  [engine] nativeAppBridgeAppStart\n" << std::flush;
-    if (sigsetjmp(g_app_bridge_app_start_jmp_buf, 1) == 0) {
-      g_app_bridge_app_start_recovery_in_progress = 1;
-      context->native_app_bridge_app_start(
-          env, native_app_bridge_class, base_url, user_agent, JNI_FALSE,
-          android_id, launch_source, empty_string);
-      g_app_bridge_app_start_recovery_in_progress = 0;
-    } else {
-      g_app_bridge_app_start_recovery_in_progress = 0;
-      std::cerr << "  [engine] nativeAppBridgeAppStart recovered\n"
-                << std::flush;
-    }
-    std::cout << "  [engine] nativeAppBridgeAppStart returned\n"
               << std::flush;
   }
 
@@ -3518,49 +3070,8 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
     usleep(static_cast<useconds_t>(init_delay_ms) * 1000);
   }
 
-  if (context->run_start_lua_app_dm && context->native_start_lua_app_dm &&
-      !IsEnabled("MOCKTAIL_START_LUA_APP_DM_AFTER_START_APP")) {
-    int delay_ms = GetEnvInt("MOCKTAIL_START_LUA_APP_DM_DELAY_MS", 1500);
-    if (IsEnabled("MOCKTAIL_START_LUA_APP_DM_INLINE")) {
-      if (delay_ms > 0) {
-        std::cout << "  [engine] nativeAppBridgeStartLuaAppDM wait "
-                  << delay_ms << " ms\n"
-                  << std::flush;
-        usleep(static_cast<useconds_t>(delay_ms) * 1000);
-      }
-      env = EnsureStartupEnv(context, env);
-      if (IsEnabled("MOCKTAIL_TRACE_START_LUA_JNI")) {
-        setenv("MOCKTAIL_JNI_TRACE", "1", 1);
-      }
-      std::cout << "  [engine] nativeAppBridgeStartLuaAppDM\n"
-                << std::flush;
-      if (sigsetjmp(g_start_lua_app_dm_jmp_buf, 1) == 0) {
-            g_start_lua_app_dm_recovery_in_progress = kStage6RecoveryInline;
-        context->native_start_lua_app_dm(env, native_gl_class);
-        g_start_lua_app_dm_recovery_in_progress = kStage6RecoveryInactive;
-      } else {
-        g_start_lua_app_dm_recovery_in_progress = kStage6RecoveryInactive;
-        std::cerr << "  [engine] nativeAppBridgeStartLuaAppDM recovered\n"
-                  << std::flush;
-      }
-      std::cout << "  [engine] nativeAppBridgeStartLuaAppDM returned\n"
-                << std::flush;
-    } else {
-      g_pending_main_thread_start_lua_app_dm =
-          context->native_start_lua_app_dm;
-      g_pending_main_thread_start_lua_due_ms =
-          MonotonicMillis() + static_cast<uint64_t>(delay_ms);
-      g_pending_main_thread_start_lua_started = false;
-      std::cout
-          << "  [engine] delayed nativeAppBridgeStartLuaAppDM scheduled on "
-          << "main thread\n"
-          << std::flush;
-    }
-  }
 
-
-  if (IsEnabled("MOCKTAIL_ASMA_START_TASK_SCHEDULER_FOREGROUND") &&
-      context->native_set_task_scheduler_background_mode) {
+  if (context->native_set_task_scheduler_background_mode) {
     env = EnsureStartupEnv(context, env);
     if (!RunTaskSchedulerForegroundOnMainThread(
             context->native_set_task_scheduler_background_mode,
@@ -3571,102 +3082,15 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
     }
   }
 
-	  const bool effective_run_start_app_with_params =
-	      HasEnvValue("MOCKTAIL_STEP_START_APP_WITH_PARAMS")
-	          ? IsEnabled("MOCKTAIL_STEP_START_APP_WITH_PARAMS")
-	          : context->run_start_app_with_params;
-  const bool effective_call_real_start_app_with_params =
-      effective_run_start_app_with_params &&
-      (HasEnvValue("MOCKTAIL_CALL_REAL_APP_BRIDGE_START")
-           ? IsEnabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_START")
-           : context->call_real_start_app_with_params);
-  const bool effective_start_game_with_params =
-      IsEnabled("MOCKTAIL_START_GAME_WITH_PARAM") &&
-      context->game_session_runtime != nullptr;
-  const bool force_inline_start_app_with_params =
-      effective_start_game_with_params &&
-      IsEnabled("MOCKTAIL_SYNC_START_APP_WITH_GAME");
-  if (context->run_start_app_with_params != effective_run_start_app_with_params ||
-      context->call_real_start_app_with_params !=
-          effective_call_real_start_app_with_params) {
-    std::cerr << "  [engine] start-app flags drifted: context_run_start_app_with_params="
-              << (context->run_start_app_with_params ? 1 : 0)
-              << " effective=" << (effective_run_start_app_with_params ? 1 : 0)
-              << " context_call_real_start_app_with_params="
-              << (context->call_real_start_app_with_params ? 1 : 0)
-              << " effective_call_real_start_app_with_params="
-              << (effective_call_real_start_app_with_params ? 1 : 0) << '\n'
-              << std::flush;
-  }
-
-	  if (effective_run_start_app_with_params) {
+  if (context->run_start_app_with_params) {
 	    env = EnsureStartupEnv(context, env);
 	    std::cout << "  [engine] nativeAppBridgeV2StartAppWithParams\n"
 	              << std::flush;
-    volatile sig_atomic_t start_app_recovered = 0;
-    if (effective_call_real_start_app_with_params) {
-      if (force_inline_start_app_with_params) {
-        std::cout << "  [engine] forcing inline StartAppWithParams because "
-                     "StartGameWithParam is enabled\n"
-                  << std::flush;
-      }
-      if (sigsetjmp(g_start_app_with_params_jmp_buf, 1) == 0) {
-            g_start_app_with_params_recovery_in_progress =
-            kStage6RecoveryInline;
-        context->native_start_app_with_params(env, native_gl_class,
-                                              start_app_params);
-        g_start_app_with_params_recovery_in_progress =
-            kStage6RecoveryInactive;
-      } else {
-        start_app_recovered = 1;
-        g_start_app_with_params_recovery_in_progress =
-            kStage6RecoveryInactive;
-        std::cerr <<
-            "  [engine] nativeAppBridgeV2StartAppWithParams recovered\n"
-                    << std::flush;
-      }
-    } else {
-      MocktailAppBridgeStart(env, app_params);
-    }
+    MocktailAppBridgeStart(env, app_params);
     std::cout << "  [engine] nativeAppBridgeV2StartAppWithParams returned\n"
               << std::flush;
-	    if (start_app_recovered) {
-	      std::cerr
-	          << "  [engine] startup path cannot continue after start_app recovery\n"
-	          << std::flush;
-	      pthread_exit(nullptr);
-	    }
-	  }
-
-
-  if (IsEnabled("MOCKTAIL_START_LUA_APP_DM_AFTER_START_APP") &&
-      context->run_start_lua_app_dm && context->native_start_lua_app_dm) {
-    int delay_ms = GetEnvInt("MOCKTAIL_START_LUA_APP_DM_DELAY_MS", 0);
-    if (delay_ms > 0) {
-      std::cout << "  [engine] post-StartApp nativeAppBridgeStartLuaAppDM wait "
-                << delay_ms << " ms\n"
-                << std::flush;
-      usleep(static_cast<useconds_t>(delay_ms) * 1000);
-    }
-    env = EnsureStartupEnv(context, env);
-    if (IsEnabled("MOCKTAIL_TRACE_START_LUA_JNI")) {
-      setenv("MOCKTAIL_JNI_TRACE", "1", 1);
-    }
-    std::cout << "  [engine] post-StartApp nativeAppBridgeStartLuaAppDM\n"
-              << std::flush;
-    if (sigsetjmp(g_start_lua_app_dm_jmp_buf, 1) == 0) {
-        g_start_lua_app_dm_recovery_in_progress = kStage6RecoveryInline;
-      context->native_start_lua_app_dm(env, native_gl_class);
-      g_start_lua_app_dm_recovery_in_progress = kStage6RecoveryInactive;
-    } else {
-      g_start_lua_app_dm_recovery_in_progress = kStage6RecoveryInactive;
-      std::cerr
-          << "  [engine] post-StartApp nativeAppBridgeStartLuaAppDM recovered\n"
-          << std::flush;
-    }
-    std::cout << "  [engine] post-StartApp nativeAppBridgeStartLuaAppDM returned\n"
-              << std::flush;
   }
+
 
   if (context->game_session_runtime != nullptr) {
     env = EnsureStartupEnv(context, env);
@@ -4247,136 +3671,40 @@ struct StartupDecisions {
 StartupDecisions ResolveStartupDecisions(
     bool has_window, const RobloxEngineSymbols& symbols) {
   StartupDecisions decisions;
-  // Real startup calls run by default; signal recovery falls back to the
-  // Mocktail implementations.
-  const bool requested_set_asset_path =
-      ShouldRunStartupStep("MOCKTAIL_STEP_SET_ASSET_PATH", true);
-  const bool requested_init_with_params =
-      ShouldRunStartupStep("MOCKTAIL_STEP_INIT_WITH_PARAMS", true);
-  const bool requested_start_app_with_params =
-      ShouldRunStartupStep("MOCKTAIL_STEP_START_APP_WITH_PARAMS", true);
-  decisions.run_set_asset_path = requested_set_asset_path;
-  decisions.call_real_set_asset_path =
-      decisions.run_set_asset_path &&
-      !IsDisabled("MOCKTAIL_CALL_REAL_NATIVE_SET_ASSET_PATH");
-  decisions.run_global_init =
-      ShouldRunStartupStep("MOCKTAIL_STEP_GAME_GLOBAL_INIT",
-                           !IsDisabled("MOCKTAIL_GAME_GLOBAL_INIT"));
-  decisions.run_init_client_settings =
-      ShouldRunStartupStep("MOCKTAIL_STEP_INIT_CLIENT_SETTINGS",
-                           !IsDisabled("MOCKTAIL_INIT_CLIENT_SETTINGS"));
-  decisions.run_post_client_settings =
-      ShouldRunStartupStep("MOCKTAIL_STEP_POST_CLIENT_SETTINGS",
-                           IsEnabled("MOCKTAIL_POST_CLIENT_SETTINGS"));
-  decisions.run_app_bridge_app_start =
-      ShouldRunStartupStep("MOCKTAIL_STEP_APP_BRIDGE_APP_START",
-                           IsEnabled("MOCKTAIL_APP_BRIDGE_APP_START")) &&
-      symbols.app_bridge_app_start != nullptr;
-  decisions.run_init_with_params = requested_init_with_params;
-  decisions.call_real_init_with_params =
-      decisions.run_init_with_params &&
-      !IsDisabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT");
-  decisions.run_update_screen_orientation =
-      ShouldRunStartupStep("MOCKTAIL_STEP_UPDATE_SCREEN_ORIENTATION",
-                           IsEnabled("MOCKTAIL_UPDATE_SCREEN_ORIENTATION")) &&
-      symbols.update_screen_orientation != nullptr;
-  decisions.run_game_activity_init =
-      ShouldRunStartupStep("MOCKTAIL_STEP_GAME_ACTIVITY_INIT",
-                           has_window || IsEnabled("MOCKTAIL_GAME_ACTIVITY_INIT"));
-  decisions.run_set_init_params =
-      ShouldRunStartupStep("MOCKTAIL_STEP_SET_INIT_PARAMS",
-                           IsEnabled("MOCKTAIL_SET_INIT_PARAMS") ||
-                               (decisions.run_game_activity_init &&
-                                !decisions.run_init_with_params));
-  decisions.run_app_lifecycle_active =
-      ShouldRunStartupStep("MOCKTAIL_STEP_APP_LIFECYCLE_ACTIVE",
-                           has_window && IsEnabled("MOCKTAIL_APP_LIFECYCLE_ACTIVE"));
+  // Every step used to be tunable through MOCKTAIL_STEP_* and friends, with
+  // ApplyRuntimeDefaults and the windowed auto-enable filling the rest. The
+  // values below are what those gates evaluated to with nothing set; the
+  // flags are gone, so the defaults are the behavior. Beware
+  // CachedGetenv: reads before ApplyRuntimeDefaults freeze, so
+  // MOCKTAIL_START_LUA_APP_DM and MOCKTAIL_CALL_REAL_APP_BRIDGE_START
+  // evaluate false here even though defaults exist for them later, and
+  // the auto-enabled MOCKTAIL_APP_LIFECYCLE_ACTIVE never reaches the gate
+  // because the auto-enable's own check poisons the cache first.
+  decisions.run_set_asset_path = true;
+  decisions.call_real_set_asset_path = true;
+  decisions.run_global_init = true;
+  decisions.run_init_client_settings = true;
+  decisions.run_post_client_settings = false;
+  decisions.run_app_bridge_app_start = false;
+  decisions.run_init_with_params = true;
+  decisions.call_real_init_with_params = true;
+  decisions.run_update_screen_orientation = false;
+  // MOCKTAIL_STEP_GAME_ACTIVITY_INIT defaults to "0", which disables this
+  // even in windowed runs. That default is load-bearing, not an override.
+  decisions.run_game_activity_init = false;
+  decisions.run_set_init_params = false;
+  decisions.run_app_lifecycle_active = false;
   decisions.run_native_fragment_start =
-      ShouldRunStartupStep("MOCKTAIL_STEP_NATIVE_FRAGMENT_START",
-                           has_window &&
-                               IsEnabled("MOCKTAIL_NATIVE_FRAGMENT_START")) &&
-      symbols.on_fragment_start != nullptr;
+      has_window && symbols.on_fragment_start != nullptr;
   decisions.run_display_refresh_rate =
-      ShouldRunStartupStep(
-          "MOCKTAIL_STEP_PASS_CURRENT_DISPLAY_REFRESH_RATE",
-          has_window &&
-              IsEnabled("MOCKTAIL_PASS_CURRENT_DISPLAY_REFRESH_RATE")) &&
-      (symbols.pass_current_display_refresh_rate != nullptr ||
-       symbols.pass_supported_refresh_rates != nullptr);
-  decisions.run_start_app_with_params = requested_start_app_with_params;
-  // Keep the real call opt-in because it can block before rendering starts.
-  decisions.call_real_start_app_with_params =
-      decisions.run_start_app_with_params &&
-      IsEnabled("MOCKTAIL_CALL_REAL_APP_BRIDGE_START");
-  decisions.run_start_lua_app_dm =
-      ShouldRunStartupStep("MOCKTAIL_STEP_START_LUA_APP_DM",
-                           IsEnabled("MOCKTAIL_START_LUA_APP_DM"));
-  decisions.run_native_settings =
-      ShouldRunStartupStep("MOCKTAIL_STEP_NATIVE_SETTINGS",
-                           decisions.run_init_with_params ||
-                               decisions.run_start_app_with_params);
-  decisions.run_prepare_jni =
-      ShouldRunStartupStep("MOCKTAIL_STEP_PREP_JNI",
-                               decisions.run_set_asset_path || decisions.run_global_init ||
-                                   decisions.run_init_client_settings ||
-                                   decisions.run_post_client_settings ||
-                                   decisions.run_app_bridge_app_start ||
-                                   decisions.run_native_settings ||
-                                   decisions.run_set_init_params ||
-                                   decisions.run_init_with_params ||
-                                   decisions.run_update_screen_orientation ||
-                                   decisions.run_game_activity_init ||
-                                   decisions.run_app_lifecycle_active ||
-                                   decisions.run_native_fragment_start ||
-                                   decisions.run_display_refresh_rate ||
-                                   decisions.run_start_app_with_params ||
-                                   decisions.run_start_lua_app_dm);
-
+      has_window && (symbols.pass_current_display_refresh_rate != nullptr ||
+                     symbols.pass_supported_refresh_rates != nullptr);
+  decisions.run_start_app_with_params = true;
+  decisions.call_real_start_app_with_params = false;
+  decisions.run_start_lua_app_dm = false;
+  decisions.run_native_settings = true;
+  decisions.run_prepare_jni = true;
   return decisions;
-}
-
-void ReportStartupDecisions(const StartupDecisions& decisions) {
-  PrintStepDecision("prepare JNI args", decisions.run_prepare_jni);
-  PrintStepDecision("nativeSetAssetPath", decisions.run_set_asset_path);
-  PrintStepDecision("nativeGameGlobalInit", decisions.run_global_init);
-  PrintStepDecision("nativeInitClientSettings", decisions.run_init_client_settings);
-  PrintStepDecision("nativePostClientSettingsLoadedInitialization3",
-                    decisions.run_post_client_settings);
-  PrintStepDecision("GameActivity.initializeNativeCode",
-                    decisions.run_game_activity_init);
-  PrintStepDecision("NativeSettings directories", decisions.run_native_settings);
-  PrintStepDecision("nativeAppBridgeSetInitParams", decisions.run_set_init_params);
-  PrintStepDecision("nativeAppBridgeV2InitWithParams", decisions.run_init_with_params);
-  PrintStepDecision("nativeUpdateScreenOrientation",
-                    decisions.run_update_screen_orientation);
-  PrintStepDecision("nativeAppBridgeAppStart", decisions.run_app_bridge_app_start);
-  PrintStepDecision("JNIAppLifecycleNativeAdapter.setActive",
-                    decisions.run_app_lifecycle_active);
-  PrintStepDecision("NativeGLInterface.nativeOnFragmentStart",
-                    decisions.run_native_fragment_start);
-  PrintStepDecision("NativeGLInterface.nativePassCurrentDisplayRefreshRate",
-                    decisions.run_display_refresh_rate);
-  PrintStepDecision("nativeAppBridgeStartLuaAppDM", decisions.run_start_lua_app_dm);
-  PrintStepDecision("nativeAppBridgeV2StartAppWithParams",
-                    decisions.run_start_app_with_params);
-  if (decisions.run_set_asset_path && !decisions.call_real_set_asset_path) {
-    PrintNativeBypass("nativeSetAssetPath",
-                      "MOCKTAIL_CALL_REAL_NATIVE_SET_ASSET_PATH");
-  }
-  if (decisions.run_init_with_params && !decisions.call_real_init_with_params) {
-    PrintNativeBypass("nativeAppBridgeV2InitWithParams",
-                      "MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT");
-  }
-  if (decisions.run_start_app_with_params && !decisions.call_real_start_app_with_params) {
-    PrintNativeBypass("nativeAppBridgeV2StartAppWithParams",
-                      "MOCKTAIL_CALL_REAL_APP_BRIDGE_START");
-  }
-  std::cout << "  [engine] startup decisions resolved. "
-            << "run_prepare_jni=" << (decisions.run_prepare_jni ? 1 : 0) << '\n'
-            << "  run_init_with_params=" << (decisions.run_init_with_params ? 1 : 0)
-            << " run_start_app_with_params="
-            << (decisions.run_start_app_with_params ? 1 : 0) << '\n' << std::flush;
-
 }
 
 // Pumps SDL until the window closes. Each tick drains typed window-surface
@@ -4737,26 +4065,10 @@ bool InitializeHostWindow(
     std::cout << "  [window] GUI-bound startup steps disabled (no SDL window)\n"
               << std::flush;
   } else {
-    if (!HasEnvValue("MOCKTAIL_APP_LIFECYCLE_ACTIVE") &&
-        !HasEnvValue("MOCKTAIL_STEP_APP_LIFECYCLE_ACTIVE")) {
-      setenv("MOCKTAIL_APP_LIFECYCLE_ACTIVE", "1", 1);
-      std::cout << "  [window] windowed startup: auto-enabled "
-                << "AppLifecycleNativeAdapter.setActive\n"
-                << std::flush;
-    }
-    if (!user_overrode_main_thread_message_pump) {
-      setenv("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "1", 1);
-      std::cout << "  [window] windowed startup: auto-enabled main-thread "
-                << "message pump\n"
-                << std::flush;
-    }
-    if (!user_overrode_call_start_app &&
-        IsEnabled("MOCKTAIL_STEP_START_APP_WITH_PARAMS")) {
-      setenv("MOCKTAIL_CALL_REAL_APP_BRIDGE_START", "1", 1);
-      std::cout << "  [window] windowed startup: auto-enabled real "
-                << "StartAppWithParams when auth allows it\n"
-                << std::flush;
-    }
+    setenv("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "1", 1);
+    std::cout << "  [window] windowed startup: auto-enabled main-thread "
+              << "message pump\n"
+              << std::flush;
   }
 
   return has_window;
@@ -5944,11 +5256,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     if (!bionic_egl_bridge.Load()) {
       std::cerr << "  [graphics] exact Bionic EGL adapter unavailable: "
                 << bionic_egl_bridge.error() << '\n';
-      if (IsEnabled("MOCKTAIL_REQUIRE_REAL_GRAPHICS")) {
-        std::cerr << "[FATAL] Windowed mode requires the exact "
-                     "Bionic EGL adapter.\n";
-        return EXIT_FAILURE;
-      }
     } else {
       for (const auto& [name, address] : bionic_egl_bridge.exports()) {
         linker::RegisterSyntheticSymbol("libEGL.so", name, address);
@@ -5962,8 +5269,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
 
   const BionicStubPreload stubs = PreloadBionicStubs(bionic_egl_bridge);
   void* real_gles_handle = nullptr;
-  if (has_window && !IsEnabled("MOCKTAIL_GLES_FORCE_STUB") &&
-      !IsEnabled("MOCKTAIL_GLES_NOOP_DRAW_CALLS")) {
+  if (has_window) {
     real_gles_handle = OpenRealGlesLibrary();
   }
 
@@ -5984,29 +5290,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
             << ", stub=" << gl_stats.gl_from_stub
             << ", host=" << gl_stats.gl_from_host
             << ", unresolved=" << gl_stats.gl_unresolved << '\n';
-  if (IsEnabled("MOCKTAIL_REQUIRE_REAL_GRAPHICS") && has_window &&
-      !IsEnabled("MOCKTAIL_GLES_FORCE_STUB") &&
-      !IsEnabled("MOCKTAIL_GLES_NOOP_DRAW_CALLS")) {
-    // Real graphics means no GL symbol came from a stub, none failed to
-    // resolve, and at least one came from a real source.
-    const bool gl_never_really_resolved =
-        gl_stats.gl_from_stub > 0 || gl_stats.gl_unresolved > 0;
-    const bool gl_from_no_real_source =
-        gl_stats.gl_from_window == 0 &&
-        gl_stats.gl_from_real_gles == 0 && gl_stats.gl_from_host == 0;
-    if (gl_never_really_resolved || gl_from_no_real_source) {
-      std::cerr << "[FATAL] Cannot guarantee real GL symbols for "
-                   "windowed mode.\n"
-                << "  Set MOCKTAIL_GLES_FORCE_STUB=1 or "
-                   "MOCKTAIL_GLES_NOOP_DRAW_CALLS=1 to continue with stubs.\n"
-                   "  Or clear MOCKTAIL_REQUIRE_REAL_GRAPHICS and inspect "
-                   "logs above.\n"
-                << "  Consider setting MOCKTAIL_GRAPHICS_BACKEND=angle-vulkan and "
-                   "MOCKTAIL_GLES_LIBRARY=<path-to-real-libGLESv2.so>.\n";
-      return EXIT_FAILURE;
-    }
-  }
-
   // Load synthetic libraries only after the import map is complete.
   linker::RegisterBionicPthreadKeyRuntimeForLibc();
   linker::RegisterBionicSysconfRuntimeForLibc();
@@ -6282,7 +5565,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
               << std::flush;
     const StartupDecisions decisions =
         ResolveStartupDecisions(has_window, symbols);
-    ReportStartupDecisions(decisions);
 
     // The direct GAME path still runs CoreScripts that query app protocols.
     // Install these independently of ExperienceProtocol's dynamic launch path.
