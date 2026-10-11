@@ -543,9 +543,6 @@ void ApplyRuntimeDefaults() {
   // loaded, and that store comes from ClientSettings. The offline-settings
   // defaults only disable flag fetching, so both of these must stay on for
   // the engine to get past "flags have been loaded".
-  SetEnvDefault("MOCKTAIL_FETCH_CLIENT_SETTINGS", "1");
-  SetEnvDefault("MOCKTAIL_INIT_CLIENT_SETTINGS", "1");
-  SetEnvDefault("MOCKTAIL_POST_CLIENT_SETTINGS", "0");
   SetEnvDefault("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP", "1");
   // Current Roblox Android builds drive app startup through NativeGLInterface's
   // V2 app bridge path. The legacy NativeAppBridgeInterface entry point stays
@@ -1156,21 +1153,7 @@ void EnsureAndroidDirectory(const std::string& android_path) {
   }
 }
 
-size_t GetEngineStackSize() {
-  const char* value = std::getenv("MOCKTAIL_ENGINE_STACK_MB");
-  if (value == nullptr || value[0] == '\0') {
-    return kDefaultEngineStackSize;
-  }
-
-  char* end = nullptr;
-  unsigned long long stack_mb = std::strtoull(value, &end, 10);
-  if (end == value || stack_mb == 0) {
-    return kDefaultEngineStackSize;
-  }
-
-  size_t stack_size = static_cast<size_t>(stack_mb) * 1024 * 1024;
-  return stack_size < kMinEngineStackSize ? kMinEngineStackSize : stack_size;
-}
+size_t GetEngineStackSize() { return kDefaultEngineStackSize; }
 
 void PrintStage(int stage, const char* description) {
   std::cout << "[stage " << stage << "] " << description << '\n'
@@ -1396,13 +1379,7 @@ void MocktailAppBridgeInit(JNIEnv* env, jstring app_params) {
   std::cout << "  [engine] app bridge params staged\n" << std::flush;
 }
 
-void MocktailAppBridgeStart(JNIEnv* env, jstring app_params) {
-  std::string params = JStringToString(env, app_params);
-  if (params.empty()) {
-    params = "{}";
-  }
-  setenv("MOCKTAIL_APP_BRIDGE_START_PARAMS", params.c_str(), 1);
-  setenv("MOCKTAIL_APP_STARTED", "1", 1);
+void MocktailAppBridgeStart(JNIEnv*, jstring) {
   std::cout << "  [engine] app bridge marked started\n" << std::flush;
 }
 
@@ -1488,9 +1465,8 @@ std::string ResolveClientSettingsJson() {
       GetEnvString("MOCKTAIL_CLIENT_SETTINGS_JSON_FILE", "");
   options.use_bundled = IsEnabled("MOCKTAIL_USE_BUNDLED_CLIENT_SETTINGS");
   options.offline_settings = IsEnabled("MOCKTAIL_OFFLINE_SETTINGS");
-  options.fetch = IsEnabled("MOCKTAIL_FETCH_CLIENT_SETTINGS");
-  options.auto_update =
-      !IsDisabled("MOCKTAIL_CLIENT_SETTINGS_AUTO_UPDATE");
+  options.fetch = true;
+  options.auto_update = true;
   options.application =
       GetEnvString("MOCKTAIL_CLIENT_SETTINGS_APP", "GoogleAndroidApp");
   options.url = GetEnvString("MOCKTAIL_CLIENT_SETTINGS_URL", "");
@@ -2615,15 +2591,9 @@ void* EngineStartupThread(void* arg) {
   EngineLog("PublishCurrentJniEnv");
   PublishCurrentJniEnv(env);
 
-  // Keep EGL unbound by default so the worker that runs real Roblox surface
-  // calls can become the first owner of the context. Binding here makes later
-  // worker MakeCurrent fail with EGL_BAD_ACCESS on Mesa/Wayland.
-  if (mocktail::window::IsInitialised() &&
-      IsEnabled("MOCKTAIL_BIND_EGL_ON_STARTUP_THREAD")) {
-    std::cout << "  [engine] binding EGL context on engine thread\n"
-              << std::flush;
-    mocktail::window::MakeCurrentOnThread();
-  }
+  // Keep EGL unbound so the worker that runs real Roblox surface calls can
+  // become the first owner of the context. Binding here makes later worker
+  // MakeCurrent fail with EGL_BAD_ACCESS on Mesa/Wayland.
   // JNI_OnLoad replaces env->functions; Stage 6 needs the pseudo-VM table.
   if (env && context->vm) {
     context->vm->RestoreFunctions();
@@ -3017,13 +2987,6 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
   ReportDisplayRefreshRates(context, env, native_gl_class);
 
 
-  int init_delay_ms = GetEnvInt("MOCKTAIL_APPBRIDGE_INIT_DELAY_MS", 0);
-  if (init_delay_ms > 0) {
-    std::cout << "  [engine] wait after AppBridge init: " << init_delay_ms
-              << " ms\n"
-              << std::flush;
-    usleep(static_cast<useconds_t>(init_delay_ms) * 1000);
-  }
 
 
   if (context->native_set_task_scheduler_background_mode) {
@@ -3627,14 +3590,12 @@ StartupDecisions ResolveStartupDecisions(
     bool has_window, const RobloxEngineSymbols& symbols) {
   StartupDecisions decisions;
   // Every step used to be tunable through MOCKTAIL_STEP_* and friends, with
-  // ApplyRuntimeDefaults and the windowed auto-enable filling the rest. The
-  // values below are what those gates evaluated to with nothing set; the
-  // flags are gone, so the defaults are the behavior. Beware
-  // CachedGetenv: reads before ApplyRuntimeDefaults freeze, so
-  // MOCKTAIL_START_LUA_APP_DM and MOCKTAIL_CALL_REAL_APP_BRIDGE_START
-  // evaluate false here even though defaults exist for them later, and
-  // the auto-enabled MOCKTAIL_APP_LIFECYCLE_ACTIVE never reaches the gate
-  // because the auto-enable's own check poisons the cache first.
+  // ApplyRuntimeDefaults filling the rest. The values below are what those
+  // gates evaluated to with nothing set; the flags are gone, so the
+  // defaults are the behavior. Beware CachedGetenv: reads before
+  // ApplyRuntimeDefaults freeze, so MOCKTAIL_START_LUA_APP_DM and
+  // MOCKTAIL_CALL_REAL_APP_BRIDGE_START evaluate false here even though
+  // defaults exist for them later.
   decisions.run_set_asset_path = true;
   decisions.call_real_set_asset_path = true;
   decisions.run_global_init = true;
@@ -4213,8 +4174,7 @@ int RunEngineStartup(EngineStartupContext* startup_context) {
       return EXIT_FAILURE;
     }
 
-    const int startup_timeout_ms =
-        GetEnvInt("MOCKTAIL_STARTUP_THREAD_TIMEOUT_MS", 0);
+    const int startup_timeout_ms = 0;
     if (startup_timeout_ms <= 0) {
       std::cout << "  [engine] joining startup thread\n" << std::flush;
     } else {
@@ -4244,9 +4204,7 @@ int RunEngineStartup(EngineStartupContext* startup_context) {
                   << std::flush;
       }
 
-      const int cancel_join_grace_ms = std::clamp(
-          GetEnvInt("MOCKTAIL_STARTUP_CANCEL_JOIN_GRACE_MS", 5000), 100,
-          60000);
+      const int cancel_join_grace_ms = 5000;
       const mocktail::runtime::OwnedPthreadCancelResult cancel_result =
           startup_thread.CancelAndJoinFor(
               cancel_join_grace_ms, 10, &PumpStartupOwnerThread);
@@ -5251,8 +5209,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
 
   JavaVM* raw_vm = jni_vm->GetJavaVM();
   PublishCurrentJniEnv(jni_vm->GetJNIEnv());
-  int jni_timeout_ms =
-      GetEnvInt("MOCKTAIL_JNI_ONLOAD_TIMEOUT_MS", 3000);
+  const int jni_timeout_ms = 3000;
   bool soft_timeout_enabled = IsEnabled("MOCKTAIL_JNI_ONLOAD_SOFT_TIMEOUT");
   bool soft_timeout_forced =
       IsEnabled("MOCKTAIL_JNI_ONLOAD_SOFT_TIMEOUT_FORCE");
@@ -5289,9 +5246,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         std::cerr << "  [jvm] JNI_OnLoad soft timeout exceeded; cancelling "
                      "without allowing runtime unwind\n"
                   << std::flush;
-        const int cancel_join_grace_ms = std::clamp(
-            GetEnvInt("MOCKTAIL_JNI_ONLOAD_CANCEL_JOIN_GRACE_MS", 5000), 100,
-            60000);
+        const int cancel_join_grace_ms = 5000;
         const mocktail::runtime::OwnedPthreadCancelResult cancel_result =
             onload_thread.CancelAndJoinFor(cancel_join_grace_ms, 10);
         std::cerr << "[FATAL] JNI_OnLoad did not complete before its timeout; "

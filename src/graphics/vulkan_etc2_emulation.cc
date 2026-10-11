@@ -86,13 +86,7 @@ bool Etc2UploadByteCounts(EtcFormat format, const VkExtent3D& extent,
 
 namespace {
 
-bool EmulationDisabledByEnvironment() {
-  static const bool disabled = [] {
-    const char* value = std::getenv("MOCKTAIL_DISABLE_ETC2_EMULATION");
-    return value != nullptr && value[0] != '\0' && std::strcmp(value, "0") != 0;
-  }();
-  return disabled;
-}
+
 
 }  // namespace
 
@@ -100,22 +94,7 @@ bool Etc2SupportAdvertised(const char* value) {
   return value == nullptr || std::strcmp(value, "0") != 0;
 }
 
-bool Etc2SupportAdvertised() {
-  static const bool advertised =
-      Etc2SupportAdvertised(std::getenv("MOCKTAIL_ADVERTISE_ETC2"));
-  return advertised;
-}
-
-std::uint32_t SmallTextureUpscale(const char* value) {
-  if (value == nullptr || value[0] < '0' || value[0] > '9') {
-    return kDefaultSmallTextureUpscale;
-  }
-  const long parsed = std::strtol(value, nullptr, 10);
-  if (parsed < 1) {
-    return 1;
-  }
-  return parsed > 8 ? 8 : static_cast<std::uint32_t>(parsed);
-}
+bool Etc2SupportAdvertised() { return true; }
 
 namespace {
 
@@ -470,8 +449,7 @@ struct VulkanEtc2Emulation::State {
   std::vector<std::uint8_t> scratch_source;
   std::vector<std::uint8_t> scratch_decoded;
   TextureOverrides overrides = TextureOverrides::FromEnvironment();
-  const std::uint32_t upscale =
-      SmallTextureUpscale(std::getenv("MOCKTAIL_SMALL_TEXTURE_UPSCALE"));
+  const std::uint32_t upscale = kDefaultSmallTextureUpscale;
 
   std::shared_ptr<const RgbaImage> FindOverride(const PendingUpload& upload,
                                                 const std::uint8_t* compressed,
@@ -604,7 +582,7 @@ VulkanEtc2Emulation::~VulkanEtc2Emulation() { delete state_; }
 
 bool VulkanEtc2Emulation::PhysicalDeviceNeedsEmulation(
     VkPhysicalDevice physical_device, PFN_vkGetPhysicalDeviceFeatures host) {
-  if (EmulationDisabledByEnvironment() || host == nullptr ||
+  if (host == nullptr ||
       physical_device == VK_NULL_HANDLE) {
     return false;
   }

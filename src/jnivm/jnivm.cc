@@ -110,11 +110,10 @@ std::unordered_map<std::string, jmethodID> g_method_ids;
 std::unordered_map<jobject, jlong> g_direct_buffer_capacities;
 bool g_android_graph_ready = false;
 bool g_fmod_initialized = true;
-constexpr jlong kLocalStorageUninitializedUser = -2;
 constexpr jlong kLocalStorageNoUser = -1;
 std::unordered_map<std::string, std::string> g_local_storage_values;
 std::unordered_set<jlong> g_local_storage_users;
-jlong g_local_storage_current_user = kLocalStorageUninitializedUser;
+jlong g_local_storage_current_user = kLocalStorageNoUser;
 bool g_cookie_store_loaded = false;
 std::string g_cookie_header;
 
@@ -419,33 +418,8 @@ jlong NanoTime() {
          static_cast<jlong>(ts.tv_nsec);
 }
 
-RobloxAuthIdentity ResearchRobloxIdentityFromEnvironment() {
-  RobloxAuthIdentity identity;
-  const char* value = std::getenv("MOCKTAIL_ROBLOX_USER_ID");
-  if (!value || value[0] == '\0') {
-    return identity;
-  }
-
-  errno = 0;
-  char* end = nullptr;
-  const long long parsed = std::strtoll(value, &end, 10);
-  if (errno == ERANGE || end == value || *end != '\0' || parsed <= 0 ||
-      static_cast<unsigned long long>(parsed) >
-          static_cast<unsigned long long>(
-              std::numeric_limits<int64_t>::max())) {
-    return identity;
-  }
-
-  // Normal startup injects identity through VM::SetRobloxAuthIdentity.
-  identity.user_id = static_cast<int64_t>(parsed);
-  const char* username = std::getenv("MOCKTAIL_ROBLOX_USERNAME");
-  if (username && username[0] != '\0') {
-    identity.username = username;
-    identity.display_name = username;
-  }
-  return identity;
-}
-
+// Identity always arrives through VM::SetRobloxAuthIdentity during normal
+// startup; without it this is an anonymous session.
 RobloxAuthIdentity RobloxIdentityForJava() {
   VM* vm = CurrentVM();
   if (vm) {
@@ -454,7 +428,7 @@ RobloxAuthIdentity RobloxIdentityForJava() {
       return identity;
     }
   }
-  return ResearchRobloxIdentityFromEnvironment();
+  return RobloxAuthIdentity{};
 }
 
 jlong RobloxUserIdForJava() {
@@ -867,30 +841,9 @@ bool FmodBooleanResultForMethod(const char* name, jboolean* result) {
   return false;
 }
 
-jlong ParseLocalStorageUserIdFromEnv() {
-  const char* value = std::getenv("MOCKTAIL_LOCAL_STORAGE_CURRENT_USER_ID");
-  if (!value || value[0] == '\0') {
-    value = std::getenv("MOCKTAIL_ROBLOX_USER_ID");
-  }
-  if (!value || value[0] == '\0') {
-    return 0;
-  }
-  errno = 0;
-  char* end = nullptr;
-  long long parsed = std::strtoll(value, &end, 10);
-  if (errno == ERANGE || end == value || *end != '\0') {
-    return 0;
-  }
-  return static_cast<jlong>(parsed);
-}
-
 jlong CurrentLocalStorageUserLocked() {
-  if (g_local_storage_current_user == kLocalStorageUninitializedUser) {
-    g_local_storage_current_user = ParseLocalStorageUserIdFromEnv();
-    if (g_local_storage_current_user != kLocalStorageNoUser) {
-      g_local_storage_users.insert(g_local_storage_current_user);
-    }
-  }
+  // The engine reports its user through setCurrentUser; until then there
+  // is no user. No environment fallback: identity comes from auth.
   return g_local_storage_current_user;
 }
 

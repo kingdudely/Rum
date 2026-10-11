@@ -28,7 +28,6 @@ bool Etc2SupportAdvertised();
 
 inline constexpr std::uint32_t kSmallTextureMaxExtent = 64;
 inline constexpr std::uint32_t kDefaultSmallTextureUpscale = 4;
-std::uint32_t SmallTextureUpscale(const char* value);
 
 class VulkanEtc2Emulation final {
  public:

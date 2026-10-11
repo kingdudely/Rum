@@ -119,7 +119,6 @@ struct WindowState {
   bool visible = false;
   bool software_window = false;
   bool direct_vulkan = false;
-  bool input_test_sequence_queued = false;
   bool fullscreen_readiness_requested = false;
   bool fullscreen_readiness_return_requested = false;
   bool restored_fullscreen_sync_pending = false;
@@ -1003,7 +1002,6 @@ bool Init(int width, int height, const char* title) {
   }
   g_state.width = width;
   g_state.height = height;
-  g_state.input_test_sequence_queued = false;
   g_state.fullscreen_readiness_requested = false;
   g_state.fullscreen_readiness_return_requested = false;
   g_state.fullscreen_readiness_present_baseline = 0;
@@ -1203,11 +1201,6 @@ bool Init(int width, int height, const char* title) {
   ShowWindowAccordingToStartupMode();
 
   SDL_GLContext sdl_context = SDL_GL_CreateContext(g_state.sdl_window);
-  if (!sdl_context && IsEnabledEnv("MOCKTAIL_ALLOW_GLES2_RESEARCH")) {
-    // Current Roblox clients reject GLES2; this path supports older payloads.
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    sdl_context = SDL_GL_CreateContext(g_state.sdl_window);
-  }
   if (!sdl_context) {
     fprintf(stderr,
             "  [window] OpenGL ES 3.0 context required; "
@@ -1258,8 +1251,7 @@ bool Init(int width, int height, const char* title) {
     fprintf(stderr, "  [window] OpenGL ES context version unavailable: %s\n",
             SDL_GetError());
   }
-  if ((!context_version_available || context_major < 3) &&
-      !IsEnabledEnv("MOCKTAIL_ALLOW_GLES2_RESEARCH")) {
+  if (!context_version_available || context_major < 3) {
     fprintf(stderr,
             "  [window] refusing unsupported OpenGL ES context; version "
             "3.0 or newer is required\n");
@@ -1763,75 +1755,6 @@ bool ShouldIgnoreCloseRequest() {
          std::strcmp(keepalive_ms, "0") != 0;
 }
 
-void MaybeQueueInputReadinessSequence() {
-  if (g_state.input_test_sequence_queued ||
-      !StringEquals(GetEnvNonEmpty("MOCKTAIL_INPUT_TEST_CLICK"), "1") ||
-      !HasPresentedFrame() || !g_platform_event_observer.HasObserver() ||
-      g_state.sdl_window == nullptr) {
-    return;
-  }
-
-  int logical_width = 0;
-  int logical_height = 0;
-  if (!SDL_GetWindowSize(g_state.sdl_window, &logical_width, &logical_height) ||
-      logical_width <= 0 || logical_height <= 0) {
-    return;
-  }
-  const float x = static_cast<float>(logical_width) * 0.5f;
-  const float y = static_cast<float>(logical_height) * 0.5f;
-  const SDL_WindowID window_id = SDL_GetWindowID(g_state.sdl_window);
-
-  SDL_Event focus{};
-  focus.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
-  focus.window.windowID = window_id;
-  // An opt-in readiness click may need a synthetic focus event.
-  const bool needs_focus =
-      (SDL_GetWindowFlags(g_state.sdl_window) & SDL_WINDOW_INPUT_FOCUS) == 0;
-
-  SDL_Event motion{};
-  motion.type = SDL_EVENT_MOUSE_MOTION;
-  motion.motion.windowID = window_id;
-  motion.motion.x = x;
-  motion.motion.y = y;
-
-  SDL_Event down{};
-  down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-  down.button.windowID = window_id;
-  down.button.button = SDL_BUTTON_LEFT;
-  down.button.down = true;
-  down.button.clicks = 1;
-  down.button.x = x;
-  down.button.y = y;
-
-  SDL_Event up = down;
-  up.type = SDL_EVENT_MOUSE_BUTTON_UP;
-  up.button.down = false;
-
-  SDL_Event touch_down{};
-  touch_down.type = SDL_EVENT_FINGER_DOWN;
-  touch_down.tfinger.windowID = window_id;
-  touch_down.tfinger.touchID = 1;
-  touch_down.tfinger.fingerID = 1;
-  touch_down.tfinger.x = 0.5f;
-  touch_down.tfinger.y = 0.5f;
-  touch_down.tfinger.pressure = 1.0f;
-
-  SDL_Event touch_up = touch_down;
-  touch_up.type = SDL_EVENT_FINGER_UP;
-  touch_up.tfinger.pressure = 0.0f;
-
-  g_state.input_test_sequence_queued = true;
-  if ((needs_focus && !SDL_PushEvent(&focus)) || !SDL_PushEvent(&motion) ||
-      !SDL_PushEvent(&down) || !SDL_PushEvent(&up) ||
-      !SDL_PushEvent(&touch_down) || !SDL_PushEvent(&touch_up)) {
-    fprintf(stderr,
-            "  [input] failed to queue SDL readiness pointer sequence: %s\n",
-            SDL_GetError());
-    return;
-  }
-  fprintf(stderr, "  [input] SDL readiness pointer sequence queued\n");
-}
-
 void MaybeRequestResizeReadiness() {
   if (g_resize_readiness_gate == nullptr || g_state.sdl_window == nullptr) {
     return;
@@ -2075,7 +1998,6 @@ bool PumpEvents() {
   MaybeApplyAndroidFullscreenRequest();
   MaybeRequestResizeReadiness();
   MaybeRequestFullscreenReadiness();
-  MaybeQueueInputReadinessSequence();
   if (!g_pre_text_input_pump_gate.Invoke()) {
     fprintf(stderr, "  [input] main-thread text command drain failed\n");
   }
@@ -2376,7 +2298,6 @@ void Shutdown() {
   g_state.software_window = false;
   g_state.direct_vulkan = false;
   g_state.display_refresh = {};
-  g_state.input_test_sequence_queued = false;
   g_state.resize_target_logical_width = 0;
   g_state.resize_target_logical_height = 0;
   g_state.fullscreen_readiness_requested = false;
