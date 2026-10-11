@@ -160,7 +160,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/runtime_config.cc
   src/runtime/runtime_paths.cc
   src/runtime/session_log.cc
-  src/runtime/support_bundle.cc
   src/runtime/texture_memory_policy.cc
 )
 add_library(Mocktail::Runtime ALIAS mocktail_runtime)

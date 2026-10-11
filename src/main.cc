@@ -37,7 +37,6 @@
 #include "runtime/runtime_config.h"
 #include "runtime/runtime_paths.h"
 #include "runtime/session_log.h"
-#include "runtime/support_bundle.h"
 #include "services/auth_service.h"
 #include "services/client_settings_service.h"
 #include "services/http_client.h"
@@ -629,9 +628,7 @@ StepResult BuildRuntimeDependencies(
 // exit status.
 // ---------------------------------------------------------------------------
 int FinishRuntime(const CommandLineOptions& options, int runtime_status,
-                  mocktail::runtime::FailureSupportBundleGuard* support_bundle_guard,
                   mocktail::runtime::GameModeSession* game_mode_session) {
-  support_bundle_guard->SetExitCode(runtime_status);
   const mocktail::Status game_mode_stop_status = game_mode_session->Stop();
   if (!game_mode_stop_status.ok()) {
     std::cerr << "  [gamemode] release failed: "
@@ -640,7 +637,6 @@ int FinishRuntime(const CommandLineOptions& options, int runtime_status,
   if (runtime_status != EXIT_SUCCESS) {
     return runtime_status;
   }
-  support_bundle_guard->Disarm();
   if (IsRunning(options)) {
     // Guest atexit handlers target workers that cannot be joined. Host
     // shutdown is already complete here, so do not re-enter guest teardown.
@@ -694,8 +690,6 @@ int main(int argc, char* argv[]) {
   // Lifetime objects. Declared here so their destructors run in reverse order
   // after the engine has fully shut down.
   mocktail::runtime::SessionLog session_log;
-  mocktail::runtime::FailureSupportBundleGuard support_bundle_guard(
-      environment, paths, IsRunning(options));
   mocktail::legacy::RuntimeDependencies dependencies;
 
   RuntimeConfig runtime_config;
@@ -758,6 +752,5 @@ int main(int argc, char* argv[]) {
               << '\n';
   }
   return FinishRuntime(options, runtime_status,
-                       &support_bundle_guard,
                        &game_mode_session);
 }

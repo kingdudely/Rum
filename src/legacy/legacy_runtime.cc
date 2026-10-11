@@ -2154,195 +2154,193 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   std::unique_ptr<mocktail::runtime::RobloxTextInputJniBridge>
       text_input_bridge;
   mocktail::window::ScopedPresentObserver game_present_observer;
-  if (!IsDisabled("MOCKTAIL_START_ENGINE")) {
-    PrintStage(6, "Invoking Roblox startup entry points");
+  PrintStage(6, "Invoking Roblox startup entry points");
 
-    const mocktail::runtime::RobloxSymbolLookup capability_lookup(
-        &ResolveRobloxCapabilitySymbol, &roblox_handle);
-    const mocktail::runtime::RobloxCapabilityResolution capability_resolution =
-        mocktail::runtime::ResolveRobloxCapabilities(
-            capability_lookup,
-            mocktail::runtime::RobloxCapabilityRequirements{has_window});
-    if (!capability_resolution.ok()) {
-      std::cerr << "\n[FATAL] Roblox startup capability resolution failed: "
-                << mocktail::runtime::RobloxCapabilityResolutionStatusName(
-                       capability_resolution.status())
+  const mocktail::runtime::RobloxSymbolLookup capability_lookup(
+      &ResolveRobloxCapabilitySymbol, &roblox_handle);
+  const mocktail::runtime::RobloxCapabilityResolution capability_resolution =
+      mocktail::runtime::ResolveRobloxCapabilities(
+          capability_lookup,
+          mocktail::runtime::RobloxCapabilityRequirements{has_window});
+  if (!capability_resolution.ok()) {
+    std::cerr << "\n[FATAL] Roblox startup capability resolution failed: "
+              << mocktail::runtime::RobloxCapabilityResolutionStatusName(
+                     capability_resolution.status())
+              << '\n';
+    for (const std::string& symbol_name :
+         capability_resolution.missing_required_symbols()) {
+      std::cerr << "  - " << symbol_name << '\n';
+    }
+    return EXIT_FAILURE;
+  }
+
+  const mocktail::runtime::RobloxCapabilities& roblox_capabilities =
+      *capability_resolution.capabilities();
+  const mocktail::runtime::RobloxStartupSymbols& startup_symbols =
+      roblox_capabilities.startup;
+  if (has_window) {
+    const mocktail::runtime::RobloxGameSessionResolution game_resolution =
+        mocktail::runtime::ResolveRobloxGameSessionSymbols(capability_lookup);
+    if (!game_resolution.ok()) {
+      std::cerr << "\n[FATAL] GAME lifecycle symbol resolution failed: "
+                << mocktail::runtime::RobloxGameSessionResolutionStatusName(
+                       game_resolution.status())
                 << '\n';
       for (const std::string& symbol_name :
-           capability_resolution.missing_required_symbols()) {
+           game_resolution.missing_required_symbols()) {
         std::cerr << "  - " << symbol_name << '\n';
       }
       return EXIT_FAILURE;
     }
-
-    const mocktail::runtime::RobloxCapabilities& roblox_capabilities =
-        *capability_resolution.capabilities();
-    const mocktail::runtime::RobloxStartupSymbols& startup_symbols =
-        roblox_capabilities.startup;
-    if (has_window) {
-      const mocktail::runtime::RobloxGameSessionResolution game_resolution =
-          mocktail::runtime::ResolveRobloxGameSessionSymbols(capability_lookup);
-      if (!game_resolution.ok()) {
-        std::cerr << "\n[FATAL] GAME lifecycle symbol resolution failed: "
-                  << mocktail::runtime::RobloxGameSessionResolutionStatusName(
-                         game_resolution.status())
-                  << '\n';
-        for (const std::string& symbol_name :
-             game_resolution.missing_required_symbols()) {
-          std::cerr << "  - " << symbol_name << '\n';
-        }
-        return EXIT_FAILURE;
-      }
-      if (IsEnabled("MOCKTAIL_START_GAME_WITH_PARAM")) {
-        mocktail::runtime::JniEnvironmentProvider environment{
-            raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
-        mocktail::runtime::RobloxGameSurfaceJniConfig surface_config;
-        surface_config.asset_folder_path = DefaultAssetPath();
-        surface_config.dpi_scale =
-            mocktail::window::GetWindowViewportSnapshot().dpi_scale;
-        surface_config.is_touch_device = input_capabilities.touch_enabled;
-        surface_config.is_mouse_device = input_capabilities.mouse_enabled;
-        surface_config.is_keyboard_device =
-            input_capabilities.keyboard_enabled;
-        game_session_runtime =
-            std::make_unique<mocktail::runtime::RobloxGameSessionRuntime>(
-                environment, *game_resolution.symbols(),
-                std::move(surface_config));
-        std::cout << "  [game-session] eager typed GAME symbols ready\n"
-                  << std::flush;
-      } else {
-        experience_game_symbols =
-            std::make_unique<mocktail::runtime::RobloxGameSessionSymbols>(
-                *game_resolution.symbols());
-        std::cout << "  [experience] dynamic GAME symbols ready\n"
-                  << std::flush;
-      }
-    }
-
-    const RobloxEngineSymbols symbols = ResolveRobloxEngineSymbols(
-        roblox_handle, startup_symbols, jni_vm.get());
-    g_native_call_messages_from_main_thread =
-        symbols.call_messages_from_main_thread;
-    std::cout << "  [engine] Stage6 symbol resolve done" << std::endl;
-    ReportResolvedEngineSymbols(symbols);
-    void* message_bus_publish_response_raw = linker::ResolveSymbol(
-        roblox_handle,
-        "Java_com_roblox_universalapp_messagebus_MessageBus_"
-        "publishProtocolMethodResponseRaw");
-
-    if (StartupSymbolsMissing(symbols, message_bus_publish_response_raw)) {
-      std::cerr << "\n[FATAL] One or more NativeGL startup symbols were not "
-                << "found.\n";
-      return EXIT_FAILURE;
-    }
-
-    std::cout << "  [compat] skipped fixed-offset Stage 6 patch set\n"
-              << std::flush;
-    const StartupDecisions decisions =
-        ResolveStartupDecisions(has_window, symbols);
-
-    // The direct GAME path still runs CoreScripts that query app protocols.
-    // Install these independently of ExperienceProtocol's dynamic launch path.
-    if (game_session_runtime != nullptr &&
-        !InstallGamePlatformProtocols(raw_vm, jni_vm.get(), roblox_handle,
-                                      runtime_config.microphone_enabled(),
-                                      &game_protocols)) {
-      return EXIT_FAILURE;
-    }
-
-    if (experience_game_symbols != nullptr &&
-        !InstallExperiencePlatformProtocols(
-            raw_vm, jni_vm.get(), roblox_handle, *experience_game_symbols,
-            &game_present_observer, input_capabilities,
-            runtime_config.microphone_enabled(), &experience_composition)) {
-      return EXIT_FAILURE;
-    }
-
-    EngineStartupContext startup_context_value =
-        BuildEngineStartupContext(jni_vm.get(), raw_vm, options, dependencies,
-                                    game_session_runtime.get(), decisions,
-                                    symbols);
-    if (game_session_runtime != nullptr) {
-      if (!game_present_observer.Register(
-              &mocktail::runtime::RobloxGameSessionRuntime::
-                  SuccessfulPresentCallback,
-              game_session_runtime.get())) {
-        std::cerr << "[FATAL] Could not register the GAME host present "
-                     "observer\n";
-        return EXIT_FAILURE;
-      }
-      std::cout << "  [game-session] host present observer registered\n"
+    if (IsEnabled("MOCKTAIL_START_GAME_WITH_PARAM")) {
+      mocktail::runtime::JniEnvironmentProvider environment{
+          raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
+      mocktail::runtime::RobloxGameSurfaceJniConfig surface_config;
+      surface_config.asset_folder_path = DefaultAssetPath();
+      surface_config.dpi_scale =
+          mocktail::window::GetWindowViewportSnapshot().dpi_scale;
+      surface_config.is_touch_device = input_capabilities.touch_enabled;
+      surface_config.is_mouse_device = input_capabilities.mouse_enabled;
+      surface_config.is_keyboard_device =
+          input_capabilities.keyboard_enabled;
+      game_session_runtime =
+          std::make_unique<mocktail::runtime::RobloxGameSessionRuntime>(
+              environment, *game_resolution.symbols(),
+              std::move(surface_config));
+      std::cout << "  [game-session] eager typed GAME symbols ready\n"
+                << std::flush;
+    } else {
+      experience_game_symbols =
+          std::make_unique<mocktail::runtime::RobloxGameSessionSymbols>(
+              *game_resolution.symbols());
+      std::cout << "  [experience] dynamic GAME symbols ready\n"
                 << std::flush;
     }
-    const int engine_startup_result = RunEngineStartup(&startup_context_value);
-    if (engine_startup_result != EXIT_SUCCESS) {
-      return engine_startup_result;
-    }
-    if (game_session_runtime != nullptr &&
-        !game_session_runtime->startup_status().ok()) {
-      std::cerr << "[FATAL] Typed GAME lifecycle did not start: "
-                << game_session_runtime->startup_status().message() << '\n';
+  }
+
+  const RobloxEngineSymbols symbols = ResolveRobloxEngineSymbols(
+      roblox_handle, startup_symbols, jni_vm.get());
+  g_native_call_messages_from_main_thread =
+      symbols.call_messages_from_main_thread;
+  std::cout << "  [engine] Stage6 symbol resolve done" << std::endl;
+  ReportResolvedEngineSymbols(symbols);
+  void* message_bus_publish_response_raw = linker::ResolveSymbol(
+      roblox_handle,
+      "Java_com_roblox_universalapp_messagebus_MessageBus_"
+      "publishProtocolMethodResponseRaw");
+
+  if (StartupSymbolsMissing(symbols, message_bus_publish_response_raw)) {
+    std::cerr << "\n[FATAL] One or more NativeGL startup symbols were not "
+              << "found.\n";
+    return EXIT_FAILURE;
+  }
+
+  std::cout << "  [compat] skipped fixed-offset Stage 6 patch set\n"
+            << std::flush;
+  const StartupDecisions decisions =
+      ResolveStartupDecisions(has_window, symbols);
+
+  // The direct GAME path still runs CoreScripts that query app protocols.
+  // Install these independently of ExperienceProtocol's dynamic launch path.
+  if (game_session_runtime != nullptr &&
+      !InstallGamePlatformProtocols(raw_vm, jni_vm.get(), roblox_handle,
+                                    runtime_config.microphone_enabled(),
+                                    &game_protocols)) {
+    return EXIT_FAILURE;
+  }
+
+  if (experience_game_symbols != nullptr &&
+      !InstallExperiencePlatformProtocols(
+          raw_vm, jni_vm.get(), roblox_handle, *experience_game_symbols,
+          &game_present_observer, input_capabilities,
+          runtime_config.microphone_enabled(), &experience_composition)) {
+    return EXIT_FAILURE;
+  }
+
+  EngineStartupContext startup_context_value =
+      BuildEngineStartupContext(jni_vm.get(), raw_vm, options, dependencies,
+                                  game_session_runtime.get(), decisions,
+                                  symbols);
+  if (game_session_runtime != nullptr) {
+    if (!game_present_observer.Register(
+            &mocktail::runtime::RobloxGameSessionRuntime::
+                SuccessfulPresentCallback,
+            game_session_runtime.get())) {
+      std::cerr << "[FATAL] Could not register the GAME host present "
+                   "observer\n";
       return EXIT_FAILURE;
     }
-    if (experience_composition != nullptr &&
-        dependencies.account_identity().user_id > 0) {
-      const mocktail::window::WindowSurfaceSnapshot window_surface =
-          mocktail::window::GetWindowSurfaceSnapshot();
-      mocktail::runtime::RobloxLuaAppExperienceReadiness readiness;
-      readiness.principal.kind =
-          mocktail::runtime::GameSessionPrincipalKind::kAuthenticated;
-      readiness.principal.generation = 1;
-      readiness.principal.principal_id =
-          std::to_string(dependencies.account_identity().user_id);
-      readiness.principal.base_url = "https://www.roblox.com/";
-      readiness.surface = {window_surface.generation,
-                           window_surface.native_window, window_surface.width,
-                           window_surface.height, window_surface.dpi_scale};
-      readiness.username = dependencies.account_identity().username;
-      const mocktail::Status experience_status =
-          experience_composition->OnLuaAppReady(std::move(readiness));
-      if (!experience_status.ok()) {
-        std::cerr << "[FATAL] Dynamic ExperienceProtocol did not initialize: "
-                  << experience_status.message() << '\n';
-        return EXIT_FAILURE;
-      }
-      if (dependencies.initial_launch_request().has_value()) {
-        const mocktail::Status initial_launch_status =
-            experience_composition->Dispatch(
-                *dependencies.initial_launch_request());
-        if (!initial_launch_status.ok()) {
-          std::cerr << "[FATAL] Could not queue the requested experience "
-                       "launch: "
-                    << initial_launch_status.message() << '\n';
-          return EXIT_FAILURE;
-        }
-      }
-      experience_lifecycle_target = std::make_shared<ExperienceLifecycleTarget>(
-          ExperienceLifecycleTarget{experience_composition});
-      jni_vm->SetRobloxExperienceLifecycleCallbacks(
-          experience_lifecycle_target,
-          jnivm::RobloxExperienceLifecycleCallbacks{&NotifyLuaAppDidReturn});
-      std::cout << "  [experience] subscribed to dynamic launch requests\n"
-                << std::flush;
-    } else if (experience_composition != nullptr) {
-      if (dependencies.initial_launch_request().has_value()) {
-        std::cerr << "[FATAL] A place launch needs a signed-in session, but "
-                     "this run is anonymous\n";
-        return EXIT_FAILURE;
-      }
-      std::cout << "  [experience] dynamic launch subscription awaits an "
-                   "authenticated identity\n"
-                << std::flush;
-    }
-    if (!InitializeTypedInput(raw_vm, jni_vm,
-                              roblox_capabilities.input,
-                              window_input_runtime,
-                              text_input_bridge)) {
-      return EXIT_FAILURE;
-    }
-    std::cout << "  [engine] legacy startup call sequence returned\n"
+    std::cout << "  [game-session] host present observer registered\n"
               << std::flush;
   }
+  const int engine_startup_result = RunEngineStartup(&startup_context_value);
+  if (engine_startup_result != EXIT_SUCCESS) {
+    return engine_startup_result;
+  }
+  if (game_session_runtime != nullptr &&
+      !game_session_runtime->startup_status().ok()) {
+    std::cerr << "[FATAL] Typed GAME lifecycle did not start: "
+              << game_session_runtime->startup_status().message() << '\n';
+    return EXIT_FAILURE;
+  }
+  if (experience_composition != nullptr &&
+      dependencies.account_identity().user_id > 0) {
+    const mocktail::window::WindowSurfaceSnapshot window_surface =
+        mocktail::window::GetWindowSurfaceSnapshot();
+    mocktail::runtime::RobloxLuaAppExperienceReadiness readiness;
+    readiness.principal.kind =
+        mocktail::runtime::GameSessionPrincipalKind::kAuthenticated;
+    readiness.principal.generation = 1;
+    readiness.principal.principal_id =
+        std::to_string(dependencies.account_identity().user_id);
+    readiness.principal.base_url = "https://www.roblox.com/";
+    readiness.surface = {window_surface.generation,
+                         window_surface.native_window, window_surface.width,
+                         window_surface.height, window_surface.dpi_scale};
+    readiness.username = dependencies.account_identity().username;
+    const mocktail::Status experience_status =
+        experience_composition->OnLuaAppReady(std::move(readiness));
+    if (!experience_status.ok()) {
+      std::cerr << "[FATAL] Dynamic ExperienceProtocol did not initialize: "
+                << experience_status.message() << '\n';
+      return EXIT_FAILURE;
+    }
+    if (dependencies.initial_launch_request().has_value()) {
+      const mocktail::Status initial_launch_status =
+          experience_composition->Dispatch(
+              *dependencies.initial_launch_request());
+      if (!initial_launch_status.ok()) {
+        std::cerr << "[FATAL] Could not queue the requested experience "
+                     "launch: "
+                  << initial_launch_status.message() << '\n';
+        return EXIT_FAILURE;
+      }
+    }
+    experience_lifecycle_target = std::make_shared<ExperienceLifecycleTarget>(
+        ExperienceLifecycleTarget{experience_composition});
+    jni_vm->SetRobloxExperienceLifecycleCallbacks(
+        experience_lifecycle_target,
+        jnivm::RobloxExperienceLifecycleCallbacks{&NotifyLuaAppDidReturn});
+    std::cout << "  [experience] subscribed to dynamic launch requests\n"
+              << std::flush;
+  } else if (experience_composition != nullptr) {
+    if (dependencies.initial_launch_request().has_value()) {
+      std::cerr << "[FATAL] A place launch needs a signed-in session, but "
+                   "this run is anonymous\n";
+      return EXIT_FAILURE;
+    }
+    std::cout << "  [experience] dynamic launch subscription awaits an "
+                 "authenticated identity\n"
+              << std::flush;
+  }
+  if (!InitializeTypedInput(raw_vm, jni_vm,
+                            roblox_capabilities.input,
+                            window_input_runtime,
+                            text_input_bridge)) {
+    return EXIT_FAILURE;
+  }
+  std::cout << "  [engine] legacy startup call sequence returned\n"
+            << std::flush;
 
   std::cout << "\n======================================================\n"
             << "  Bootstrap sequence returned; validating readiness.\n"
