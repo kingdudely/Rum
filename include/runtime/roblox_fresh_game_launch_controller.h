@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_FRESH_GAME_LAUNCH_CONTROLLER_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_FRESH_GAME_LAUNCH_CONTROLLER_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_FRESH_GAME_LAUNCH_CONTROLLER_H_
+#define ROBLOX_RUNTIME_ROBLOX_FRESH_GAME_LAUNCH_CONTROLLER_H_
 
 #include <jni.h>
 
@@ -8,11 +8,11 @@
 #include <mutex>
 #include <string>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 #include "runtime/roblox_experience_launch_bridge.h"
 #include "runtime/roblox_game_session_native_adapter.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Borrowed LuaApp JNI objects plus owned identity/surface values needed
@@ -112,6 +112,6 @@ class RobloxFreshGameLaunchController final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_FRESH_GAME_LAUNCH_CONTROLLER_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_FRESH_GAME_LAUNCH_CONTROLLER_H_

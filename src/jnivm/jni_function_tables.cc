@@ -5,8 +5,8 @@
 #include "jni_fields.h"
 #include "jni_strings.h"
 
-#include "mocktail/audio/fmod_thread_floating_point.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/audio/fmod_thread_floating_point.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <algorithm>
 #include <atomic>
@@ -71,7 +71,7 @@ void VM::InitJavaVMInterface() {
       const auto* attach_args = static_cast<const JavaVMAttachArgs*>(args);
       if (attach_args != nullptr &&
           g_thread_audio_fp_mode.Enable(attach_args->name)) {
-        std::fprintf(stderr, "  [mocktail][audio] %s: enabled FTZ/DAZ\n",
+        std::fprintf(stderr, "  [roblox][audio] %s: enabled FTZ/DAZ\n",
                      attach_args->name);
       }
     }
@@ -1271,12 +1271,12 @@ void VM::InitJNIEnvMiscInterface() {
 	      }
 	      struct GameActivityBinding { const char* method; void** out; };
 	      const GameActivityBinding game_activity_bindings[] = {
-	          {"onStartNative", &mocktail_gameactivity_on_start_native},
-	          {"onResumeNative", &mocktail_gameactivity_on_resume_native},
-	          {"onSurfaceCreatedNative", &mocktail_gameactivity_on_surface_created_native},
-	          {"onSurfaceChangedNative", &mocktail_gameactivity_on_surface_changed_native},
-	          {"onSurfaceRedrawNeededNative", &mocktail_gameactivity_on_surface_redraw_needed_native},
-	          {"onTrimMemoryNative", &mocktail_gameactivity_on_trim_memory_native},
+	          {"onStartNative", &roblox_gameactivity_on_start_native},
+	          {"onResumeNative", &roblox_gameactivity_on_resume_native},
+	          {"onSurfaceCreatedNative", &roblox_gameactivity_on_surface_created_native},
+	          {"onSurfaceChangedNative", &roblox_gameactivity_on_surface_changed_native},
+	          {"onSurfaceRedrawNeededNative", &roblox_gameactivity_on_surface_redraw_needed_native},
+	          {"onTrimMemoryNative", &roblox_gameactivity_on_trim_memory_native},
 	      };
 	      for (const auto& b : game_activity_bindings) {
 	        if (std::strcmp(name, b.method) == 0) {

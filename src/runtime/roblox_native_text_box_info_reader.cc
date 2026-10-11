@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -193,4 +193,4 @@ Status QueryRobloxNativeTextBoxInfo(
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

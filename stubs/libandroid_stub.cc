@@ -49,13 +49,13 @@ AAssetManager g_asset_manager;
 
 bool TraceEnabled() {
   static const bool enabled =
-      StubAnyEnvSet({"MOCKTAIL_TRACE"});
+      StubAnyEnvSet({"ROBLOX_TRACE"});
   return enabled;
 }
 
 bool AssetTraceEnabled() {
   static const bool enabled =
-      StubAnyEnvSet({"MOCKTAIL_TRACE"});
+      StubAnyEnvSet({"ROBLOX_TRACE"});
   return enabled;
 }
 
@@ -118,14 +118,14 @@ std::string NormalizeAssetRequest(std::string_view path) {
 
 // The guest resolves assets against the APK's asset directory, which is the
 // parent of the content/ directory handed to the app bridge. Derive it from
-// MOCKTAIL_ASSET_PATH so asset lookups work during early startup, before the
-// engine calls back into MocktailSetAssetPath.
+// ROBLOX_ASSET_PATH so asset lookups work during early startup, before the
+// engine calls back into RobloxSetAssetPath.
 std::string DefaultAssetRoot() {
-  const char* root = StubGetEnvNonEmpty("MOCKTAIL_ASSET_ROOT");
+  const char* root = StubGetEnvNonEmpty("ROBLOX_ASSET_ROOT");
   if (root != nullptr) {
     return root;
   }
-  const char* content = StubGetEnvNonEmpty("MOCKTAIL_ASSET_PATH");
+  const char* content = StubGetEnvNonEmpty("ROBLOX_ASSET_PATH");
   if (content != nullptr) {
     std::string assets(content);
     while (assets.size() > 1 && assets.back() == '/') {
@@ -276,35 +276,35 @@ bool LoadFile(const std::string& path, std::vector<unsigned char>* data) {
 }
 
 
-void* MocktailNativeWindow() {
+void* RobloxNativeWindow() {
   using Fn = void* (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = StubResolveCached(&cached_fn, "mocktail_native_window");
+  Fn fn = StubResolveCached(&cached_fn, "roblox_native_window");
   return fn != nullptr ? fn() : nullptr;
 }
 
-int MocktailWindowWidth() {
+int RobloxWindowWidth() {
   using Fn = int (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_width");
+  Fn fn = StubResolveCached(&cached_fn, "roblox_window_width");
   return fn != nullptr ? fn() : 1280;
 }
 
-int MocktailWindowHeight() {
+int RobloxWindowHeight() {
   using Fn = int (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_height");
+  Fn fn = StubResolveCached(&cached_fn, "roblox_window_height");
   return fn != nullptr ? fn() : 720;
 }
 
-bool MocktailUsesDirectVulkan() {
+bool RobloxUsesDirectVulkan() {
   using Fn = bool (*)();
   static Fn cached_fn = nullptr;
-  Fn fn = StubResolveCached(&cached_fn, "mocktail_window_uses_direct_vulkan");
+  Fn fn = StubResolveCached(&cached_fn, "roblox_window_uses_direct_vulkan");
   if (fn != nullptr) {
     return fn();
   }
-  const char* backend = StubGetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND");
+  const char* backend = StubGetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND");
   return backend != nullptr && std::strcmp(backend, "direct-vulkan") == 0;
 }
 
@@ -322,8 +322,8 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename,
     if (AssetTraceEnabled()) {
       std::fprintf(stderr, "[asset] open MISS %s (root=%s)\n",
                    filename ? filename : "(null)",
-                   StubGetEnvNonEmpty("MOCKTAIL_ASSET_ROOT") != nullptr
-                       ? StubGetEnvNonEmpty("MOCKTAIL_ASSET_ROOT")
+                   StubGetEnvNonEmpty("ROBLOX_ASSET_ROOT") != nullptr
+                       ? StubGetEnvNonEmpty("ROBLOX_ASSET_ROOT")
                        : "rbx_bin/assets");
     }
     return nullptr;
@@ -338,7 +338,7 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename,
     delete asset;
     return nullptr;
   }
-  if (MocktailUsesDirectVulkan()) {
+  if (RobloxUsesDirectVulkan()) {
     asset->transcoded =
         libc_shim::TranscodeEtc1SkyTextureForVulkan(path.c_str(), &asset->data);
   }
@@ -1005,12 +1005,12 @@ void ANativeWindow_acquire(ANativeWindow*) {}
 void ANativeWindow_release(ANativeWindow*) {}
 
 ANativeWindow* ANativeWindow_fromSurface(void* env, void* surface) {
-  void* native_window = MocktailNativeWindow();
+  void* native_window = RobloxNativeWindow();
   // The direct-Vulkan WSI adapter ignores the Android window
   // member and creates VkSurfaceKHR from SDL_Window. Preserve the Java Surface
   // token as its opaque ANativeWindow identity so a recreated Surface is not
   // collapsed back onto the same SDL_Window pointer inside Roblox.
-  if (surface != nullptr && MocktailUsesDirectVulkan()) {
+  if (surface != nullptr && RobloxUsesDirectVulkan()) {
     if (TraceEnabled()) {
       std::fprintf(stderr,
                    "[androidstub] ANativeWindow_fromSurface env=%p surface=%p "
@@ -1039,7 +1039,7 @@ ANativeWindow* ANativeWindow_fromSurface(void* env, void* surface) {
 }
 
 int32_t ANativeWindow_getWidth(ANativeWindow* window) {
-  int width = MocktailWindowWidth();
+  int width = RobloxWindowWidth();
   if (TraceEnabled()) {
     std::fprintf(stderr,
                  "[androidstub] ANativeWindow_getWidth window=%p -> %d\n",
@@ -1049,7 +1049,7 @@ int32_t ANativeWindow_getWidth(ANativeWindow* window) {
 }
 
 int32_t ANativeWindow_getHeight(ANativeWindow* window) {
-  int height = MocktailWindowHeight();
+  int height = RobloxWindowHeight();
   if (TraceEnabled()) {
     std::fprintf(stderr,
                  "[androidstub] ANativeWindow_getHeight window=%p -> %d\n",

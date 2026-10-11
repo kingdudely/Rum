@@ -46,10 +46,10 @@
 #include "linker_relocate.h"
 #include "linker_utils.h"
 
-extern "C" void mocktail_before_soinfo_constructors(const char* realpath,
+extern "C" void roblox_before_soinfo_constructors(const char* realpath,
                                                     uintptr_t base)
     __attribute__((weak));
-extern "C" bool mocktail_should_skip_soinfo_constructors(const char* realpath)
+extern "C" bool roblox_should_skip_soinfo_constructors(const char* realpath)
     __attribute__((weak));
 
 // Enable the slow lookup path if symbol lookups should be logged.
@@ -556,7 +556,7 @@ static void call_array(const char* array_name __unused,
 
   for (int i = begin; i != end; i += step) {
     TRACE("[ %s[%d] == %p ]", array_name, i, functions[i]);
-    const char* ctor_trace = getenv("MOCKTAIL_CTOR_TRACE");
+    const char* ctor_trace = getenv("ROBLOX_CTOR_TRACE");
     if (ctor_trace != nullptr && ctor_trace[0] != '\0' &&
         strcmp(ctor_trace, "0") != 0) {
       Dl_info info{};
@@ -566,7 +566,7 @@ static void call_array(const char* array_name __unused,
         offset = reinterpret_cast<uintptr_t>(functions[i]) -
                  reinterpret_cast<uintptr_t>(info.dli_fbase);
       }
-      async_safe_format_log(ANDROID_LOG_INFO, "mocktail",
+      async_safe_format_log(ANDROID_LOG_INFO, "roblox",
                             "%s[%d] %s function=%p offset=0x%zx",
                             array_name, i, realpath ? realpath : "(null)",
                             reinterpret_cast<void*>(functions[i]), offset);
@@ -624,12 +624,12 @@ void soinfo::call_constructors() {
 #endif
 
   mcpelauncher_linker_notifylldb(get_realpath(), base);
-  if (mocktail_before_soinfo_constructors != nullptr) {
-    mocktail_before_soinfo_constructors(get_realpath(), load_bias);
+  if (roblox_before_soinfo_constructors != nullptr) {
+    roblox_before_soinfo_constructors(get_realpath(), load_bias);
   }
-  if (mocktail_should_skip_soinfo_constructors != nullptr &&
-      mocktail_should_skip_soinfo_constructors(get_realpath())) {
-    PRINT("\"%s\": skipping constructors by Mocktail hook", get_realpath());
+  if (roblox_should_skip_soinfo_constructors != nullptr &&
+      roblox_should_skip_soinfo_constructors(get_realpath())) {
+    PRINT("\"%s\": skipping constructors by Roblox hook", get_realpath());
     return;
   }
 

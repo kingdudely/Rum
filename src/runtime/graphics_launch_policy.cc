@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -272,17 +272,17 @@ bool ApplyGraphicsLaunchPolicy(const RuntimeConfig& config,
 
   const bool direct_vulkan =
       config.graphics_backend() == GraphicsBackend::kVulkan;
-  if (!SetValue("MOCKTAIL_GRAPHICS_BACKEND",
+  if (!SetValue("ROBLOX_GRAPHICS_BACKEND",
                 config.graphics_backend_name(), error) ||
-      !SetValue("MOCKTAIL_PRELOAD_VULKAN_SHIM",
+      !SetValue("ROBLOX_PRELOAD_VULKAN_SHIM",
                 direct_vulkan ? "1" : "0", error) ||
-      !SetDefault("MOCKTAIL_REQUIRE_REAL_GRAPHICS", "1", error)) {
+      !SetDefault("ROBLOX_REQUIRE_REAL_GRAPHICS", "1", error)) {
     return false;
   }
 
   if (IsStrictOpenGlName(config.graphics_backend_name()) &&
-      (!SetValue("MOCKTAIL_DISABLE_AUTO_ANGLE_FALLBACK", "1", error) ||
-       !SetValue("MOCKTAIL_SOFTWARE_WINDOW_FALLBACK", "0", error))) {
+      (!SetValue("ROBLOX_DISABLE_AUTO_ANGLE_FALLBACK", "1", error) ||
+       !SetValue("ROBLOX_SOFTWARE_WINDOW_FALLBACK", "0", error))) {
     return false;
   }
 
@@ -290,7 +290,7 @@ bool ApplyGraphicsLaunchPolicy(const RuntimeConfig& config,
     const char* wsi_mode =
         UnthrottledPresentation(config) ? "immediate" : "mailbox";
     const HostGpus gpus = DetectHostGpus();
-    if (!SetDefault("MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON",
+    if (!SetDefault("ROBLOX_CLIENT_SETTINGS_OVERRIDES_JSON",
                     kVulkanClientSettingsOverrides, error) ||
         !SetDefault("ANV_SYS_MEM_LIMIT", AnvSysMemLimitPercent(), error) ||
         !SetDefault("MESA_VK_WSI_PRESENT_MODE", wsi_mode, error) ||
@@ -303,7 +303,7 @@ bool ApplyGraphicsLaunchPolicy(const RuntimeConfig& config,
     // Low FRM only on Intel-only machines. Hybrid NVIDIA/AMD laptops should
     // keep the desktop quality default on the discrete GPU.
     if (gpus.intel && !gpus.nvidia && !gpus.amd &&
-        !SetDefault("MOCKTAIL_GRAPHICS_QUALITY", "1", error)) {
+        !SetDefault("ROBLOX_GRAPHICS_QUALITY", "1", error)) {
       return false;
     }
   }
@@ -311,4 +311,4 @@ bool ApplyGraphicsLaunchPolicy(const RuntimeConfig& config,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

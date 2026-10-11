@@ -1,18 +1,18 @@
-#ifndef MOCKTAIL_WINDOW_WINDOW_H_
-#define MOCKTAIL_WINDOW_WINDOW_H_
+#ifndef ROBLOX_WINDOW_WINDOW_H_
+#define ROBLOX_WINDOW_WINDOW_H_
 
 #include <cstdint>
 #include <filesystem>
 
-#include "mocktail/platform/display_refresh_capabilities.h"
-#include "mocktail/status.h"
+#include "roblox/platform/display_refresh_capabilities.h"
+#include "roblox/status.h"
 #include "window/platform_event_observer.h"
 #include "window/present_observer.h"
 #include "window/window_pointer_capture_owner.h"
 #include "window/window_surface_lifecycle.h"
 #include "window/window_text_input_owner.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 using PreTextInputPumpCallback = bool (*)(void* context);
@@ -150,6 +150,6 @@ int GetWidth();
 int GetHeight();
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_WINDOW_H_
+#endif  // ROBLOX_WINDOW_WINDOW_H_

@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 
-#include "mocktail/platform/android_log_observer.h"
+#include "roblox/platform/android_log_observer.h"
 
 // Android log priorities
 enum AndroidLogPriority {
@@ -34,10 +34,10 @@ static const char* PriorityChar(int prio) {
 
 namespace {
 
-std::atomic<MocktailAndroidLogObserver> g_log_observer{nullptr};
+std::atomic<RobloxAndroidLogObserver> g_log_observer{nullptr};
 
 void NotifyObserver(int priority, const char* tag, const char* message) {
-  MocktailAndroidLogObserver observer =
+  RobloxAndroidLogObserver observer =
       g_log_observer.load(std::memory_order_acquire);
   if (observer != nullptr) {
     observer(priority, tag, message);
@@ -48,7 +48,7 @@ void NotifyObserver(int priority, const char* tag, const char* message) {
 
 extern "C" {
 
-void mocktail_android_log_set_observer(MocktailAndroidLogObserver observer) {
+void roblox_android_log_set_observer(RobloxAndroidLogObserver observer) {
   g_log_observer.store(observer, std::memory_order_release);
 }
 

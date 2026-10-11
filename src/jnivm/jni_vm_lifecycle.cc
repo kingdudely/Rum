@@ -5,8 +5,8 @@
 #include "jni_fields.h"
 #include "jni_strings.h"
 
-#include "mocktail/audio/fmod_thread_floating_point.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/audio/fmod_thread_floating_point.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <algorithm>
 #include <atomic>
@@ -68,9 +68,9 @@ jobject CreateAndroidConfiguration(JNIEnv* env) {
   SetIntFieldRaw(configuration, "navigation", 1);
   SetIntFieldRaw(configuration, "navigationHidden", 1);
   SetIntFieldRaw(configuration, "orientation", 2);
-  const mocktail::runtime::DisplaySize config_window =
-      mocktail::runtime::ParseDisplaySize(
-          std::getenv(mocktail::runtime::kWindowSizeEnvironment));
+  const roblox::runtime::DisplaySize config_window =
+      roblox::runtime::ParseDisplaySize(
+          std::getenv(roblox::runtime::kWindowSizeEnvironment));
   SetIntFieldRaw(configuration, "screenHeightDp", config_window.height);
   SetIntFieldRaw(configuration, "screenLayout", 0);
   SetIntFieldRaw(configuration, "screenWidthDp", config_window.width);

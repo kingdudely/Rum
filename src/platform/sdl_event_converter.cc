@@ -1,8 +1,8 @@
-#include "mocktail/platform/sdl_event_converter.h"
+#include "roblox/platform/sdl_event_converter.h"
 
 #include <cstdint>
 
-namespace mocktail {
+namespace roblox {
 namespace platform {
 
 bool ConvertSdlEvent(SDL_Window* window, const SDL_Event& source,
@@ -125,4 +125,4 @@ bool ConvertSdlEvent(SDL_Window* window, const SDL_Event& source,
 }
 
 }  // namespace platform
-}  // namespace mocktail
+}  // namespace roblox

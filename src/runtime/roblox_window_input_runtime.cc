@@ -9,7 +9,7 @@
 
 #include "window/window.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 RobloxWindowInputRuntime::RobloxWindowInputRuntime(
@@ -210,4 +210,4 @@ bool RobloxWindowInputRuntime::MouseLockQueryCallback(void* context,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

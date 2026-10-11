@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_WINDOW_VULKAN_PRESENT_PROGRESS_GATE_H_
-#define MOCKTAIL_WINDOW_VULKAN_PRESENT_PROGRESS_GATE_H_
+#ifndef ROBLOX_WINDOW_VULKAN_PRESENT_PROGRESS_GATE_H_
+#define ROBLOX_WINDOW_VULKAN_PRESENT_PROGRESS_GATE_H_
 
 #include <array>
 #include <atomic>
@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 enum class VulkanPresentStallStage {
@@ -508,6 +508,6 @@ class VulkanPresentProgressGate final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_VULKAN_PRESENT_PROGRESS_GATE_H_
+#endif  // ROBLOX_WINDOW_VULKAN_PRESENT_PROGRESS_GATE_H_

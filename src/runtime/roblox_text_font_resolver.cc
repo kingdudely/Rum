@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -131,10 +131,10 @@ RobloxTextFontSelection ResolveRobloxTextFont(
 }
 
 RobloxTextFontSelection ResolveRobloxTextFont(int32_t font) {
-  const char* content = std::getenv("MOCKTAIL_ASSET_PATH");
+  const char* content = std::getenv("ROBLOX_ASSET_PATH");
   return ResolveRobloxTextFont(
       font, content != nullptr && content[0] != '\0' ? content : "");
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

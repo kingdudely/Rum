@@ -1,10 +1,10 @@
-#ifndef MOCKTAIL_RUNTIME_DISPLAY_SIZE_H_
-#define MOCKTAIL_RUNTIME_DISPLAY_SIZE_H_
+#ifndef ROBLOX_RUNTIME_DISPLAY_SIZE_H_
+#define ROBLOX_RUNTIME_DISPLAY_SIZE_H_
 
 #include <cstdint>
 #include <limits>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 struct DisplaySize {
@@ -14,9 +14,9 @@ struct DisplaySize {
 
 // Physical pixels; window size is captured at startup.
 inline constexpr const char* kDisplaySizeEnvironment =
-    "MOCKTAIL_DISPLAY_SIZE_INTERNAL";
+    "ROBLOX_DISPLAY_SIZE_INTERNAL";
 inline constexpr const char* kWindowSizeEnvironment =
-    "MOCKTAIL_WINDOW_SIZE_INTERNAL";
+    "ROBLOX_WINDOW_SIZE_INTERNAL";
 
 inline DisplaySize ParseDisplaySize(const char* value) {
   const DisplaySize fallback;
@@ -61,6 +61,6 @@ inline std::int32_t PixelsToMillimetersAt160Dpi(std::int32_t pixels) {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_DISPLAY_SIZE_H_
+#endif  // ROBLOX_RUNTIME_DISPLAY_SIZE_H_

@@ -8,7 +8,7 @@
 
 #include "runtime/roblox_input_router.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -379,4 +379,4 @@ Status RobloxInputRouter::DisconnectGamepadsLocked() {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

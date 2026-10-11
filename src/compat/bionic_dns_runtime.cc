@@ -9,7 +9,7 @@
 #include <cstring>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace compat {
 namespace {
 
@@ -219,20 +219,20 @@ hostent* BionicGetHostByName(const char* name) noexcept {
 }
 
 }  // namespace compat
-}  // namespace mocktail
+}  // namespace roblox
 
-extern "C" int mocktail_bionic_getaddrinfo(
+extern "C" int roblox_bionic_getaddrinfo(
     const char* node, const char* service,
-    const mocktail::compat::BionicAddressInfo* hints,
-    mocktail::compat::BionicAddressInfo** result) {
-  return mocktail::compat::BionicGetAddressInfo(node, service, hints, result);
+    const roblox::compat::BionicAddressInfo* hints,
+    roblox::compat::BionicAddressInfo** result) {
+  return roblox::compat::BionicGetAddressInfo(node, service, hints, result);
 }
 
-extern "C" void mocktail_bionic_freeaddrinfo(
-    mocktail::compat::BionicAddressInfo* info) {
-  mocktail::compat::BionicFreeAddressInfo(info);
+extern "C" void roblox_bionic_freeaddrinfo(
+    roblox::compat::BionicAddressInfo* info) {
+  roblox::compat::BionicFreeAddressInfo(info);
 }
 
-extern "C" hostent* mocktail_bionic_gethostbyname(const char* name) {
-  return mocktail::compat::BionicGetHostByName(name);
+extern "C" hostent* roblox_bionic_gethostbyname(const char* name) {
+  return roblox::compat::BionicGetHostByName(name);
 }

@@ -21,7 +21,7 @@
 #include "compat/http_client_spin_guard.h"
 #include "window/window.h"
 
-volatile uintptr_t g_mocktail_abort_libroblox_base = 0;
+volatile uintptr_t g_roblox_abort_libroblox_base = 0;
 std::atomic<void*> g_current_jni_env_for_publish{nullptr};
 
 namespace {
@@ -83,16 +83,16 @@ ssize_t CallHostSendto(int socket_fd, const void* buf, size_t len, int flags,
 // EGL handle exports — resolved by libegl_stub via dlsym(RTLD_DEFAULT, sym).
 // These bridge the window.cc real EGL context into the stub library.
 extern "C" {
-void* mocktail_egl_display() { return mocktail::window::GetEGLDisplay(); }
-void* mocktail_egl_surface() { return mocktail::window::GetEGLSurface(); }
-void* mocktail_egl_context() { return mocktail::window::GetEGLContext(); }
-void* mocktail_egl_config() { return mocktail::window::GetEGLConfig(); }
-void* mocktail_native_window() { return mocktail::window::GetNativeWindow(); }
-__attribute__((visibility("default"))) void mocktail_set_current_jni_env(
+void* roblox_egl_display() { return roblox::window::GetEGLDisplay(); }
+void* roblox_egl_surface() { return roblox::window::GetEGLSurface(); }
+void* roblox_egl_context() { return roblox::window::GetEGLContext(); }
+void* roblox_egl_config() { return roblox::window::GetEGLConfig(); }
+void* roblox_native_window() { return roblox::window::GetNativeWindow(); }
+__attribute__((visibility("default"))) void roblox_set_current_jni_env(
     void* env) {
   g_current_jni_env_for_publish.store(env, std::memory_order_release);
 }
-__attribute__((visibility("default"))) void* mocktail_get_current_jni_env() {
+__attribute__((visibility("default"))) void* roblox_get_current_jni_env() {
   return g_current_jni_env_for_publish.load(std::memory_order_acquire);
 }
 __attribute__((visibility("default"))) uintptr_t __stack_chk_guard =
@@ -112,7 +112,7 @@ void __assert2(const char* file, int line, const char* function,
                failed_expression ? failed_expression : "(unknown)");
   std::abort();
 }
-__attribute__((noreturn)) void mocktail_abort() {
+__attribute__((noreturn)) void roblox_abort() {
   uintptr_t caller = reinterpret_cast<uintptr_t>(__builtin_return_address(0));
   uintptr_t rax = 0;
   uintptr_t rbx = 0;
@@ -124,7 +124,7 @@ __attribute__((noreturn)) void mocktail_abort() {
   asm volatile("mov %%rdi,%0" : "=r"(rdi));
   asm volatile("mov %%r15,%0" : "=r"(r15));
 #endif
-  uintptr_t base = static_cast<uintptr_t>(g_mocktail_abort_libroblox_base);
+  uintptr_t base = static_cast<uintptr_t>(g_roblox_abort_libroblox_base);
   uintptr_t caller_offset = (base != 0 && caller >= base) ? caller - base : 0;
   std::fprintf(stderr,
                "  [abort] bionic abort caller=%p off=0x%lx "
@@ -167,13 +167,13 @@ int __system_property_get(const char* name, char* value) {
   } else if (std::strcmp(name, "ro.product.cpu.abilist32") == 0) {
     result = "";
   } else if (std::strcmp(name, "ro.product.manufacturer") == 0) {
-    result = EnvironmentOr("MOCKTAIL_DEVICE_MANUFACTURER", "Google");
+    result = EnvironmentOr("ROBLOX_DEVICE_MANUFACTURER", "Google");
   } else if (std::strcmp(name, "ro.product.model") == 0) {
-    result = EnvironmentOr("MOCKTAIL_DEVICE_MODEL", "Pixel 7");
+    result = EnvironmentOr("ROBLOX_DEVICE_MODEL", "Pixel 7");
   } else if (std::strcmp(name, "ro.product.brand") == 0) {
-    result = EnvironmentOr("MOCKTAIL_DEVICE_BRAND", "google");
+    result = EnvironmentOr("ROBLOX_DEVICE_BRAND", "google");
   } else if (std::strcmp(name, "ro.product.device") == 0) {
-    result = EnvironmentOr("MOCKTAIL_DEVICE_CODE", "panther");
+    result = EnvironmentOr("ROBLOX_DEVICE_CODE", "panther");
   } else if (std::strcmp(name, "ro.hardware") == 0) {
     result = "ranchu";
   } else if (std::strcmp(name, "debug.hwui.renderer") == 0) {
@@ -284,7 +284,7 @@ ssize_t __pread64_chk(int fd, void* buf, size_t count, off_t offset,
   }
   return CallHostPread(fd, buf, count, offset);
 }
-bool mocktail_is_low_bionic_pointer(const void* ptr) {
+bool roblox_is_low_bionic_pointer(const void* ptr) {
   return reinterpret_cast<uintptr_t>(ptr) < 4096;
 }
 
@@ -317,8 +317,8 @@ constexpr int kBionicMutexRecursive = 1;
 constexpr int kBionicMutexErrorCheck = 2;
 static_assert(sizeof(pthread_mutex_t) >= kBionicMutexSize);
 
-int mocktail_bionic_mutex_type_from_attributes(
-    const MocktailBionicMutexAttr* guest_attributes) {
+int roblox_bionic_mutex_type_from_attributes(
+    const RobloxBionicMutexAttr* guest_attributes) {
   if (guest_attributes == nullptr) {
     return kBionicMutexNormal;
   }
@@ -328,20 +328,20 @@ int mocktail_bionic_mutex_type_from_attributes(
   return type <= kBionicMutexErrorCheck ? type : -1;
 }
 
-void mocktail_store_bionic_mutex_attributes(MocktailBionicMutexAttr* guest_attr,
+void roblox_store_bionic_mutex_attributes(RobloxBionicMutexAttr* guest_attr,
                                             int64_t value) {
   std::memcpy(guest_attr, &value, sizeof(value));
 }
 
-uint16_t* mocktail_bionic_mutex_state(pthread_mutex_t* mutex) {
+uint16_t* roblox_bionic_mutex_state(pthread_mutex_t* mutex) {
   return reinterpret_cast<uint16_t*>(mutex);
 }
 
-int32_t* mocktail_bionic_mutex_owner(pthread_mutex_t* mutex) {
+int32_t* roblox_bionic_mutex_owner(pthread_mutex_t* mutex) {
   return reinterpret_cast<int32_t*>(reinterpret_cast<char*>(mutex) + 4);
 }
 
-pid_t mocktail_bionic_tid() {
+pid_t roblox_bionic_tid() {
   thread_local pid_t tid = 0;
   if (__builtin_expect(tid == 0, 0)) {
     tid = ::gettid();
@@ -349,26 +349,26 @@ pid_t mocktail_bionic_tid() {
   return tid;
 }
 
-void mocktail_initialize_bionic_mutex_storage(pthread_mutex_t* guest_mutex,
+void roblox_initialize_bionic_mutex_storage(pthread_mutex_t* guest_mutex,
                                               int type) {
   std::memset(guest_mutex, 0, kBionicMutexSize);
   const uint16_t guest_state = static_cast<uint16_t>(
       (type & kBionicMutexTypeMask) << kBionicMutexTypeShift);
-  __atomic_store_n(mocktail_bionic_mutex_state(guest_mutex), guest_state,
+  __atomic_store_n(roblox_bionic_mutex_state(guest_mutex), guest_state,
                    __ATOMIC_RELAXED);
 }
 
-int mocktail_bionic_futex(uint32_t* addr, int op, uint32_t val,
+int roblox_bionic_futex(uint32_t* addr, int op, uint32_t val,
                           const timespec* timeout, uint32_t bitset);
 
-int mocktail_bionic_mutex_futex(pthread_mutex_t* mutex, int wait_op,
+int roblox_bionic_mutex_futex(pthread_mutex_t* mutex, int wait_op,
                                 uint16_t expected, bool shared) {
   uint32_t* word = reinterpret_cast<uint32_t*>(mutex);
   const int op = shared ? wait_op : (wait_op | FUTEX_PRIVATE_FLAG);
-  return mocktail_bionic_futex(word, op, expected, nullptr, 0);
+  return roblox_bionic_futex(word, op, expected, nullptr, 0);
 }
 
-int mocktail_bionic_normal_mutex_trylock(uint16_t* state, uint16_t shared) {
+int roblox_bionic_normal_mutex_trylock(uint16_t* state, uint16_t shared) {
   const uint16_t unlocked = static_cast<uint16_t>(shared | kBionicMutexUnlocked);
   const uint16_t locked =
       static_cast<uint16_t>(shared | kBionicMutexLockedUncontended);
@@ -380,9 +380,9 @@ int mocktail_bionic_normal_mutex_trylock(uint16_t* state, uint16_t shared) {
   return EBUSY;
 }
 
-int mocktail_bionic_normal_mutex_lock(pthread_mutex_t* mutex, uint16_t shared) {
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
-  if (mocktail_bionic_normal_mutex_trylock(state, shared) == 0) {
+int roblox_bionic_normal_mutex_lock(pthread_mutex_t* mutex, uint16_t shared) {
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
+  if (roblox_bionic_normal_mutex_trylock(state, shared) == 0) {
     return 0;
   }
   // Park on the guest word. Do not CAS-spin: this host has four threads and
@@ -396,25 +396,25 @@ int mocktail_bionic_normal_mutex_lock(pthread_mutex_t* mutex, uint16_t shared) {
     if (old_state == unlocked) {
       return 0;
     }
-    (void)mocktail_bionic_mutex_futex(mutex, FUTEX_WAIT, contended,
+    (void)roblox_bionic_mutex_futex(mutex, FUTEX_WAIT, contended,
                                       shared != 0);
   }
 }
 
-void mocktail_bionic_normal_mutex_unlock(pthread_mutex_t* mutex,
+void roblox_bionic_normal_mutex_unlock(pthread_mutex_t* mutex,
                                          uint16_t shared) {
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
   const uint16_t unlocked = static_cast<uint16_t>(shared | kBionicMutexUnlocked);
   const uint16_t contended =
       static_cast<uint16_t>(shared | kBionicMutexLockedContended);
   const uint16_t old_state =
       __atomic_exchange_n(state, unlocked, __ATOMIC_RELEASE);
   if (old_state == contended) {
-    (void)mocktail_bionic_mutex_futex(mutex, FUTEX_WAKE, 1, shared != 0);
+    (void)roblox_bionic_mutex_futex(mutex, FUTEX_WAKE, 1, shared != 0);
   }
 }
 
-int mocktail_bionic_recursive_increment(uint16_t* state, uint16_t old_state) {
+int roblox_bionic_recursive_increment(uint16_t* state, uint16_t old_state) {
   if ((old_state & kBionicMutexCounterMask) == kBionicMutexCounterMask) {
     return EAGAIN;
   }
@@ -422,19 +422,19 @@ int mocktail_bionic_recursive_increment(uint16_t* state, uint16_t old_state) {
   return 0;
 }
 
-int mocktail_bionic_owned_mutex_lock(pthread_mutex_t* mutex, uint16_t old_state) {
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
-  int32_t* owner = mocktail_bionic_mutex_owner(mutex);
+int roblox_bionic_owned_mutex_lock(pthread_mutex_t* mutex, uint16_t old_state) {
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
+  int32_t* owner = roblox_bionic_mutex_owner(mutex);
   const uint16_t mtype =
       static_cast<uint16_t>(old_state & kBionicMutexTypeFieldMask);
   const uint16_t shared =
       static_cast<uint16_t>(old_state & kBionicMutexSharedMask);
-  const pid_t tid = mocktail_bionic_tid();
+  const pid_t tid = roblox_bionic_tid();
   if (tid == __atomic_load_n(owner, __ATOMIC_RELAXED)) {
     if (mtype == kBionicMutexTypeBitsErrorCheck) {
       return EDEADLK;
     }
-    return mocktail_bionic_recursive_increment(state, old_state);
+    return roblox_bionic_recursive_increment(state, old_state);
   }
 
   const uint16_t unlocked =
@@ -472,24 +472,24 @@ int mocktail_bionic_owned_mutex_lock(pthread_mutex_t* mutex, uint16_t old_state)
       }
       old_state = contended;
     }
-    (void)mocktail_bionic_mutex_futex(mutex, FUTEX_WAIT, old_state,
+    (void)roblox_bionic_mutex_futex(mutex, FUTEX_WAIT, old_state,
                                       shared != 0);
     old_state = __atomic_load_n(state, __ATOMIC_RELAXED);
   }
 }
 
-int mocktail_bionic_owned_mutex_trylock(pthread_mutex_t* mutex,
+int roblox_bionic_owned_mutex_trylock(pthread_mutex_t* mutex,
                                         uint16_t old_state) {
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
-  int32_t* owner = mocktail_bionic_mutex_owner(mutex);
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
+  int32_t* owner = roblox_bionic_mutex_owner(mutex);
   const uint16_t mtype =
       static_cast<uint16_t>(old_state & kBionicMutexTypeFieldMask);
-  const pid_t tid = mocktail_bionic_tid();
+  const pid_t tid = roblox_bionic_tid();
   if (tid == __atomic_load_n(owner, __ATOMIC_RELAXED)) {
     if (mtype == kBionicMutexTypeBitsErrorCheck) {
       return EBUSY;
     }
-    return mocktail_bionic_recursive_increment(state, old_state);
+    return roblox_bionic_recursive_increment(state, old_state);
   }
   const uint16_t shared =
       static_cast<uint16_t>(old_state & kBionicMutexSharedMask);
@@ -506,15 +506,15 @@ int mocktail_bionic_owned_mutex_trylock(pthread_mutex_t* mutex,
   return EBUSY;
 }
 
-int mocktail_bionic_owned_mutex_unlock(pthread_mutex_t* mutex,
+int roblox_bionic_owned_mutex_unlock(pthread_mutex_t* mutex,
                                        uint16_t old_state) {
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
-  int32_t* owner = mocktail_bionic_mutex_owner(mutex);
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
+  int32_t* owner = roblox_bionic_mutex_owner(mutex);
   const uint16_t mtype =
       static_cast<uint16_t>(old_state & kBionicMutexTypeFieldMask);
   const uint16_t shared =
       static_cast<uint16_t>(old_state & kBionicMutexSharedMask);
-  if (mocktail_bionic_tid() != __atomic_load_n(owner, __ATOMIC_RELAXED)) {
+  if (roblox_bionic_tid() != __atomic_load_n(owner, __ATOMIC_RELAXED)) {
     return EPERM;
   }
   if ((old_state & kBionicMutexCounterMask) != 0) {
@@ -526,7 +526,7 @@ int mocktail_bionic_owned_mutex_unlock(pthread_mutex_t* mutex,
       static_cast<uint16_t>(mtype | shared | kBionicMutexUnlocked);
   old_state = __atomic_exchange_n(state, unlocked, __ATOMIC_RELEASE);
   if ((old_state & kBionicMutexStateMask) == kBionicMutexLockedContended) {
-    (void)mocktail_bionic_mutex_futex(mutex, FUTEX_WAKE, 1, shared != 0);
+    (void)roblox_bionic_mutex_futex(mutex, FUTEX_WAKE, 1, shared != 0);
   }
   return 0;
 }
@@ -543,45 +543,45 @@ constexpr uint32_t kBionicCondFlagsMask =
 constexpr uint32_t kBionicCondDestroyedState = 0xdeadc04d;
 constexpr uint32_t kBionicCondAttrDestroyedState = 0xdeada11d;
 
-uint32_t* mocktail_bionic_cond_state(pthread_cond_t* cond) {
+uint32_t* roblox_bionic_cond_state(pthread_cond_t* cond) {
   return reinterpret_cast<uint32_t*>(cond);
 }
 
-void mocktail_store_bionic_condattr_flags(pthread_condattr_t* attr,
+void roblox_store_bionic_condattr_flags(pthread_condattr_t* attr,
                                           uint32_t flags) {
   std::memset(attr, 0, sizeof(*attr));
   std::memcpy(attr, &flags, sizeof(flags));
 }
 
-uint32_t mocktail_load_bionic_condattr_flags(const pthread_condattr_t* attr) {
+uint32_t roblox_load_bionic_condattr_flags(const pthread_condattr_t* attr) {
   uint32_t flags = 0;
   std::memcpy(&flags, attr, sizeof(flags));
   return flags;
 }
 
-int mocktail_bionic_futex(uint32_t* addr, int op, uint32_t val,
+int roblox_bionic_futex(uint32_t* addr, int op, uint32_t val,
                           const timespec* timeout, uint32_t bitset) {
   return static_cast<int>(
       ::syscall(SYS_futex, addr, op, val, timeout, nullptr, bitset));
 }
 
-int mocktail_bionic_cond_pulse(pthread_cond_t* cond, int waiters) {
-  uint32_t* state = mocktail_bionic_cond_state(cond);
+int roblox_bionic_cond_pulse(pthread_cond_t* cond, int waiters) {
+  uint32_t* state = roblox_bionic_cond_state(cond);
   const uint32_t previous =
       __atomic_fetch_add(state, kBionicCondCounterStep, __ATOMIC_RELAXED);
   const int op = (previous & kBionicCondSharedMask) != 0 ? FUTEX_WAKE
                                                          : FUTEX_WAKE_PRIVATE;
-  (void)mocktail_bionic_futex(state, op, static_cast<uint32_t>(waiters),
+  (void)roblox_bionic_futex(state, op, static_cast<uint32_t>(waiters),
                               nullptr, 0);
   return 0;
 }
 
-int mocktail_bionic_cond_timedwait(pthread_cond_t* cond, pthread_mutex_t* mutex,
+int roblox_bionic_cond_timedwait(pthread_cond_t* cond, pthread_mutex_t* mutex,
                                    bool use_realtime_clock,
                                    const timespec* abstime) {
-  uint32_t* state = mocktail_bionic_cond_state(cond);
+  uint32_t* state = roblox_bionic_cond_state(cond);
   const uint32_t old_state = __atomic_load_n(state, __ATOMIC_RELAXED);
-  const int unlock_result = mocktail_pthread_mutex_unlock(mutex);
+  const int unlock_result = roblox_pthread_mutex_unlock(mutex);
   if (unlock_result != 0) {
     return unlock_result;
   }
@@ -602,7 +602,7 @@ int mocktail_bionic_cond_timedwait(pthread_cond_t* cond, pthread_mutex_t* mutex,
       bitset = FUTEX_BITSET_MATCH_ANY;
     }
     const int rc =
-        mocktail_bionic_futex(state, op, old_state, abstime, bitset);
+        roblox_bionic_futex(state, op, old_state, abstime, bitset);
     if (rc == 0 || errno == EAGAIN) {
       wait_result = 0;
       break;
@@ -618,169 +618,169 @@ int mocktail_bionic_cond_timedwait(pthread_cond_t* cond, pthread_mutex_t* mutex,
     break;
   }
 
-  const int lock_result = mocktail_pthread_mutex_lock(mutex);
+  const int lock_result = roblox_pthread_mutex_lock(mutex);
   if (lock_result != 0) {
     return lock_result;
   }
   return wait_result;
 }
 
-int mocktail_pthread_condattr_init(pthread_condattr_t* attr) {
-  if (attr == nullptr || mocktail_is_low_bionic_pointer(attr)) {
+int roblox_pthread_condattr_init(pthread_condattr_t* attr) {
+  if (attr == nullptr || roblox_is_low_bionic_pointer(attr)) {
     return EINVAL;
   }
-  mocktail_store_bionic_condattr_flags(attr, 0);
+  roblox_store_bionic_condattr_flags(attr, 0);
   return 0;
 }
-int mocktail_pthread_condattr_destroy(pthread_condattr_t* attr) {
-  if (attr == nullptr || mocktail_is_low_bionic_pointer(attr)) {
+int roblox_pthread_condattr_destroy(pthread_condattr_t* attr) {
+  if (attr == nullptr || roblox_is_low_bionic_pointer(attr)) {
     return EINVAL;
   }
-  mocktail_store_bionic_condattr_flags(attr, kBionicCondAttrDestroyedState);
+  roblox_store_bionic_condattr_flags(attr, kBionicCondAttrDestroyedState);
   return 0;
 }
-int mocktail_pthread_condattr_setclock(pthread_condattr_t* attr,
+int roblox_pthread_condattr_setclock(pthread_condattr_t* attr,
                                        clockid_t clock_id) {
-  if (attr == nullptr || mocktail_is_low_bionic_pointer(attr)) {
+  if (attr == nullptr || roblox_is_low_bionic_pointer(attr)) {
     return EINVAL;
   }
   if (clock_id != CLOCK_MONOTONIC && clock_id != CLOCK_REALTIME) {
     return EINVAL;
   }
-  uint32_t flags = mocktail_load_bionic_condattr_flags(attr);
+  uint32_t flags = roblox_load_bionic_condattr_flags(attr);
   flags = (flags & ~kBionicCondClockMask) |
           (static_cast<uint32_t>(clock_id) << 1);
-  mocktail_store_bionic_condattr_flags(attr, flags);
+  roblox_store_bionic_condattr_flags(attr, flags);
   return 0;
 }
-int mocktail_pthread_cond_init(pthread_cond_t* cond,
+int roblox_pthread_cond_init(pthread_cond_t* cond,
                                const pthread_condattr_t* attr) {
-  if (mocktail_is_low_bionic_pointer(cond)) {
+  if (roblox_is_low_bionic_pointer(cond)) {
     return 0;
   }
   if (cond == nullptr) {
     return EINVAL;
   }
-  if (attr != nullptr && mocktail_is_low_bionic_pointer(attr)) {
+  if (attr != nullptr && roblox_is_low_bionic_pointer(attr)) {
     return EINVAL;
   }
   uint32_t flags = 0;
   if (attr != nullptr) {
-    flags = mocktail_load_bionic_condattr_flags(attr) & kBionicCondFlagsMask;
+    flags = roblox_load_bionic_condattr_flags(attr) & kBionicCondFlagsMask;
   }
   std::memset(cond, 0, sizeof(*cond));
-  __atomic_store_n(mocktail_bionic_cond_state(cond), flags, __ATOMIC_RELAXED);
+  __atomic_store_n(roblox_bionic_cond_state(cond), flags, __ATOMIC_RELAXED);
   return 0;
 }
-int mocktail_pthread_cond_destroy(pthread_cond_t* cond) {
-  if (mocktail_is_low_bionic_pointer(cond)) {
+int roblox_pthread_cond_destroy(pthread_cond_t* cond) {
+  if (roblox_is_low_bionic_pointer(cond)) {
     return 0;
   }
   if (cond == nullptr) {
     return EINVAL;
   }
-  __atomic_store_n(mocktail_bionic_cond_state(cond), kBionicCondDestroyedState,
+  __atomic_store_n(roblox_bionic_cond_state(cond), kBionicCondDestroyedState,
                    __ATOMIC_RELAXED);
   return 0;
 }
-int mocktail_pthread_cond_signal(pthread_cond_t* cond) {
-  if (mocktail_is_low_bionic_pointer(cond)) {
+int roblox_pthread_cond_signal(pthread_cond_t* cond) {
+  if (roblox_is_low_bionic_pointer(cond)) {
     return 0;
   }
   if (cond == nullptr) {
     return EINVAL;
   }
-  return mocktail_bionic_cond_pulse(cond, 1);
+  return roblox_bionic_cond_pulse(cond, 1);
 }
-int mocktail_pthread_cond_broadcast(pthread_cond_t* cond) {
-  if (mocktail_is_low_bionic_pointer(cond)) {
+int roblox_pthread_cond_broadcast(pthread_cond_t* cond) {
+  if (roblox_is_low_bionic_pointer(cond)) {
     return 0;
   }
   if (cond == nullptr) {
     return EINVAL;
   }
-  return mocktail_bionic_cond_pulse(cond, INT_MAX);
+  return roblox_bionic_cond_pulse(cond, INT_MAX);
 }
-int mocktail_pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
-  if (mocktail_is_low_bionic_pointer(cond) ||
-      mocktail_is_low_bionic_pointer(mutex)) {
+int roblox_pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
+  if (roblox_is_low_bionic_pointer(cond) ||
+      roblox_is_low_bionic_pointer(mutex)) {
     return 0;
   }
   if (cond == nullptr || mutex == nullptr) {
     return EINVAL;
   }
-  return mocktail_bionic_cond_timedwait(cond, mutex, false, nullptr);
+  return roblox_bionic_cond_timedwait(cond, mutex, false, nullptr);
 }
-int mocktail_pthread_cond_timedwait(pthread_cond_t* cond,
+int roblox_pthread_cond_timedwait(pthread_cond_t* cond,
                                     pthread_mutex_t* mutex,
                                     const timespec* abstime) {
-  if (mocktail_is_low_bionic_pointer(cond) ||
-      mocktail_is_low_bionic_pointer(mutex)) {
+  if (roblox_is_low_bionic_pointer(cond) ||
+      roblox_is_low_bionic_pointer(mutex)) {
     return ETIMEDOUT;
   }
   if (cond == nullptr || mutex == nullptr || abstime == nullptr) {
     return EINVAL;
   }
   const uint32_t flags =
-      __atomic_load_n(mocktail_bionic_cond_state(cond), __ATOMIC_RELAXED);
+      __atomic_load_n(roblox_bionic_cond_state(cond), __ATOMIC_RELAXED);
   const bool use_realtime_clock = (flags & kBionicCondClockMask) == 0;
-  return mocktail_bionic_cond_timedwait(cond, mutex, use_realtime_clock,
+  return roblox_bionic_cond_timedwait(cond, mutex, use_realtime_clock,
                                         abstime);
 }
 
-int mocktail_pthread_mutexattr_init(MocktailBionicMutexAttr* attr) {
-  if (attr == nullptr || mocktail_is_low_bionic_pointer(attr)) {
+int roblox_pthread_mutexattr_init(RobloxBionicMutexAttr* attr) {
+  if (attr == nullptr || roblox_is_low_bionic_pointer(attr)) {
     return EINVAL;
   }
-  mocktail_store_bionic_mutex_attributes(attr, kBionicMutexNormal);
+  roblox_store_bionic_mutex_attributes(attr, kBionicMutexNormal);
   return 0;
 }
-int mocktail_pthread_mutexattr_destroy(MocktailBionicMutexAttr* attr) {
-  if (attr == nullptr || mocktail_is_low_bionic_pointer(attr)) {
+int roblox_pthread_mutexattr_destroy(RobloxBionicMutexAttr* attr) {
+  if (attr == nullptr || roblox_is_low_bionic_pointer(attr)) {
     return EINVAL;
   }
-  mocktail_store_bionic_mutex_attributes(attr, -1);
+  roblox_store_bionic_mutex_attributes(attr, -1);
   return 0;
 }
-int mocktail_pthread_mutexattr_settype(MocktailBionicMutexAttr* attr, int type) {
-  if (attr == nullptr || mocktail_is_low_bionic_pointer(attr) ||
+int roblox_pthread_mutexattr_settype(RobloxBionicMutexAttr* attr, int type) {
+  if (attr == nullptr || roblox_is_low_bionic_pointer(attr) ||
       type < kBionicMutexNormal || type > kBionicMutexErrorCheck) {
     return EINVAL;
   }
   int64_t attributes = 0;
   std::memcpy(&attributes, attr, sizeof(attributes));
   attributes = (attributes & ~kBionicMutexAttrTypeMask) | type;
-  mocktail_store_bionic_mutex_attributes(attr, attributes);
+  roblox_store_bionic_mutex_attributes(attr, attributes);
   return 0;
 }
 
-int mocktail_pthread_mutex_init(pthread_mutex_t* mutex,
-                                const MocktailBionicMutexAttr* attr) {
-  if (mocktail_is_low_bionic_pointer(mutex)) {
+int roblox_pthread_mutex_init(pthread_mutex_t* mutex,
+                                const RobloxBionicMutexAttr* attr) {
+  if (roblox_is_low_bionic_pointer(mutex)) {
     return 0;
   }
   if (mutex == nullptr) {
     return EINVAL;
   }
-  if (attr != nullptr && mocktail_is_low_bionic_pointer(attr)) {
+  if (attr != nullptr && roblox_is_low_bionic_pointer(attr)) {
     return EINVAL;
   }
   const int bionic_type =
-      mocktail_bionic_mutex_type_from_attributes(attr);
+      roblox_bionic_mutex_type_from_attributes(attr);
   if (bionic_type < 0) {
     return EINVAL;
   }
-  mocktail_initialize_bionic_mutex_storage(mutex, bionic_type);
+  roblox_initialize_bionic_mutex_storage(mutex, bionic_type);
   return 0;
 }
-int mocktail_pthread_mutex_destroy(pthread_mutex_t* mutex) {
-  if (mocktail_is_low_bionic_pointer(mutex)) {
+int roblox_pthread_mutex_destroy(pthread_mutex_t* mutex) {
+  if (roblox_is_low_bionic_pointer(mutex)) {
     return 0;
   }
   if (mutex == nullptr) {
     return EINVAL;
   }
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
   uint16_t old_state = __atomic_load_n(state, __ATOMIC_RELAXED);
   if (old_state == kBionicMutexDestroyedState) {
     return EBUSY;
@@ -794,14 +794,14 @@ int mocktail_pthread_mutex_destroy(pthread_mutex_t* mutex) {
   }
   return EBUSY;
 }
-int mocktail_pthread_mutex_lock(pthread_mutex_t* mutex) {
-  if (mocktail_is_low_bionic_pointer(mutex)) {
+int roblox_pthread_mutex_lock(pthread_mutex_t* mutex) {
+  if (roblox_is_low_bionic_pointer(mutex)) {
     return 0;
   }
   if (mutex == nullptr) {
     return EINVAL;
   }
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
   const uint16_t old_state = __atomic_load_n(state, __ATOMIC_RELAXED);
   if (old_state == kBionicMutexDestroyedState) {
     return EBUSY;
@@ -812,19 +812,19 @@ int mocktail_pthread_mutex_lock(pthread_mutex_t* mutex) {
     return EINVAL;
   }
   if (mtype == kBionicMutexTypeBitsNormal) {
-    return mocktail_bionic_normal_mutex_lock(
+    return roblox_bionic_normal_mutex_lock(
         mutex, static_cast<uint16_t>(old_state & kBionicMutexSharedMask));
   }
-  return mocktail_bionic_owned_mutex_lock(mutex, old_state);
+  return roblox_bionic_owned_mutex_lock(mutex, old_state);
 }
-int mocktail_pthread_mutex_trylock(pthread_mutex_t* mutex) {
-  if (mocktail_is_low_bionic_pointer(mutex)) {
+int roblox_pthread_mutex_trylock(pthread_mutex_t* mutex) {
+  if (roblox_is_low_bionic_pointer(mutex)) {
     return 0;
   }
   if (mutex == nullptr) {
     return EINVAL;
   }
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
   const uint16_t old_state = __atomic_load_n(state, __ATOMIC_RELAXED);
   if (old_state == kBionicMutexDestroyedState) {
     return EBUSY;
@@ -835,19 +835,19 @@ int mocktail_pthread_mutex_trylock(pthread_mutex_t* mutex) {
     return EINVAL;
   }
   if (mtype == kBionicMutexTypeBitsNormal) {
-    return mocktail_bionic_normal_mutex_trylock(
+    return roblox_bionic_normal_mutex_trylock(
         state, static_cast<uint16_t>(old_state & kBionicMutexSharedMask));
   }
-  return mocktail_bionic_owned_mutex_trylock(mutex, old_state);
+  return roblox_bionic_owned_mutex_trylock(mutex, old_state);
 }
-int mocktail_pthread_mutex_unlock(pthread_mutex_t* mutex) {
-  if (mocktail_is_low_bionic_pointer(mutex)) {
+int roblox_pthread_mutex_unlock(pthread_mutex_t* mutex) {
+  if (roblox_is_low_bionic_pointer(mutex)) {
     return 0;
   }
   if (mutex == nullptr) {
     return 0;
   }
-  uint16_t* state = mocktail_bionic_mutex_state(mutex);
+  uint16_t* state = roblox_bionic_mutex_state(mutex);
   const uint16_t old_state = __atomic_load_n(state, __ATOMIC_RELAXED);
   if (old_state == kBionicMutexDestroyedState) {
     return EBUSY;
@@ -858,13 +858,13 @@ int mocktail_pthread_mutex_unlock(pthread_mutex_t* mutex) {
   if (mtype == kBionicMutexTypeBitsPi) {
     unlock_result = EINVAL;
   } else if (mtype == kBionicMutexTypeBitsNormal) {
-    mocktail_bionic_normal_mutex_unlock(
+    roblox_bionic_normal_mutex_unlock(
         mutex, static_cast<uint16_t>(old_state & kBionicMutexSharedMask));
   } else {
-    unlock_result = mocktail_bionic_owned_mutex_unlock(mutex, old_state);
+    unlock_result = roblox_bionic_owned_mutex_unlock(mutex, old_state);
   }
   if (unlock_result == 0) {
-    mocktail::compat::ApplyHttpClientSpinGuard();
+    roblox::compat::ApplyHttpClientSpinGuard();
   }
   return unlock_result;
 }
@@ -878,33 +878,33 @@ constexpr uint32_t kSpinContended = 2;
 constexpr uint32_t kBarrierWaitState = 0;
 constexpr uint32_t kBarrierReleaseState = 1;
 
-int* mocktail_once_word(pthread_once_t* once_control) {
+int* roblox_once_word(pthread_once_t* once_control) {
   return reinterpret_cast<int*>(once_control);
 }
 
-int* mocktail_spin_word(pthread_spinlock_t* lock) {
+int* roblox_spin_word(pthread_spinlock_t* lock) {
   return const_cast<int*>(lock);
 }
 
-uint32_t* mocktail_barrier_init_count(pthread_barrier_t* barrier) {
+uint32_t* roblox_barrier_init_count(pthread_barrier_t* barrier) {
   return reinterpret_cast<uint32_t*>(barrier);
 }
 
-uint32_t* mocktail_barrier_state(pthread_barrier_t* barrier) {
+uint32_t* roblox_barrier_state(pthread_barrier_t* barrier) {
   return reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(barrier) + 4);
 }
 
-uint32_t* mocktail_barrier_wait_count(pthread_barrier_t* barrier) {
+uint32_t* roblox_barrier_wait_count(pthread_barrier_t* barrier) {
   return reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(barrier) + 8);
 }
 
-int mocktail_pthread_once(pthread_once_t* once_control,
+int roblox_pthread_once(pthread_once_t* once_control,
                           void (*init_routine)(void)) {
   if (once_control == nullptr || init_routine == nullptr ||
-      mocktail_is_low_bionic_pointer(once_control)) {
+      roblox_is_low_bionic_pointer(once_control)) {
     return EINVAL;
   }
-  int* word = mocktail_once_word(once_control);
+  int* word = roblox_once_word(once_control);
   int old_value = __atomic_load_n(word, __ATOMIC_ACQUIRE);
   for (;;) {
     if (old_value == kOnceComplete) {
@@ -917,34 +917,34 @@ int mocktail_pthread_once(pthread_once_t* once_control,
     if (old_value == kOnceNotStarted) {
       init_routine();
       __atomic_store_n(word, kOnceComplete, __ATOMIC_RELEASE);
-      (void)mocktail_bionic_futex(reinterpret_cast<uint32_t*>(word),
+      (void)roblox_bionic_futex(reinterpret_cast<uint32_t*>(word),
                                   FUTEX_WAKE_PRIVATE,
                                   static_cast<uint32_t>(INT_MAX), nullptr, 0);
       return 0;
     }
-    (void)mocktail_bionic_futex(reinterpret_cast<uint32_t*>(word),
+    (void)roblox_bionic_futex(reinterpret_cast<uint32_t*>(word),
                                 FUTEX_WAIT_PRIVATE,
                                 static_cast<uint32_t>(old_value), nullptr, 0);
     old_value = __atomic_load_n(word, __ATOMIC_ACQUIRE);
   }
 }
 
-int mocktail_pthread_spin_init(pthread_spinlock_t* lock, int pshared) {
+int roblox_pthread_spin_init(pthread_spinlock_t* lock, int pshared) {
   static_cast<void>(pshared);
   if (lock == nullptr ||
       reinterpret_cast<uintptr_t>(lock) < 4096) {
     return EINVAL;
   }
-  __atomic_store_n(mocktail_spin_word(lock), static_cast<int>(kSpinUnlocked),
+  __atomic_store_n(roblox_spin_word(lock), static_cast<int>(kSpinUnlocked),
                    __ATOMIC_RELAXED);
   return 0;
 }
 
-int mocktail_pthread_spin_destroy(pthread_spinlock_t* lock) {
+int roblox_pthread_spin_destroy(pthread_spinlock_t* lock) {
   if (lock == nullptr || reinterpret_cast<uintptr_t>(lock) < 4096) {
     return EINVAL;
   }
-  int* word = mocktail_spin_word(lock);
+  int* word = roblox_spin_word(lock);
   int old_value = static_cast<int>(kSpinUnlocked);
   if (__atomic_compare_exchange_n(word, &old_value,
                                   static_cast<int>(kSpinUnlocked), false,
@@ -954,11 +954,11 @@ int mocktail_pthread_spin_destroy(pthread_spinlock_t* lock) {
   return EBUSY;
 }
 
-int mocktail_pthread_spin_trylock(pthread_spinlock_t* lock) {
+int roblox_pthread_spin_trylock(pthread_spinlock_t* lock) {
   if (lock == nullptr || reinterpret_cast<uintptr_t>(lock) < 4096) {
     return EINVAL;
   }
-  int* word = mocktail_spin_word(lock);
+  int* word = roblox_spin_word(lock);
   int old_value = static_cast<int>(kSpinUnlocked);
   if (__atomic_compare_exchange_n(word, &old_value,
                                   static_cast<int>(kSpinLocked), false,
@@ -968,90 +968,90 @@ int mocktail_pthread_spin_trylock(pthread_spinlock_t* lock) {
   return EBUSY;
 }
 
-int mocktail_pthread_spin_lock(pthread_spinlock_t* lock) {
+int roblox_pthread_spin_lock(pthread_spinlock_t* lock) {
   if (lock == nullptr || reinterpret_cast<uintptr_t>(lock) < 4096) {
     return EINVAL;
   }
-  if (mocktail_pthread_spin_trylock(lock) == 0) {
+  if (roblox_pthread_spin_trylock(lock) == 0) {
     return 0;
   }
-  int* word = mocktail_spin_word(lock);
+  int* word = roblox_spin_word(lock);
   for (;;) {
     const int old_value = __atomic_exchange_n(
         word, static_cast<int>(kSpinContended), __ATOMIC_ACQUIRE);
     if (old_value == static_cast<int>(kSpinUnlocked)) {
       return 0;
     }
-    (void)mocktail_bionic_futex(reinterpret_cast<uint32_t*>(word),
+    (void)roblox_bionic_futex(reinterpret_cast<uint32_t*>(word),
                                 FUTEX_WAIT_PRIVATE, kSpinContended, nullptr, 0);
   }
 }
 
-int mocktail_pthread_spin_unlock(pthread_spinlock_t* lock) {
+int roblox_pthread_spin_unlock(pthread_spinlock_t* lock) {
   if (lock == nullptr || reinterpret_cast<uintptr_t>(lock) < 4096) {
     return EINVAL;
   }
-  int* word = mocktail_spin_word(lock);
+  int* word = roblox_spin_word(lock);
   const int old_value = __atomic_exchange_n(
       word, static_cast<int>(kSpinUnlocked), __ATOMIC_RELEASE);
   if (old_value == static_cast<int>(kSpinContended)) {
-    (void)mocktail_bionic_futex(reinterpret_cast<uint32_t*>(word),
+    (void)roblox_bionic_futex(reinterpret_cast<uint32_t*>(word),
                                 FUTEX_WAKE_PRIVATE, 1, nullptr, 0);
   }
   return 0;
 }
 
-int mocktail_pthread_barrier_init(pthread_barrier_t* barrier,
+int roblox_pthread_barrier_init(pthread_barrier_t* barrier,
                                   const pthread_barrierattr_t* attr,
                                   unsigned count) {
   static_cast<void>(attr);
-  if (barrier == nullptr || mocktail_is_low_bionic_pointer(barrier) ||
+  if (barrier == nullptr || roblox_is_low_bionic_pointer(barrier) ||
       count == 0) {
     return EINVAL;
   }
   std::memset(barrier, 0, sizeof(*barrier));
-  __atomic_store_n(mocktail_barrier_init_count(barrier), count,
+  __atomic_store_n(roblox_barrier_init_count(barrier), count,
                    __ATOMIC_RELAXED);
-  __atomic_store_n(mocktail_barrier_state(barrier), kBarrierWaitState,
+  __atomic_store_n(roblox_barrier_state(barrier), kBarrierWaitState,
                    __ATOMIC_RELAXED);
-  __atomic_store_n(mocktail_barrier_wait_count(barrier), 0u, __ATOMIC_RELAXED);
+  __atomic_store_n(roblox_barrier_wait_count(barrier), 0u, __ATOMIC_RELAXED);
   return 0;
 }
 
-int mocktail_pthread_barrier_destroy(pthread_barrier_t* barrier) {
-  if (barrier == nullptr || mocktail_is_low_bionic_pointer(barrier)) {
+int roblox_pthread_barrier_destroy(pthread_barrier_t* barrier) {
+  if (barrier == nullptr || roblox_is_low_bionic_pointer(barrier)) {
     return EINVAL;
   }
-  if (__atomic_load_n(mocktail_barrier_init_count(barrier),
+  if (__atomic_load_n(roblox_barrier_init_count(barrier),
                       __ATOMIC_RELAXED) == 0) {
     return EINVAL;
   }
-  uint32_t* state = mocktail_barrier_state(barrier);
+  uint32_t* state = roblox_barrier_state(barrier);
   while (__atomic_load_n(state, __ATOMIC_ACQUIRE) == kBarrierReleaseState) {
-    (void)mocktail_bionic_futex(state, FUTEX_WAIT_PRIVATE, kBarrierReleaseState,
+    (void)roblox_bionic_futex(state, FUTEX_WAIT_PRIVATE, kBarrierReleaseState,
                                 nullptr, 0);
   }
-  if (__atomic_load_n(mocktail_barrier_wait_count(barrier),
+  if (__atomic_load_n(roblox_barrier_wait_count(barrier),
                       __ATOMIC_RELAXED) != 0) {
     return EBUSY;
   }
-  __atomic_store_n(mocktail_barrier_init_count(barrier), 0u, __ATOMIC_RELAXED);
+  __atomic_store_n(roblox_barrier_init_count(barrier), 0u, __ATOMIC_RELAXED);
   return 0;
 }
 
-int mocktail_pthread_barrier_wait(pthread_barrier_t* barrier) {
-  if (barrier == nullptr || mocktail_is_low_bionic_pointer(barrier)) {
+int roblox_pthread_barrier_wait(pthread_barrier_t* barrier) {
+  if (barrier == nullptr || roblox_is_low_bionic_pointer(barrier)) {
     return EINVAL;
   }
   const uint32_t init_count =
-      __atomic_load_n(mocktail_barrier_init_count(barrier), __ATOMIC_RELAXED);
+      __atomic_load_n(roblox_barrier_init_count(barrier), __ATOMIC_RELAXED);
   if (init_count == 0) {
     return EINVAL;
   }
-  uint32_t* state = mocktail_barrier_state(barrier);
-  uint32_t* wait_count = mocktail_barrier_wait_count(barrier);
+  uint32_t* state = roblox_barrier_state(barrier);
+  uint32_t* wait_count = roblox_barrier_wait_count(barrier);
   while (__atomic_load_n(state, __ATOMIC_ACQUIRE) == kBarrierReleaseState) {
-    (void)mocktail_bionic_futex(state, FUTEX_WAIT_PRIVATE, kBarrierReleaseState,
+    (void)roblox_bionic_futex(state, FUTEX_WAIT_PRIVATE, kBarrierReleaseState,
                                 nullptr, 0);
   }
   uint32_t prev = __atomic_load_n(wait_count, __ATOMIC_RELAXED);
@@ -1069,17 +1069,17 @@ int mocktail_pthread_barrier_wait(pthread_barrier_t* barrier) {
     result = PTHREAD_BARRIER_SERIAL_THREAD;
     if (prev != 0) {
       __atomic_store_n(state, kBarrierReleaseState, __ATOMIC_RELEASE);
-      (void)mocktail_bionic_futex(state, FUTEX_WAKE_PRIVATE, prev, nullptr, 0);
+      (void)roblox_bionic_futex(state, FUTEX_WAKE_PRIVATE, prev, nullptr, 0);
     }
   } else {
     while (__atomic_load_n(state, __ATOMIC_ACQUIRE) == kBarrierWaitState) {
-      (void)mocktail_bionic_futex(state, FUTEX_WAIT_PRIVATE, kBarrierWaitState,
+      (void)roblox_bionic_futex(state, FUTEX_WAIT_PRIVATE, kBarrierWaitState,
                                   nullptr, 0);
     }
   }
   if (__atomic_fetch_sub(wait_count, 1u, __ATOMIC_RELEASE) == 1u) {
     __atomic_store_n(state, kBarrierWaitState, __ATOMIC_RELEASE);
-    (void)mocktail_bionic_futex(state, FUTEX_WAKE_PRIVATE, init_count, nullptr,
+    (void)roblox_bionic_futex(state, FUTEX_WAKE_PRIVATE, init_count, nullptr,
                                 0);
   }
   return result;
@@ -1121,10 +1121,10 @@ int __FD_ISSET_chk(int fd, fd_set* set, size_t set_len) {
   }
   return FD_ISSET(fd, set);
 }
-extern void* mocktail_gameactivity_on_start_native;
-extern void* mocktail_gameactivity_on_resume_native;
-extern void* mocktail_gameactivity_on_surface_created_native;
-extern void* mocktail_gameactivity_on_surface_changed_native;
-extern void* mocktail_gameactivity_on_surface_redraw_needed_native;
-extern void* mocktail_gameactivity_on_trim_memory_native;
+extern void* roblox_gameactivity_on_start_native;
+extern void* roblox_gameactivity_on_resume_native;
+extern void* roblox_gameactivity_on_surface_created_native;
+extern void* roblox_gameactivity_on_surface_changed_native;
+extern void* roblox_gameactivity_on_surface_redraw_needed_native;
+extern void* roblox_gameactivity_on_trim_memory_native;
 }  // extern "C"

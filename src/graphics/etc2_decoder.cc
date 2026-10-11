@@ -1,4 +1,4 @@
-#include "mocktail/graphics/etc2_decoder.h"
+#include "roblox/graphics/etc2_decoder.h"
 
 #include <algorithm>
 #include <array>
@@ -8,7 +8,7 @@
 #include <limits>
 #include <vector>
 
-namespace mocktail::graphics {
+namespace roblox::graphics {
 namespace {
 
 constexpr std::array<int, 8> kDistance = {3, 6, 11, 16, 23, 32, 41, 64};
@@ -395,4 +395,4 @@ bool DecodeEtcImageBlockRows(EtcFormat format, const std::uint8_t* source,
   return true;
 }
 
-}  // namespace mocktail::graphics
+}  // namespace roblox::graphics

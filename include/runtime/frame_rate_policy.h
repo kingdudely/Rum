@@ -1,10 +1,10 @@
-#ifndef MOCKTAIL_RUNTIME_FRAME_RATE_POLICY_H_
-#define MOCKTAIL_RUNTIME_FRAME_RATE_POLICY_H_
+#ifndef ROBLOX_RUNTIME_FRAME_RATE_POLICY_H_
+#define ROBLOX_RUNTIME_FRAME_RATE_POLICY_H_
 
 #include <string>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 inline constexpr int kMaximumSupportedRobloxSchedulerFps = 240;
@@ -27,7 +27,7 @@ struct FrameRatePolicy {
 FrameRatePolicy ParseFrameRatePolicy(std::string_view value);
 
 // Enables Roblox's Basic Settings frame-rate control and, when explicitly
-// requested, merges a Mocktail scheduler policy into client settings.
+// requested, merges a Roblox scheduler policy into client settings.
 // Unmanaged (-1) does not add a scheduler target, so Roblox owns the cap.
 // Every positive fixed value is forwarded verbatim to
 // DFIntTaskSchedulerTargetFps; it is not restricted to common refresh rates.
@@ -42,6 +42,6 @@ bool MergeFrameRateClientSettingsOverrides(const FrameRatePolicy &policy,
                                            std::string *error);
 
 } // namespace runtime
-} // namespace mocktail
+} // namespace roblox
 
-#endif // MOCKTAIL_RUNTIME_FRAME_RATE_POLICY_H_
+#endif // ROBLOX_RUNTIME_FRAME_RATE_POLICY_H_

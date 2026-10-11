@@ -14,10 +14,10 @@
 #include <system_error>
 #include <utility>
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/runtime_paths.h"
 
-namespace mocktail {
+namespace roblox {
 namespace services {
 namespace {
 
@@ -68,7 +68,7 @@ bool AtomicWriteFile(const std::filesystem::path& path,
   const std::filesystem::path parent = path.parent_path().empty()
                                            ? std::filesystem::path(".")
                                            : path.parent_path();
-  if (!mocktail::runtime::RuntimePaths::EnsureDirectory(parent,
+  if (!roblox::runtime::RuntimePaths::EnsureDirectory(parent,
                                                         &directory_error)) {
     if (error_message != nullptr) {
       *error_message = "could not create client settings cache directory: " +
@@ -359,4 +359,4 @@ const char* ClientSettingsSourceName(ClientSettingsSource source) {
 }
 
 }  // namespace services
-}  // namespace mocktail
+}  // namespace roblox

@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -697,4 +697,4 @@ void RobloxInputRuntime::LogFirstDispatch(
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

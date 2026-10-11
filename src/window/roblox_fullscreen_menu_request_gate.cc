@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 namespace {
 
@@ -58,4 +58,4 @@ void RobloxFullscreenMenuRequestGate::Reset() {
 }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

@@ -1,13 +1,13 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_CALL_PROTOCOL_BRIDGE_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_CALL_PROTOCOL_BRIDGE_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_CALL_PROTOCOL_BRIDGE_H_
+#define ROBLOX_RUNTIME_ROBLOX_CALL_PROTOCOL_BRIDGE_H_
 
 #include "runtime/roblox_message_bus_request_bridge.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // In-experience CoreScripts query the app's cross-experience call state before
-// initializing voice. Mocktail does not start or accept cross-experience calls,
+// initializing voice. Roblox does not start or accept cross-experience calls,
 // so that state is Idle. This query neither joins voice nor opens a microphone.
 class RobloxCallProtocolBridge final {
  public:
@@ -22,5 +22,5 @@ class RobloxCallProtocolBridge final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 #endif

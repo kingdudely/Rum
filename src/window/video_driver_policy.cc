@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 VideoDriverChoice ResolveVideoDriverChoice(
@@ -61,4 +61,4 @@ bool HasAvailableVideoDriverCandidate(
 }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

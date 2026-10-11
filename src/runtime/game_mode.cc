@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -45,7 +45,7 @@ std::string ClientError(const GameModeClientApi& api,
 
 void* OpenClientLibrary(const char* name) {
 #if defined(__GLIBC__)
-  // Mocktail intentionally exports Bionic compatibility symbols for the
+  // Roblox intentionally exports Bionic compatibility symbols for the
   // Android payload. A normal dlopen() lets host libraries such as libdbus
   // bind to those ABI-compatible-looking exports instead of glibc, which can
   // corrupt the GameMode portal exchange. A new link-map namespace keeps the
@@ -225,4 +225,4 @@ void GameModeSession::CloseLibrary() {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

@@ -21,11 +21,11 @@
 #include <vector>
 
 #include "jnivm/jnivm.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/environment.h"
 #include "services/auth_service.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -52,13 +52,13 @@ bool Enabled(const Environment& environment, const char* name,
   return *value != "0";
 }
 
-// The credential lives only in memory: MOCKTAIL_ROBLOSECURITY (or the
+// The credential lives only in memory: ROBLOX_ROBLOSECURITY (or the
 // --roblosecurity flag that sets it). Nothing is read from or written to
 // disk, so a relaunch with a different value is a different identity.
 CookieLoadResult LoadSavedCookie(const Environment& environment) {
   CookieLoadResult result;
   std::optional<std::string> environment_cookie =
-      environment.Get("MOCKTAIL_ROBLOSECURITY");
+      environment.Get("ROBLOX_ROBLOSECURITY");
   if (environment_cookie.has_value() && !environment_cookie->empty()) {
     result.status = CookieLoadStatus::kFound;
     result.value = std::move(*environment_cookie);
@@ -144,7 +144,7 @@ AuthRuntimeComposition ComposeAuthRuntime(const Environment& environment,
     SecureClear(&cookie_value);
   }
   const bool allow_guest =
-      Enabled(environment, "MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP", true);
+      Enabled(environment, "ROBLOX_ALLOW_NO_COOKIE_LUA_APP", true);
   const services::AuthSession session = auth_service.ResolveSession(
       credential.empty() ? std::string_view(cookie.value) : credential.view(),
       allow_guest);
@@ -186,4 +186,4 @@ AuthRuntimeComposition ComposeAuthRuntime(const Environment& environment,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

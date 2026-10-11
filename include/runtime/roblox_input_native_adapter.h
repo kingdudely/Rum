@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_INPUT_NATIVE_ADAPTER_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_INPUT_NATIVE_ADAPTER_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_INPUT_NATIVE_ADAPTER_H_
+#define ROBLOX_RUNTIME_ROBLOX_INPUT_NATIVE_ADAPTER_H_
 
 #include <jni.h>
 
@@ -8,14 +8,14 @@
 #include <mutex>
 #include <string>
 
-#include "mocktail/platform/platform_runtime.h"
-#include "mocktail/status.h"
+#include "roblox/platform/platform_runtime.h"
+#include "roblox/status.h"
 #include "runtime/roblox_capability_resolver.h"
 #include "runtime/roblox_game_session_native_adapter.h"
 #include "runtime/roblox_input_router.h"
 #include "runtime/roblox_native_text_box_info_reader.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Owns the JNI class references used by the exported NativeInputInterface and
@@ -143,6 +143,6 @@ class RobloxInputRuntime final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_INPUT_NATIVE_ADAPTER_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_INPUT_NATIVE_ADAPTER_H_

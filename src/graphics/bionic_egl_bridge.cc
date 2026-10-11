@@ -1,4 +1,4 @@
-#include "mocktail/graphics/bionic_egl_bridge.h"
+#include "roblox/graphics/bionic_egl_bridge.h"
 
 #include <dlfcn.h>
 #include <limits.h>
@@ -6,7 +6,7 @@
 
 #include <cstdlib>
 
-namespace mocktail::graphics {
+namespace roblox::graphics {
 namespace {
 
 constexpr const char *kEglExportNames[] = {
@@ -69,7 +69,7 @@ bool BionicEglBridge::Load() {
   library_path_.clear();
 
   const char *directory_override =
-      std::getenv("MOCKTAIL_RUNTIME_LIBRARY_DIR");
+      std::getenv("ROBLOX_RUNTIME_LIBRARY_DIR");
   const std::string directory =
       directory_override != nullptr && directory_override[0] != '\0'
           ? directory_override
@@ -110,7 +110,7 @@ bool BionicEglBridge::Load() {
         CanonicalPath(origin.dli_fname) != library_path_) {
       error_ = "EGL export '";
       error_ += name;
-      error_ += "' did not resolve from the exact Mocktail bridge";
+      error_ += "' did not resolve from the exact Roblox bridge";
       ::dlclose(loaded_handle);
       exports_.clear();
       return false;
@@ -122,4 +122,4 @@ bool BionicEglBridge::Load() {
   return true;
 }
 
-} // namespace mocktail::graphics
+} // namespace roblox::graphics

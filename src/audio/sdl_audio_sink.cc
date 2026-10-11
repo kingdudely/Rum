@@ -1,6 +1,6 @@
-#include "mocktail/audio/sdl_audio_sink.h"
+#include "roblox/audio/sdl_audio_sink.h"
 
-#include "mocktail/audio/sdl_audio_capture.h"
+#include "roblox/audio/sdl_audio_capture.h"
 
 #include <SDL3/SDL.h>
 
@@ -18,7 +18,7 @@
 // SDL 3.4 added borrowed audio buffers. Older SDL copies instead; the caller
 // still releases its buffer immediately because the copy already owns the data.
 
-namespace mocktail::audio {
+namespace roblox::audio {
 namespace {
 
 class SdlAudioSink;
@@ -763,4 +763,4 @@ Status CreateSdlAudioSink(const SdlAudioSinkOptions& options,
   return Status::Ok();
 }
 
-}  // namespace mocktail::audio
+}  // namespace roblox::audio

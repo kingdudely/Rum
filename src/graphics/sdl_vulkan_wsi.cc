@@ -1,11 +1,11 @@
-#include "mocktail/graphics/sdl_vulkan_wsi.h"
+#include "roblox/graphics/sdl_vulkan_wsi.h"
 
 #include <SDL3/SDL.h>
 
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace graphics {
 namespace {
 
@@ -130,4 +130,4 @@ void SdlVulkanWsi::DestroySurface(
 }
 
 }  // namespace graphics
-}  // namespace mocktail
+}  // namespace roblox

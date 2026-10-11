@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -672,4 +672,4 @@ Status ParseRobloxLaunchUri(std::string_view uri,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

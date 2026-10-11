@@ -12,11 +12,11 @@
 #include <utility>
 
 #include "jnivm/jnivm.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/roblox_window_input_runtime.h"
 #include "window/window.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -940,4 +940,4 @@ Status RobloxTextInputJniBridge::Shutdown() {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

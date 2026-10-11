@@ -10,10 +10,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/runtime_paths.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 bool AtomicWriteJson(const std::filesystem::path& path,
@@ -76,4 +76,4 @@ bool AtomicWriteJson(const std::filesystem::path& path,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

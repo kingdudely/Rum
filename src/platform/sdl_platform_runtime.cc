@@ -1,4 +1,4 @@
-#include "mocktail/platform/sdl_platform_runtime.h"
+#include "roblox/platform/sdl_platform_runtime.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_video.h>
@@ -8,11 +8,11 @@
 #include <string>
 #include <utility>
 
-#include "mocktail/platform/sdl_application_metadata.h"
-#include "mocktail/platform/sdl_event_converter.h"
-#include "mocktail/platform/sdl_window_icon.h"
+#include "roblox/platform/sdl_application_metadata.h"
+#include "roblox/platform/sdl_event_converter.h"
+#include "roblox/platform/sdl_window_icon.h"
 
-namespace mocktail {
+namespace roblox {
 namespace platform {
 namespace {
 
@@ -203,4 +203,4 @@ std::unique_ptr<PlatformRuntime> CreateSdlPlatformRuntime() {
 }
 
 }  // namespace platform
-}  // namespace mocktail
+}  // namespace roblox

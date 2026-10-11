@@ -1,6 +1,6 @@
 #include "runtime/roblox_call_protocol_bridge.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 RobloxCallProtocolBridge::RobloxCallProtocolBridge(
@@ -30,4 +30,4 @@ Status RobloxCallProtocolBridge::Shutdown() {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

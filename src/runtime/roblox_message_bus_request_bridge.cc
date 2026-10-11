@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 Status Unavailable(const char* message) {
@@ -292,4 +292,4 @@ Status RobloxMessageBusRequestBridge::ShutdownLocked() {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

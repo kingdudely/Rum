@@ -6,7 +6,7 @@
 #include <charconv>
 #include <string>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -89,4 +89,4 @@ bool MergeFrameRateClientSettingsOverrides(const FrameRatePolicy &policy,
 }
 
 } // namespace runtime
-} // namespace mocktail
+} // namespace roblox

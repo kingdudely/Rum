@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_RUNTIME_COMMAND_LINE_H_
-#define MOCKTAIL_RUNTIME_COMMAND_LINE_H_
+#ifndef ROBLOX_RUNTIME_COMMAND_LINE_H_
+#define ROBLOX_RUNTIME_COMMAND_LINE_H_
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 enum class CommandMode {
@@ -15,7 +15,7 @@ enum class CommandMode {
 
 struct CommandLineOptions {
   CommandMode mode = CommandMode::kRun;
-  std::string program_name = "mocktail";
+  std::string program_name = "roblox";
   std::string roblox_library_path;
   std::string assets_path;
   std::string graphics_backend;
@@ -57,6 +57,6 @@ bool ApplyCommandLineEnvironment(const CommandLineOptions& options,
 std::string CommandLineUsage(const std::string& program_name);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_COMMAND_LINE_H_
+#endif  // ROBLOX_RUNTIME_COMMAND_LINE_H_

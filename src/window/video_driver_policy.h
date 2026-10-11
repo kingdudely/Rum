@@ -1,10 +1,10 @@
-#ifndef MOCKTAIL_WINDOW_VIDEO_DRIVER_POLICY_H_
-#define MOCKTAIL_WINDOW_VIDEO_DRIVER_POLICY_H_
+#ifndef ROBLOX_WINDOW_VIDEO_DRIVER_POLICY_H_
+#define ROBLOX_WINDOW_VIDEO_DRIVER_POLICY_H_
 
 #include <string_view>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 enum class VideoDriverChoice {
@@ -40,6 +40,6 @@ bool HasAvailableVideoDriverCandidate(
     const std::vector<std::string_view>& available_drivers);
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_VIDEO_DRIVER_POLICY_H_
+#endif  // ROBLOX_WINDOW_VIDEO_DRIVER_POLICY_H_

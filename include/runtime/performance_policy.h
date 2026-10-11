@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_PERFORMANCE_POLICY_H_
-#define MOCKTAIL_RUNTIME_PERFORMANCE_POLICY_H_
+#ifndef ROBLOX_RUNTIME_PERFORMANCE_POLICY_H_
+#define ROBLOX_RUNTIME_PERFORMANCE_POLICY_H_
 
 #include <cstdint>
 #include <string>
@@ -8,7 +8,7 @@
 #include "runtime/frame_rate_policy.h"
 #include "runtime/game_mode.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 enum class PhysicsWorkerMode {
@@ -67,6 +67,6 @@ bool MergeAudioCaptureClientSettingsOverrides(bool microphone_enabled,
                                               std::string* error);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_PERFORMANCE_POLICY_H_
+#endif  // ROBLOX_RUNTIME_PERFORMANCE_POLICY_H_

@@ -8,18 +8,18 @@
 #include <cstdlib>
 #include <optional>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
 // Overrides that put an engine call on a detached thread. Every name here has
 // a step it belongs to, so retiring a step retires its thread override too.
 constexpr std::array<std::string_view, 5> kUnsafeDetachedThreadOverrides = {
-    "MOCKTAIL_APP_BRIDGE_APP_START_THREAD",
-    "MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT_THREAD",
-    "MOCKTAIL_START_LUA_APP_DM_THREAD",
-    "MOCKTAIL_CALL_REAL_APP_BRIDGE_START_THREAD",
-    "MOCKTAIL_SEND_APP_READY_THREAD",
+    "ROBLOX_APP_BRIDGE_APP_START_THREAD",
+    "ROBLOX_CALL_REAL_APP_BRIDGE_INIT_THREAD",
+    "ROBLOX_START_LUA_APP_DM_THREAD",
+    "ROBLOX_CALL_REAL_APP_BRIDGE_START_THREAD",
+    "ROBLOX_SEND_APP_READY_THREAD",
 };
 
 bool LegacyEnabled(const Environment& environment, std::string_view name) {
@@ -71,7 +71,7 @@ bool ApplyDeviceProfileOverride(const Environment& environment,
 
 bool DesktopPlayabilityEnabled(const Environment& environment) {
   const std::optional<std::string> value =
-      environment.Get("MOCKTAIL_DESKTOP_PLAYABILITY");
+      environment.Get("ROBLOX_DESKTOP_PLAYABILITY");
   return !value.has_value() ||
          (*value != "0" && *value != "off" && *value != "false");
 }
@@ -96,11 +96,11 @@ int ReadPositiveInt(const Environment& environment, std::string_view name,
 std::optional<NetworkProxyConfig> ReadNetworkProxy(
     const Environment& environment) {
   const std::optional<std::string> host =
-      environment.Get("MOCKTAIL_HTTP_PROXY_HOST");
+      environment.Get("ROBLOX_HTTP_PROXY_HOST");
   const std::optional<std::string> port =
-      environment.Get("MOCKTAIL_HTTP_PROXY_PORT");
+      environment.Get("ROBLOX_HTTP_PROXY_PORT");
   const std::string scheme =
-      environment.GetOr("MOCKTAIL_HTTP_PROXY_SCHEME", "http");
+      environment.GetOr("ROBLOX_HTTP_PROXY_SCHEME", "http");
   if (!host.has_value() || host->empty() || !port.has_value()) {
     return std::nullopt;
   }
@@ -156,26 +156,26 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
     config.roblox_library_path_ = DefaultRobloxLibraryPath();
   }
   config.graphics_backend_name_ = environment.GetOr(
-      "MOCKTAIL_GRAPHICS_BACKEND", config.graphics_backend_name_);
+      "ROBLOX_GRAPHICS_BACKEND", config.graphics_backend_name_);
   config.graphics_backend_ =
       ParseGraphicsBackend(config.graphics_backend_name_);
   config.window_.width =
-      ReadPositiveInt(environment, "MOCKTAIL_WIN_WIDTH", config.window_.width);
-  config.window_.height = ReadPositiveInt(environment, "MOCKTAIL_WIN_HEIGHT",
+      ReadPositiveInt(environment, "ROBLOX_WIN_WIDTH", config.window_.width);
+  config.window_.height = ReadPositiveInt(environment, "ROBLOX_WIN_HEIGHT",
                                           config.window_.height);
   config.window_.title =
-      environment.GetOr("MOCKTAIL_WIN_TITLE", config.window_.title);
-  config.window_.high_dpi = ReadBoolean(environment, "MOCKTAIL_WIN_HIGH_DPI",
+      environment.GetOr("ROBLOX_WIN_TITLE", config.window_.title);
+  config.window_.high_dpi = ReadBoolean(environment, "ROBLOX_WIN_HIGH_DPI",
                                         config.window_.high_dpi,
                                         &config.window_.high_dpi_valid);
   config.theme_mode_ =
-      environment.GetOr("MOCKTAIL_THEME", config.theme_mode_);
+      environment.GetOr("ROBLOX_THEME", config.theme_mode_);
   const std::optional<std::string> configured_device =
-      environment.Get("MOCKTAIL_DEVICE_PROFILE");
+      environment.Get("ROBLOX_DEVICE_PROFILE");
   const bool has_explicit_device =
       configured_device.has_value() && !configured_device->empty();
   const bool has_legacy_playability =
-      environment.Get("MOCKTAIL_DESKTOP_PLAYABILITY").has_value();
+      environment.Get("ROBLOX_DESKTOP_PLAYABILITY").has_value();
   std::string_view selected_device = kDefaultDeviceProfileName;
   if (has_explicit_device) {
     selected_device = *configured_device;
@@ -198,45 +198,45 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
         config.device_profile_.keyboard_enabled;
   }
   if (const std::optional<bool> touch =
-          InputEnabled(environment, "MOCKTAIL_TOUCH_MODE");
+          InputEnabled(environment, "ROBLOX_TOUCH_MODE");
       touch.has_value()) {
     config.input_capabilities_.touch_enabled = *touch;
   }
   if (const std::optional<bool> mouse =
-          InputEnabled(environment, "MOCKTAIL_MOUSE_MODE");
+          InputEnabled(environment, "ROBLOX_MOUSE_MODE");
       mouse.has_value()) {
     config.input_capabilities_.mouse_enabled = *mouse;
   }
   if (const std::optional<bool> keyboard =
-          InputEnabled(environment, "MOCKTAIL_KEYBOARD_MODE");
+          InputEnabled(environment, "ROBLOX_KEYBOARD_MODE");
       keyboard.has_value()) {
     config.input_capabilities_.keyboard_enabled = *keyboard;
   }
   bool customized_device = false;
   config.device_profile_valid_ =
       config.device_profile_valid_ &&
-      ApplyDeviceProfileOverride(environment, "MOCKTAIL_DEVICE_PLATFORM_NAME",
+      ApplyDeviceProfileOverride(environment, "ROBLOX_DEVICE_PLATFORM_NAME",
                                  128, &config.device_profile_.platform_name,
                                  &customized_device) &&
-      ApplyDeviceProfileOverride(environment, "MOCKTAIL_DEVICE_NAME", 128,
+      ApplyDeviceProfileOverride(environment, "ROBLOX_DEVICE_NAME", 128,
                                  &config.device_profile_.display_name,
                                  &customized_device) &&
-      ApplyDeviceProfileOverride(environment, "MOCKTAIL_DEVICE_MANUFACTURER",
+      ApplyDeviceProfileOverride(environment, "ROBLOX_DEVICE_MANUFACTURER",
                                  128, &config.device_profile_.manufacturer,
                                  &customized_device) &&
-      ApplyDeviceProfileOverride(environment, "MOCKTAIL_DEVICE_MODEL", 128,
+      ApplyDeviceProfileOverride(environment, "ROBLOX_DEVICE_MODEL", 128,
                                  &config.device_profile_.model,
                                  &customized_device) &&
-      ApplyDeviceProfileOverride(environment, "MOCKTAIL_DEVICE_BRAND", 64,
+      ApplyDeviceProfileOverride(environment, "ROBLOX_DEVICE_BRAND", 64,
                                  &config.device_profile_.brand,
                                  &customized_device) &&
-      ApplyDeviceProfileOverride(environment, "MOCKTAIL_DEVICE_CODE", 64,
+      ApplyDeviceProfileOverride(environment, "ROBLOX_DEVICE_CODE", 64,
                                  &config.device_profile_.device_code,
                                  &customized_device) &&
-      ApplyDeviceProfileOverride(environment, "MOCKTAIL_DEVICE_SKU", 64,
+      ApplyDeviceProfileOverride(environment, "ROBLOX_DEVICE_SKU", 64,
                                  &config.device_profile_.device_sku,
                                  &customized_device) &&
-      ApplyDeviceProfileOverride(environment, "MOCKTAIL_DEVICE_SOC_MODEL", 128,
+      ApplyDeviceProfileOverride(environment, "ROBLOX_DEVICE_SOC_MODEL", 128,
                                  &config.device_profile_.soc_model,
                                  &customized_device);
   if (customized_device && config.device_profile_valid_) {
@@ -244,7 +244,7 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
         BuildCustomDeviceProfileCacheKey(config.device_profile_);
   }
   const std::optional<std::string> configured_user_agent =
-      environment.Get("MOCKTAIL_USER_AGENT");
+      environment.Get("ROBLOX_USER_AGENT");
   if (configured_user_agent.has_value() && !configured_user_agent->empty()) {
     config.roblox_http_user_agent_ = *configured_user_agent;
   } else if (!config.device_profile_.roblox_http_user_agent.empty()) {
@@ -252,23 +252,23 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
         config.device_profile_.roblox_http_user_agent;
   }
   config.frame_rate_ = ParseFrameRatePolicy(
-      environment.GetOr("MOCKTAIL_FRAME_RATE_LIMIT", "-1"));
-  config.vsync_mode_ = environment.GetOr("MOCKTAIL_VSYNC", "auto");
+      environment.GetOr("ROBLOX_FRAME_RATE_LIMIT", "-1"));
+  config.vsync_mode_ = environment.GetOr("ROBLOX_VSYNC", "auto");
   config.performance_ = ParsePerformancePolicy(
-      environment.GetOr("MOCKTAIL_MULTITHREADED_RENDERING", "0"),
-      environment.GetOr("MOCKTAIL_GAMEMODE", "auto"),
-      environment.GetOr("MOCKTAIL_PHYSICS_WORKER_MODE", "throughput"));
+      environment.GetOr("ROBLOX_MULTITHREADED_RENDERING", "0"),
+      environment.GetOr("ROBLOX_GAMEMODE", "auto"),
+      environment.GetOr("ROBLOX_PHYSICS_WORKER_MODE", "throughput"));
   config.audio_output_device_ = environment.GetOr(
-      "MOCKTAIL_AUDIO_OUTPUT_DEVICE", config.audio_output_device_);
+      "ROBLOX_AUDIO_OUTPUT_DEVICE", config.audio_output_device_);
   config.audio_output_device_valid_ =
       IsValidDeviceProfileValue(config.audio_output_device_, 512);
   config.audio_input_device_ = environment.GetOr(
-      "MOCKTAIL_AUDIO_INPUT_DEVICE", config.audio_input_device_);
+      "ROBLOX_AUDIO_INPUT_DEVICE", config.audio_input_device_);
   config.audio_input_device_valid_ =
       IsValidDeviceProfileValue(config.audio_input_device_, 512);
   config.network_proxy_ = ReadNetworkProxy(environment);
   if (const std::optional<std::string> ca_bundle =
-          environment.Get("MOCKTAIL_CA_BUNDLE");
+          environment.Get("ROBLOX_CA_BUNDLE");
       ca_bundle.has_value()) {
     config.ca_bundle_ = *ca_bundle;
     config.ca_bundle_valid_ = !ca_bundle->empty() &&
@@ -379,98 +379,98 @@ bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
   }
   const DeviceProfile& device = config.device_profile();
   const bool base_exported =
-      SetEnvironmentValue("MOCKTAIL_DEVICE_PROFILE", std::string(device.name),
+      SetEnvironmentValue("ROBLOX_DEVICE_PROFILE", std::string(device.name),
                           error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_CLASS",
+      SetEnvironmentValue("ROBLOX_DEVICE_CLASS",
                           std::string(DeviceClassName(device.device_class)),
                           error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_PLATFORM_NAME",
+      SetEnvironmentValue("ROBLOX_DEVICE_PLATFORM_NAME",
                           std::string(device.platform_name), error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_NAME",
+      SetEnvironmentValue("ROBLOX_DEVICE_NAME",
                           std::string(device.display_name), error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_MANUFACTURER",
+      SetEnvironmentValue("ROBLOX_DEVICE_MANUFACTURER",
                           std::string(device.manufacturer), error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_MODEL", std::string(device.model),
+      SetEnvironmentValue("ROBLOX_DEVICE_MODEL", std::string(device.model),
                           error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_BRAND", std::string(device.brand),
+      SetEnvironmentValue("ROBLOX_DEVICE_BRAND", std::string(device.brand),
                           error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_CODE",
+      SetEnvironmentValue("ROBLOX_DEVICE_CODE",
                           std::string(device.device_code), error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_SKU", std::string(device.device_sku),
+      SetEnvironmentValue("ROBLOX_DEVICE_SKU", std::string(device.device_sku),
                           error) &&
-      SetEnvironmentValue("MOCKTAIL_DEVICE_SOC_MODEL",
+      SetEnvironmentValue("ROBLOX_DEVICE_SOC_MODEL",
                           std::string(device.soc_model), error) &&
       SetEnvironmentValue("ROBLOX_LIB_PATH",
                           config.roblox_library_path().string(), error) &&
-      SetEnvironmentValue("MOCKTAIL_GRAPHICS_BACKEND",
+      SetEnvironmentValue("ROBLOX_GRAPHICS_BACKEND",
                           config.graphics_backend_name(), error) &&
-      SetEnvironmentValue("MOCKTAIL_THEME", config.theme_mode(), error) &&
-      SetEnvironmentValue("MOCKTAIL_WIN_WIDTH",
+      SetEnvironmentValue("ROBLOX_THEME", config.theme_mode(), error) &&
+      SetEnvironmentValue("ROBLOX_WIN_WIDTH",
                           std::to_string(config.window().width), error) &&
-      SetEnvironmentValue("MOCKTAIL_WIN_HEIGHT",
+      SetEnvironmentValue("ROBLOX_WIN_HEIGHT",
                           std::to_string(config.window().height), error) &&
-      SetEnvironmentValue("MOCKTAIL_WIN_TITLE", config.window().title, error) &&
-      SetEnvironmentValue("MOCKTAIL_WIN_HIGH_DPI",
+      SetEnvironmentValue("ROBLOX_WIN_TITLE", config.window().title, error) &&
+      SetEnvironmentValue("ROBLOX_WIN_HIGH_DPI",
                           config.window().high_dpi ? "1" : "0", error) &&
       SetEnvironmentValue(
-          "MOCKTAIL_TOUCH_MODE",
+          "ROBLOX_TOUCH_MODE",
           config.input_capabilities().touch_enabled ? "on" : "off", error) &&
       SetEnvironmentValue(
-          "MOCKTAIL_MOUSE_MODE",
+          "ROBLOX_MOUSE_MODE",
           config.input_capabilities().mouse_enabled ? "on" : "off", error) &&
       SetEnvironmentValue(
-          "MOCKTAIL_KEYBOARD_MODE",
+          "ROBLOX_KEYBOARD_MODE",
           config.input_capabilities().keyboard_enabled ? "on" : "off", error) &&
-      SetEnvironmentValue("MOCKTAIL_DESKTOP_PLAYABILITY",
+      SetEnvironmentValue("ROBLOX_DESKTOP_PLAYABILITY",
                           config.desktop_playability() ? "1" : "0", error) &&
-      SetEnvironmentValue("MOCKTAIL_FRAME_RATE_LIMIT",
+      SetEnvironmentValue("ROBLOX_FRAME_RATE_LIMIT",
                           FrameRateValue(config.frame_rate()), error) &&
-      SetEnvironmentValue("MOCKTAIL_VSYNC", config.vsync_mode(), error) &&
+      SetEnvironmentValue("ROBLOX_VSYNC", config.vsync_mode(), error) &&
       SetEnvironmentValue(
-          "MOCKTAIL_MULTITHREADED_RENDERING",
+          "ROBLOX_MULTITHREADED_RENDERING",
           config.performance().multithreaded_rendering ? "1" : "0", error) &&
-      SetEnvironmentValue("MOCKTAIL_PHYSICS_WORKER_MODE",
+      SetEnvironmentValue("ROBLOX_PHYSICS_WORKER_MODE",
                           std::string(PhysicsWorkerModeName(
                               config.performance().physics_worker_mode)),
                           error) &&
-      SetEnvironmentValue("MOCKTAIL_GAMEMODE",
+      SetEnvironmentValue("ROBLOX_GAMEMODE",
                           GameModePolicyName(config.performance().game_mode),
                           error) &&
-      SetEnvironmentValue("MOCKTAIL_AUDIO_OUTPUT_DEVICE",
+      SetEnvironmentValue("ROBLOX_AUDIO_OUTPUT_DEVICE",
                           config.audio_output_device(), error) &&
-      SetEnvironmentValue("MOCKTAIL_AUDIO_INPUT_DEVICE",
+      SetEnvironmentValue("ROBLOX_AUDIO_INPUT_DEVICE",
                           config.audio_input_device(), error);
   if (!base_exported) {
     return false;
   }
   if (config.ca_bundle().has_value()) {
-    if (!SetEnvironmentValue("MOCKTAIL_CA_BUNDLE",
+    if (!SetEnvironmentValue("ROBLOX_CA_BUNDLE",
                              config.ca_bundle()->string(), error)) {
       return false;
     }
-  } else if (!UnsetEnvironmentValue("MOCKTAIL_CA_BUNDLE", error)) {
+  } else if (!UnsetEnvironmentValue("ROBLOX_CA_BUNDLE", error)) {
     return false;
   }
   if (config.roblox_http_user_agent().has_value() &&
-      !SetEnvironmentValue("MOCKTAIL_USER_AGENT",
+      !SetEnvironmentValue("ROBLOX_USER_AGENT",
                            *config.roblox_http_user_agent(), error)) {
     return false;
   }
   if (!config.roblox_http_user_agent().has_value() &&
-      !UnsetEnvironmentValue("MOCKTAIL_USER_AGENT", error)) {
+      !UnsetEnvironmentValue("ROBLOX_USER_AGENT", error)) {
     return false;
   }
   if (!config.network_proxy().has_value()) {
     return base_exported;
   }
-  return SetEnvironmentValue("MOCKTAIL_HTTP_PROXY_HOST",
+  return SetEnvironmentValue("ROBLOX_HTTP_PROXY_HOST",
                              config.network_proxy()->host, error) &&
-         SetEnvironmentValue("MOCKTAIL_HTTP_PROXY_PORT",
+         SetEnvironmentValue("ROBLOX_HTTP_PROXY_PORT",
                              std::to_string(config.network_proxy()->port),
                              error) &&
-         SetEnvironmentValue("MOCKTAIL_HTTP_PROXY_SCHEME",
+         SetEnvironmentValue("ROBLOX_HTTP_PROXY_SCHEME",
                              config.network_proxy()->scheme, error) &&
-         SetEnvironmentValue("MOCKTAIL_NATIVE_SET_HTTP_CLIENT_PROXY", "1",
+         SetEnvironmentValue("ROBLOX_NATIVE_SET_HTTP_CLIENT_PROXY", "1",
                              error);
 }
 
@@ -522,4 +522,4 @@ bool LoadRuntimeConfigFromEnvironment(const Environment& environment,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

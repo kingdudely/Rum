@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_SERVICES_CLIENT_SETTINGS_SERVICE_H_
-#define MOCKTAIL_SERVICES_CLIENT_SETTINGS_SERVICE_H_
+#ifndef ROBLOX_SERVICES_CLIENT_SETTINGS_SERVICE_H_
+#define ROBLOX_SERVICES_CLIENT_SETTINGS_SERVICE_H_
 
 #include <cstddef>
 #include <filesystem>
@@ -8,7 +8,7 @@
 
 #include "services/http_client.h"
 
-namespace mocktail {
+namespace roblox {
 namespace services {
 
 enum class ClientSettingsSource {
@@ -75,6 +75,6 @@ class ClientSettingsService {
 const char* ClientSettingsSourceName(ClientSettingsSource source);
 
 }  // namespace services
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_SERVICES_CLIENT_SETTINGS_SERVICE_H_
+#endif  // ROBLOX_SERVICES_CLIENT_SETTINGS_SERVICE_H_

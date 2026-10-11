@@ -9,7 +9,7 @@
 
 #include "runtime/runtime_config.h"
 
-namespace mocktail {
+namespace roblox {
 namespace services {
 namespace {
 
@@ -118,13 +118,13 @@ HttpResponse PerformRequest(const HttpRequest& request,
   curl_easy_setopt(handle, CURLOPT_WRITEDATA, &writer);
   curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, WriteHeader);
   curl_easy_setopt(handle, CURLOPT_HEADERDATA, &response.headers);
-  if (const char* ca_bundle = std::getenv("MOCKTAIL_CA_BUNDLE")) {
+  if (const char* ca_bundle = std::getenv("ROBLOX_CA_BUNDLE")) {
     curl_easy_setopt(handle, CURLOPT_CAINFO, ca_bundle);
   }
   std::string proxy_url;
-  const char* proxy_host = std::getenv("MOCKTAIL_HTTP_PROXY_HOST");
-  const char* proxy_port = std::getenv("MOCKTAIL_HTTP_PROXY_PORT");
-  const char* proxy_scheme = std::getenv("MOCKTAIL_HTTP_PROXY_SCHEME");
+  const char* proxy_host = std::getenv("ROBLOX_HTTP_PROXY_HOST");
+  const char* proxy_port = std::getenv("ROBLOX_HTTP_PROXY_PORT");
+  const char* proxy_scheme = std::getenv("ROBLOX_HTTP_PROXY_SCHEME");
   if (proxy_host != nullptr && proxy_port != nullptr) {
     const std::optional<runtime::NetworkProxyConfig> proxy =
         runtime::ParseNetworkProxyConfig(
@@ -169,4 +169,4 @@ HttpResponse CurlHttpClient::Post(const HttpRequest& request,
 }
 
 }  // namespace services
-}  // namespace mocktail
+}  // namespace roblox

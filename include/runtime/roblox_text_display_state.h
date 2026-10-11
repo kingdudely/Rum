@@ -1,15 +1,15 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_TEXT_DISPLAY_STATE_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_TEXT_DISPLAY_STATE_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_TEXT_DISPLAY_STATE_H_
+#define ROBLOX_RUNTIME_ROBLOX_TEXT_DISPLAY_STATE_H_
 
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 #include "runtime/roblox_text_editor.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 struct RobloxTextOverlayViewport {
@@ -111,6 +111,6 @@ class RobloxTextDisplayState final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_TEXT_DISPLAY_STATE_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_TEXT_DISPLAY_STATE_H_

@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_WINDOW_MAIN_THREAD_COMMAND_GATE_H_
-#define MOCKTAIL_WINDOW_MAIN_THREAD_COMMAND_GATE_H_
+#ifndef ROBLOX_WINDOW_MAIN_THREAD_COMMAND_GATE_H_
+#define ROBLOX_WINDOW_MAIN_THREAD_COMMAND_GATE_H_
 
 #include <atomic>
 #include <condition_variable>
@@ -7,7 +7,7 @@
 #include <mutex>
 #include <thread>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 using MainThreadCommandCallback = bool (*)(void* context);
@@ -97,6 +97,6 @@ class MainThreadCommandGate final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_MAIN_THREAD_COMMAND_GATE_H_
+#endif  // ROBLOX_WINDOW_MAIN_THREAD_COMMAND_GATE_H_

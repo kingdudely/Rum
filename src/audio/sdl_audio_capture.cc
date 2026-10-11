@@ -1,4 +1,4 @@
-#include "mocktail/audio/sdl_audio_capture.h"
+#include "roblox/audio/sdl_audio_capture.h"
 
 #include <SDL3/SDL.h>
 
@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace mocktail::audio {
+namespace roblox::audio {
 namespace {
 
 class SdlAudioCapture;
@@ -530,4 +530,4 @@ Status PrepareSdlAudioCaptureSubsystemShutdown() {
   return Status::Ok();
 }
 
-}  // namespace mocktail::audio
+}  // namespace roblox::audio

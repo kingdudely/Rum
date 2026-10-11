@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_RUNTIME_JNIVM_PLATFORM_WEB_CALLBACKS_H_
-#define MOCKTAIL_RUNTIME_JNIVM_PLATFORM_WEB_CALLBACKS_H_
+#ifndef ROBLOX_RUNTIME_JNIVM_PLATFORM_WEB_CALLBACKS_H_
+#define ROBLOX_RUNTIME_JNIVM_PLATFORM_WEB_CALLBACKS_H_
 
 #include <jni.h>
 
 #include <memory>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // The opaque context must be the jnivm::VM owned by startup composition.
@@ -20,6 +20,6 @@ bool SetJnivmPlatformWebCallbacks(
 void ClearJnivmPlatformWebCallbacks(void* context);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_JNIVM_PLATFORM_WEB_CALLBACKS_H_
+#endif  // ROBLOX_RUNTIME_JNIVM_PLATFORM_WEB_CALLBACKS_H_

@@ -53,50 +53,50 @@ std::string CookieForJNICookieManager(std::string_view cookie_header,
 NativeSettingsValues ResolveNativeSettingsValues(
     const EngineStartupContext* context) {
   std::string data_dir = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_DATA_DIR",
+      "ROBLOX_ANDROID_DATA_DIR",
       "/data/user/0/com.roblox.client");
   std::string files_dir = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_FILES_DIR",
+      "ROBLOX_ANDROID_FILES_DIR",
       "/data/user/0/com.roblox.client/files");
   std::string settings_cache_dir = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_SETTINGS_CACHE_DIR",
+      "ROBLOX_ANDROID_SETTINGS_CACHE_DIR",
       "/data/user/0/com.roblox.client");
   std::string cache_dir = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_CACHE_DIR",
+      "ROBLOX_ANDROID_CACHE_DIR",
       "/data/user/0/com.roblox.client/cache");
   std::string external_base = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_EXTERNAL_BASE_DIR",
+      "ROBLOX_ANDROID_EXTERNAL_BASE_DIR",
       "/sdcard/Android/data/com.roblox.client");
   std::string external_dir = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_EXTERNAL_DIR",
+      "ROBLOX_ANDROID_EXTERNAL_DIR",
       "/sdcard/Android/data/com.roblox.client/files");
-  std::string preferences_file = GetEnvString("MOCKTAIL_ANDROID_PREFERENCES_FILE",
+  std::string preferences_file = GetEnvString("ROBLOX_ANDROID_PREFERENCES_FILE",
                                               "prefs");
   std::string default_policy_file = GetEnvString(
-      "MOCKTAIL_DEFAULT_APP_POLICY_FILE",
+      "ROBLOX_DEFAULT_APP_POLICY_FILE",
       "content/guac/defaultConfigs/GuacDefaultPolicy-GlobalDist.json");
   std::string base_url =
-      GetEnvString("MOCKTAIL_BASE_URL", "https://www.roblox.com/");
+      GetEnvString("ROBLOX_BASE_URL", "https://www.roblox.com/");
   std::string api_url =
-      GetEnvString("MOCKTAIL_API_URL", "https://api.roblox.com/");
+      GetEnvString("ROBLOX_API_URL", "https://api.roblox.com/");
   std::string roblox_channel =
-      GetEnvString("MOCKTAIL_ROBLOX_CHANNEL", "production");
+      GetEnvString("ROBLOX_ROBLOX_CHANNEL", "production");
   std::string channel_platform_name =
-      GetEnvString("MOCKTAIL_CHANNEL_PLATFORM_NAME", "GoogleAndroidApp");
+      GetEnvString("ROBLOX_CHANNEL_PLATFORM_NAME", "GoogleAndroidApp");
   std::string roblox_version =
-      GetEnvString("MOCKTAIL_ROBLOX_VERSION", "unknown");
+      GetEnvString("ROBLOX_ROBLOX_VERSION", "unknown");
   std::string exception_reason_filename =
-      GetEnvString("MOCKTAIL_EXCEPTION_REASON_FILENAME",
+      GetEnvString("ROBLOX_EXCEPTION_REASON_FILENAME",
                    "exception_reason.txt");
   std::string http_proxy_host =
-      GetEnvString("MOCKTAIL_HTTP_PROXY_HOST", "");
+      GetEnvString("ROBLOX_HTTP_PROXY_HOST", "");
   jlong http_proxy_port =
-      static_cast<jlong>(GetEnvInt("MOCKTAIL_HTTP_PROXY_PORT", 0));
+      static_cast<jlong>(GetEnvInt("ROBLOX_HTTP_PROXY_PORT", 0));
   std::string cookie_base_url =
-      GetEnvString("MOCKTAIL_COOKIE_BASE_URL", "https://www.roblox.com/");
+      GetEnvString("ROBLOX_COOKIE_BASE_URL", "https://www.roblox.com/");
   std::string cookie_domain =
-      GetEnvString("MOCKTAIL_COOKIE_DOMAIN", "roblox.com");
-  const mocktail::runtime::SecureRobloxCredential* credential =
+      GetEnvString("ROBLOX_COOKIE_DOMAIN", "roblox.com");
+  const roblox::runtime::SecureRobloxCredential* credential =
       context->roblox_credential;
   const std::string_view roblox_cookies =
       credential != nullptr ? credential->view() : std::string_view();
@@ -106,7 +106,7 @@ NativeSettingsValues ResolveNativeSettingsValues(
     std::cout << "  [engine] typed credential prepared bytes="
               << roblox_cookies.size() << '\n'
               << std::flush;
-  } else if (IsEnabled("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP")) {
+  } else if (IsEnabled("ROBLOX_ALLOW_NO_COOKIE_LUA_APP")) {
     std::cout << "  [engine] no Roblox cookie found; proceeding without login\n"
               << std::flush;
   } else {
@@ -114,9 +114,9 @@ NativeSettingsValues ResolveNativeSettingsValues(
               << std::flush;
   }
   std::string android_id =
-      GetEnvString("MOCKTAIL_ANDROID_ID", "0000000000000000");
+      GetEnvString("ROBLOX_ANDROID_ID", "0000000000000000");
   std::string advertising_id =
-      GetEnvString("MOCKTAIL_ADVERTISING_ID", "");
+      GetEnvString("ROBLOX_ADVERTISING_ID", "");
   const jnivm::RobloxAuthIdentity& account_identity =
       context->account_identity;
   std::string account_user_id = std::to_string(account_identity.user_id);
@@ -313,7 +313,7 @@ void ConfigureNativeSettings(JNIEnv* env, jclass settings_class,
     std::cout << "  [engine] NativeSettings multipleCookies returned\n"
               << std::flush;
   }
-  mocktail::platform::SecureClear(&values.cookie_manager_cookies);
+  roblox::platform::SecureClear(&values.cookie_manager_cookies);
 }
 
 void ConfigureLocalStorage(JNIEnv* env, const EngineStartupContext* context) {
@@ -321,13 +321,13 @@ void ConfigureLocalStorage(JNIEnv* env, const EngineStartupContext* context) {
     return;
   }
   std::string data_dir = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_DATA_DIR",
+      "ROBLOX_ANDROID_DATA_DIR",
       "/data/user/0/com.roblox.client");
   std::string files_dir = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_FILES_DIR",
+      "ROBLOX_ANDROID_FILES_DIR",
       "/data/user/0/com.roblox.client/files");
   std::string cache_dir = GetEnvStringDefaultPath(
-      "MOCKTAIL_ANDROID_CACHE_DIR",
+      "ROBLOX_ANDROID_CACHE_DIR",
       "/data/user/0/com.roblox.client/cache");
   EnsureAndroidDirectory(files_dir + "/appData");
   EnsureAndroidDirectory(files_dir + "/appData/LocalStorage");
@@ -379,8 +379,8 @@ void ConfigureLocalStorage(JNIEnv* env, const EngineStartupContext* context) {
 
 void ReportDisplayRefreshRates(EngineStartupContext* context, JNIEnv*& env,
                             jclass native_gl_class) {
-const mocktail::platform::DisplayRefreshCapabilities display_refresh =
-    mocktail::window::GetDisplayRefreshCapabilities();
+const roblox::platform::DisplayRefreshCapabilities display_refresh =
+    roblox::window::GetDisplayRefreshCapabilities();
 if (context->run_display_refresh_rate && display_refresh.valid() &&
     context->native_pass_current_display_refresh_rate) {
   env = EnsureStartupEnv(context, env);

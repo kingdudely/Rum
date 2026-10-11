@@ -4,7 +4,7 @@
 
 #include "linker/linker.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -62,4 +62,4 @@ RobloxPlatformProtocolSymbols ResolveRobloxPlatformProtocolSymbols(
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

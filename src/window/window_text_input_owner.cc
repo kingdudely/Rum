@@ -10,9 +10,9 @@
 #include <cmath>
 #include <utility>
 
-#include "mocktail/platform/platform_runtime.h"
+#include "roblox/platform/platform_runtime.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 namespace {
@@ -275,4 +275,4 @@ void SdlTextInputBackend::FlushTextEvents() {
 }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

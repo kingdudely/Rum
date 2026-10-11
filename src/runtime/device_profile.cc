@@ -3,7 +3,7 @@
 #include <array>
 #include <cstdint>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -144,4 +144,4 @@ std::string_view DeviceClassName(DeviceClass device_class) {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

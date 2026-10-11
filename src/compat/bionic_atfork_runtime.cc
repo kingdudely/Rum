@@ -2,7 +2,7 @@
 
 #include <pthread.h>
 
-namespace mocktail::compat {
+namespace roblox::compat {
 
 int RegisterBionicAtFork(BionicAtForkCallback prepare,
                          BionicAtForkCallback parent,
@@ -15,13 +15,13 @@ int RegisterBionicAtFork(BionicAtForkCallback prepare,
   return pthread_atfork(prepare, parent, child);
 }
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
 extern "C" int
-mocktail_bionic_register_atfork(mocktail::compat::BionicAtForkCallback prepare,
-                                mocktail::compat::BionicAtForkCallback parent,
-                                mocktail::compat::BionicAtForkCallback child,
+roblox_bionic_register_atfork(roblox::compat::BionicAtForkCallback prepare,
+                                roblox::compat::BionicAtForkCallback parent,
+                                roblox::compat::BionicAtForkCallback child,
                                 void* dso_handle) {
-  return mocktail::compat::RegisterBionicAtFork(prepare, parent, child,
+  return roblox::compat::RegisterBionicAtFork(prepare, parent, child,
                                                 dso_handle);
 }

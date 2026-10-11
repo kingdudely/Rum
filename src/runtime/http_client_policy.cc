@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -58,4 +58,4 @@ bool MergeHttpClientSettingsOverrides(std::string_view base_json,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

@@ -18,9 +18,9 @@
 #include "compat/guest_abi.h"
 #include "legacy/legacy_runtime.h"
 #include "libc_shim/libc_shim.h"
-#include "mocktail/audio/fmod_jni_audio_bridge.h"
-#include "mocktail/audio/webrtc_jni_audio_bridge.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/audio/fmod_jni_audio_bridge.h"
+#include "roblox/audio/webrtc_jni_audio_bridge.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/auth_runtime_composition.h"
 #include "runtime/command_line.h"
 #include "runtime/crash_report_policy.h"
@@ -48,12 +48,12 @@
 // individual policies stay independently readable.
 namespace {
 
-using mocktail::runtime::CommandLineOptions;
-using mocktail::runtime::CommandMode;
-using mocktail::runtime::ProcessEnvironment;
-using mocktail::runtime::RobloxExperienceLaunchRequest;
-using mocktail::runtime::RuntimeConfig;
-using mocktail::runtime::RuntimePaths;
+using roblox::runtime::CommandLineOptions;
+using roblox::runtime::CommandMode;
+using roblox::runtime::ProcessEnvironment;
+using roblox::runtime::RobloxExperienceLaunchRequest;
+using roblox::runtime::RuntimeConfig;
+using roblox::runtime::RuntimePaths;
 
 enum class StepResult {
   kContinue,
@@ -63,22 +63,22 @@ enum class StepResult {
 
 struct AndroidWindowBridgeContext {};
 
-using mocktail::platform::SecureErase;
+using roblox::platform::SecureErase;
 
 bool QueueAndroidWindowFlags(void*, int flags, int mask) {
-  return mocktail::window::RequestFullscreenFromAndroidWindowFlags(flags, mask);
+  return roblox::window::RequestFullscreenFromAndroidWindowFlags(flags, mask);
 }
 
-mocktail::Status ShutdownPlatformBridges(jnivm::VM* vm) {
+roblox::Status ShutdownPlatformBridges(jnivm::VM* vm) {
   if (vm == nullptr) {
-    return mocktail::Status::Error(mocktail::StatusCode::kInvalidArgument,
+    return roblox::Status::Error(roblox::StatusCode::kInvalidArgument,
                                    "platform bridge shutdown requires a VM");
   }
   vm->ClearAndroidWindowCallbacks();
-  const mocktail::Status voice_status =
-      mocktail::audio::ShutdownWebRtcJniAudioBridge(vm);
-  const mocktail::Status playback_status =
-      mocktail::audio::ShutdownFmodJniAudioBridge(vm);
+  const roblox::Status voice_status =
+      roblox::audio::ShutdownWebRtcJniAudioBridge(vm);
+  const roblox::Status playback_status =
+      roblox::audio::ShutdownFmodJniAudioBridge(vm);
   return !voice_status.ok() ? voice_status : playback_status;
 }
 
@@ -116,8 +116,8 @@ StepResult ResolveLaunchRequest(
     launch_request->emplace();
     const std::string document =
         "{\"placeId\":" + std::to_string(options.place_id) + "}";
-    const mocktail::Status status =
-        mocktail::runtime::ParseRobloxExperienceLaunchJson(
+    const roblox::Status status =
+        roblox::runtime::ParseRobloxExperienceLaunchJson(
             document, &**launch_request);
     if (!status.ok()) {
       std::cerr << "[FATAL] Invalid --place-id launch request\n";
@@ -129,8 +129,8 @@ StepResult ResolveLaunchRequest(
     return StepResult::kContinue;
   }
   launch_request->emplace();
-  const mocktail::Status status =
-      mocktail::runtime::ParseRobloxLaunchUri(options.raw_launch_argument,
+  const roblox::Status status =
+      roblox::runtime::ParseRobloxLaunchUri(options.raw_launch_argument,
                                               &**launch_request);
   if (!status.ok()) {
     std::cerr << "[FATAL] Invalid Roblox launch URI\n";
@@ -147,7 +147,7 @@ StepResult ResolveLaunchRequest(
 StepResult LoadRuntimeConfiguration(
     const ProcessEnvironment& environment, const CommandLineOptions& options,
     RuntimeConfig* runtime_config, std::string* error) {
-  if (!mocktail::runtime::LoadRuntimeConfigFromEnvironment(
+  if (!roblox::runtime::LoadRuntimeConfigFromEnvironment(
           environment, runtime_config, error)) {
     std::cerr << "[FATAL] Cannot load runtime configuration";
     if (error != nullptr && !error->empty()) {
@@ -169,7 +169,7 @@ StepResult LoadRuntimeConfiguration(
   }
   std::string graphics_error;
   if (IsRunning(options) &&
-      !mocktail::runtime::ApplyGraphicsLaunchPolicy(*runtime_config,
+      !roblox::runtime::ApplyGraphicsLaunchPolicy(*runtime_config,
                                                      &graphics_error)) {
     std::cerr << "[FATAL] " << graphics_error << '\n';
     return StepResult::kExitFailure;
@@ -188,11 +188,11 @@ void ReportStartupSummary(const ProcessEnvironment& environment,
                           const RuntimePaths& paths,
                           const CommandLineOptions& options,
                           const RuntimeConfig& config,
-                          mocktail::runtime::SessionLog* session_log,
+                          roblox::runtime::SessionLog* session_log,
                           std::chrono::system_clock::time_point process_started_at,
                           const std::string& process_launch_diagnostics) {
   if (IsRunning(options)) {
-    *session_log = mocktail::runtime::SessionLog::Start(
+    *session_log = roblox::runtime::SessionLog::Start(
         environment, paths, process_started_at);
     if (*session_log) {
       std::cout << session_log->Header(environment, paths,
@@ -203,13 +203,13 @@ void ReportStartupSummary(const ProcessEnvironment& environment,
                 << session_log->error() << '\n';
     }
     std::cout << process_launch_diagnostics << std::flush;
-    mocktail::runtime::InstallCpuLimitDiagnostics();
-    mocktail::runtime::LogProcessDiagnostics(
-        mocktail::runtime::ProcessDiagnosticStage::kStartup);
+    roblox::runtime::InstallCpuLimitDiagnostics();
+    roblox::runtime::LogProcessDiagnostics(
+        roblox::runtime::ProcessDiagnosticStage::kStartup);
   }
   if (IsRunning(options) && config.network_proxy().has_value()) {
     std::cout << "  [network] proxy="
-              << mocktail::runtime::BuildNetworkProxyUrl(
+              << roblox::runtime::BuildNetworkProxyUrl(
                      *config.network_proxy())
               << '\n';
   }
@@ -217,7 +217,7 @@ void ReportStartupSummary(const ProcessEnvironment& environment,
     std::cout << "  [runtime] graphics backend="
               << config.graphics_backend_name()
               << (config.graphics_backend() ==
-                          mocktail::runtime::GraphicsBackend::kSystem
+                          roblox::runtime::GraphicsBackend::kSystem
                       ? " (EGL/OpenGL ES)"
                       : "")
               << '\n';
@@ -228,23 +228,23 @@ void ReportStartupSummary(const ProcessEnvironment& environment,
 // Step: ask libgamemode for a performance governor. libgamemode caches its
 // D-Bus connection, so this must happen in the final game process.
 // ---------------------------------------------------------------------------
-mocktail::runtime::GameModeSession StartGameModeSession(
+roblox::runtime::GameModeSession StartGameModeSession(
     const CommandLineOptions& options, const RuntimeConfig& config) {
-  const mocktail::runtime::GameModePolicy policy =
+  const roblox::runtime::GameModePolicy policy =
       config.performance().game_mode;
-  mocktail::runtime::GameModeSession session =
-      IsRunning(options) ? mocktail::runtime::GameModeSession::Start(policy)
-                         : mocktail::runtime::GameModeSession();
+  roblox::runtime::GameModeSession session =
+      IsRunning(options) ? roblox::runtime::GameModeSession::Start(policy)
+                         : roblox::runtime::GameModeSession();
   switch (session.state()) {
-    case mocktail::runtime::GameModeSessionState::kActive:
+    case roblox::runtime::GameModeSessionState::kActive:
       std::cout << "  [gamemode] performance request active\n";
       break;
-    case mocktail::runtime::GameModeSessionState::kAlreadyActive:
+    case roblox::runtime::GameModeSessionState::kAlreadyActive:
       std::cout << "  [gamemode] already active for this process\n";
       break;
-    case mocktail::runtime::GameModeSessionState::kUnavailable:
-    case mocktail::runtime::GameModeSessionState::kRequestFailed:
-      if (policy == mocktail::runtime::GameModePolicy::kOn) {
+    case roblox::runtime::GameModeSessionState::kUnavailable:
+    case roblox::runtime::GameModeSessionState::kRequestFailed:
+      if (policy == roblox::runtime::GameModePolicy::kOn) {
         std::cerr << "  [gamemode] requested but unavailable: "
                   << session.detail()
                   << "; continuing without GameMode\n";
@@ -252,13 +252,13 @@ mocktail::runtime::GameModeSession StartGameModeSession(
         std::cout << "  [gamemode] unavailable; continuing normally\n";
       }
       break;
-    case mocktail::runtime::GameModeSessionState::kDisabled:
+    case roblox::runtime::GameModeSessionState::kDisabled:
       if (IsRunning(options)) {
         std::cout << "  [gamemode] disabled by runtime policy\n";
       }
       break;
-    case mocktail::runtime::GameModeSessionState::kStopped:
-    case mocktail::runtime::GameModeSessionState::kStopFailed:
+    case roblox::runtime::GameModeSessionState::kStopped:
+    case roblox::runtime::GameModeSessionState::kStopFailed:
       break;
   }
   return session;
@@ -291,14 +291,14 @@ std::string GuestAbiMismatch(const std::filesystem::path& library) {
   // host's alignment rules.
   std::uint16_t machine = 0;
   std::memcpy(&machine, header + EI_NIDENT + 2, sizeof(machine));
-  if (machine == mocktail::compat::kGuestElfMachine) {
+  if (machine == roblox::compat::kGuestElfMachine) {
     return "";
   }
   const char* guest_abi =
       machine == EM_AARCH64 ? "arm64-v8a" : "another architecture";
   return std::string("That libroblox.so is ") + guest_abi +
-         ", but this Mocktail build is " +
-         std::string(mocktail::compat::kGuestAbi) + ".";
+         ", but this Roblox build is " +
+         std::string(roblox::compat::kGuestAbi) + ".";
 }
 
 StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
@@ -321,18 +321,18 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
     std::cerr << "[FATAL] " << abi_error << '\n';
     return StepResult::kExitFailure;
   }
-  // Everything downstream reads MOCKTAIL_ASSET_PATH, so the asset location is
+  // Everything downstream reads ROBLOX_ASSET_PATH, so the asset location is
   // resolved once here and normalised to the content root. An explicit
   // --assets wins over the environment: silently discarding the flag the user
   // just typed is worse than overriding a stale variable.
   std::filesystem::path asset_root;
-  const std::string asset_env = environment.GetOr("MOCKTAIL_ASSET_PATH", "");
+  const std::string asset_env = environment.GetOr("ROBLOX_ASSET_PATH", "");
   if (!options.assets_path.empty()) {
     asset_root = options.assets_path;
   } else if (!asset_env.empty()) {
     asset_root = asset_env;
   } else {
-    asset_root = mocktail::runtime::DefaultRobloxAssetPath();
+    asset_root = roblox::runtime::DefaultRobloxAssetPath();
     if (asset_root.empty()) {
       std::cerr << "[FATAL] No assets directory. Place it at "
                    "<exe dir>/assets/content, or pass --assets <path>\n";
@@ -340,8 +340,8 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
     }
   }
   const std::filesystem::path content_root =
-      mocktail::runtime::NormalizeRobloxAssetPath(asset_root);
-  if (!mocktail::runtime::LooksLikeRobloxContentDirectory(content_root)) {
+      roblox::runtime::NormalizeRobloxAssetPath(asset_root);
+  if (!roblox::runtime::LooksLikeRobloxContentDirectory(content_root)) {
     std::cerr << "[FATAL] Assets path does not contain Roblox content: "
               << content_root
               << "\n        Expected an existing directory holding the content "
@@ -350,20 +350,20 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
                  "accepted.\n";
     return StepResult::kExitFailure;
   }
-  if (setenv("MOCKTAIL_ASSET_PATH", content_root.c_str(), 1) != 0) {
+  if (setenv("ROBLOX_ASSET_PATH", content_root.c_str(), 1) != 0) {
     std::cerr << "[FATAL] Cannot apply the assets path\n";
     return StepResult::kExitFailure;
   }
   std::cout << "  [runtime] assets content root: " << content_root << '\n';
-  if (!mocktail::runtime::ExportRuntimePathEnvironment(paths, error)) {
+  if (!roblox::runtime::ExportRuntimePathEnvironment(paths, error)) {
     std::cerr << "[FATAL] " << *error << '\n';
     return StepResult::kExitFailure;
   }
   if (!IsRunning(options)) {
     return StepResult::kContinue;
   }
-  const mocktail::Status window_state_status =
-      mocktail::window::ConfigureWindowStatePersistence(
+  const roblox::Status window_state_status =
+      roblox::window::ConfigureWindowStatePersistence(
           paths.state_root() / "window-state.json");
   if (!window_state_status.ok()) {
     std::cerr << "[FATAL] Cannot configure window state persistence: "
@@ -372,14 +372,14 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
   }
   // Identity and policy caches are keyed by device profile, so switching
   // profiles has to invalidate them before the engine reads any.
-  const mocktail::runtime::InputCapabilityConfig& input =
+  const roblox::runtime::InputCapabilityConfig& input =
       config.input_capabilities();
   const std::string platform_profile =
-      mocktail::runtime::BuildPlatformProfileRevision(
+      roblox::runtime::BuildPlatformProfileRevision(
           config.device_profile().cache_key, input.touch_enabled,
           input.mouse_enabled, input.keyboard_enabled);
-  const mocktail::runtime::PlatformCacheMigrationResult cache_migration =
-      mocktail::runtime::MigratePlatformProfileCaches(environment, paths,
+  const roblox::runtime::PlatformCacheMigrationResult cache_migration =
+      roblox::runtime::MigratePlatformProfileCaches(environment, paths,
                                                       platform_profile);
   if (!cache_migration) {
     std::cerr << "[FATAL] Platform cache migration failed: "
@@ -387,7 +387,7 @@ StepResult BindRuntimeStorage(const ProcessEnvironment& environment,
     return StepResult::kExitFailure;
   }
   *app_storage_file = cache_migration.app_storage_file;
-  setenv("MOCKTAIL_APP_STORAGE_FILE_INTERNAL", app_storage_file->c_str(), 1);
+  setenv("ROBLOX_APP_STORAGE_FILE_INTERNAL", app_storage_file->c_str(), 1);
   if (cache_migration.transitioned) {
     std::cout << "  [runtime] platform cache profile transitioned; "
                  "refreshable identity and policy caches invalidated="
@@ -406,28 +406,28 @@ StepResult ApplyClientSettingsPolicy(const ProcessEnvironment& environment,
                                      const CommandLineOptions& options,
                                      const RuntimeConfig& config,
                                      std::string* error) {
-  if (!mocktail::runtime::ExportRuntimeConfigEnvironment(config, error)) {
+  if (!roblox::runtime::ExportRuntimeConfigEnvironment(config, error)) {
     std::cerr << *error << '\n';
     return StepResult::kExitFailure;
   }
   if (!IsRunning(options)) {
     return StepResult::kContinue;
   }
-  if (!environment.HasNonEmpty("MOCKTAIL_NATIVE_SET_DEFAULT_POLICY_FILE") &&
-      setenv("MOCKTAIL_NATIVE_SET_DEFAULT_POLICY_FILE", "1", 1) != 0) {
+  if (!environment.HasNonEmpty("ROBLOX_NATIVE_SET_DEFAULT_POLICY_FILE") &&
+      setenv("ROBLOX_NATIVE_SET_DEFAULT_POLICY_FILE", "1", 1) != 0) {
     std::cerr << "[FATAL] Cannot enable Roblox default app-policy file\n";
     return StepResult::kExitFailure;
   }
   std::cout << "  [runtime] device profile=" << config.device_profile().name
             << " class="
-            << mocktail::runtime::DeviceClassName(
+            << roblox::runtime::DeviceClassName(
                    config.device_profile().device_class)
             << " model=\"" << config.device_profile().display_name << "\"\n";
 
   const std::filesystem::path fflags_path = paths.config_root() / "fflags.json";
-  const auto fflags = mocktail::services::LoadAndMergeFflagsFile(
+  const auto fflags = roblox::services::LoadAndMergeFflagsFile(
       fflags_path,
-      environment.GetOr("MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON", "{}"));
+      environment.GetOr("ROBLOX_CLIENT_SETTINGS_OVERRIDES_JSON", "{}"));
   if (!fflags.error.empty()) {
     std::cerr << "[FATAL] Cannot load FFlag overrides from " << fflags_path
               << ": " << fflags.error << '\n';
@@ -438,7 +438,7 @@ StepResult ApplyClientSettingsPolicy(const ProcessEnvironment& environment,
               << " FFlag overrides from " << fflags_path << '\n';
   }
   std::string client_settings_overrides;
-  if (!mocktail::runtime::MergeRuntimeClientSettingsOverrides(
+  if (!roblox::runtime::MergeRuntimeClientSettingsOverrides(
           config.frame_rate(), config.performance(), fflags.json,
           &client_settings_overrides, error)) {
     std::cerr << "[FATAL] Cannot apply runtime client-settings policy: "
@@ -446,14 +446,14 @@ StepResult ApplyClientSettingsPolicy(const ProcessEnvironment& environment,
     return StepResult::kExitFailure;
   }
   std::string audio_capture_overrides;
-  if (!mocktail::runtime::MergeAudioCaptureClientSettingsOverrides(
+  if (!roblox::runtime::MergeAudioCaptureClientSettingsOverrides(
           config.microphone_enabled(), client_settings_overrides,
           &audio_capture_overrides, error)) {
     std::cerr << "[FATAL] Cannot apply microphone permission policy: "
               << *error << '\n';
     return StepResult::kExitFailure;
   }
-  if (setenv("MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON",
+  if (setenv("ROBLOX_CLIENT_SETTINGS_OVERRIDES_JSON",
              audio_capture_overrides.c_str(), 1) != 0) {
     std::cerr << "[FATAL] Cannot export runtime client-settings policy\n";
     return StepResult::kExitFailure;
@@ -462,14 +462,14 @@ StepResult ApplyClientSettingsPolicy(const ProcessEnvironment& environment,
                "generic LuaApp retry and RuntimeMutexRv disabled\n";
 
   std::string fast_flags_overrides;
-  if (!mocktail::runtime::MergeCrashReportFastFlagsOverrides(
-          environment.GetOr("MOCKTAIL_FAST_FLAGS_JSON", "{}"),
+  if (!roblox::runtime::MergeCrashReportFastFlagsOverrides(
+          environment.GetOr("ROBLOX_FAST_FLAGS_JSON", "{}"),
           &fast_flags_overrides, error)) {
     std::cerr << "[FATAL] Cannot apply crash-report fast-flags policy: "
               << *error << '\n';
     return StepResult::kExitFailure;
   }
-  if (setenv("MOCKTAIL_FAST_FLAGS_JSON", fast_flags_overrides.c_str(), 1) != 0) {
+  if (setenv("ROBLOX_FAST_FLAGS_JSON", fast_flags_overrides.c_str(), 1) != 0) {
     std::cerr << "[FATAL] Cannot export crash-report fast-flags policy\n";
     return StepResult::kExitFailure;
   }
@@ -479,35 +479,35 @@ StepResult ApplyClientSettingsPolicy(const ProcessEnvironment& environment,
   const auto physics_worker_mode = config.performance().physics_worker_mode;
   const int physical_core_count = config.performance().physical_core_count;
   const int engine_worker_count =
-      physics_worker_mode == mocktail::runtime::PhysicsWorkerMode::kThroughput
-          ? mocktail::runtime::CalculateThroughputWorkerCount(
+      physics_worker_mode == roblox::runtime::PhysicsWorkerMode::kThroughput
+          ? roblox::runtime::CalculateThroughputWorkerCount(
                 physical_core_count)
           : physical_core_count;
-  if (physics_worker_mode == mocktail::runtime::PhysicsWorkerMode::kLatency) {
+  if (physics_worker_mode == roblox::runtime::PhysicsWorkerMode::kLatency) {
     std::cout << "  [runtime] physics worker mode=latency: Roblox-managed "
                  "worker pools, midphase batch=128\n";
   } else if (physics_worker_mode ==
-             mocktail::runtime::PhysicsWorkerMode::kThroughput) {
+             roblox::runtime::PhysicsWorkerMode::kThroughput) {
     std::cout << "  [runtime] physics worker mode=throughput: "
               << engine_worker_count << " scheduler workers, async minimum="
               << std::min(engine_worker_count, 3) << ", midphase batch=128\n";
   }
   if ((config.performance().multithreaded_rendering ||
-       physics_worker_mode == mocktail::runtime::PhysicsWorkerMode::kThroughput) &&
-      physics_worker_mode != mocktail::runtime::PhysicsWorkerMode::kLatency) {
+       physics_worker_mode == roblox::runtime::PhysicsWorkerMode::kThroughput) &&
+      physics_worker_mode != roblox::runtime::PhysicsWorkerMode::kLatency) {
     std::cout << "  [runtime] full multithreaded engine queues enabled: "
               << engine_worker_count << " scheduler workers, "
               << std::max(1, engine_worker_count / 2) << " occlusion workers\n";
   } else if (config.performance().multithreaded_rendering &&
              physics_worker_mode ==
-                 mocktail::runtime::PhysicsWorkerMode::kLatency) {
+                 roblox::runtime::PhysicsWorkerMode::kLatency) {
     std::cout << "  [runtime] latency mode leaves scheduler/render worker "
                  "counts under Roblox client-settings control\n";
   }
   if (config.frame_rate().mode ==
-      mocktail::runtime::FrameRateLimitMode::kUnlimited) {
+      roblox::runtime::FrameRateLimitMode::kUnlimited) {
     std::cout << "  [runtime] frame-rate mode=unlimited scheduler_target="
-              << mocktail::runtime::kMaximumSupportedRobloxSchedulerFps
+              << roblox::runtime::kMaximumSupportedRobloxSchedulerFps
               << " vsync=" << config.vsync_mode() << '\n';
   }
   return StepResult::kContinue;
@@ -522,14 +522,14 @@ StepResult BuildRuntimeDependencies(
     const ProcessEnvironment& environment, const RuntimePaths& paths,
     const CommandLineOptions& options, const RuntimeConfig& config,
     const std::filesystem::path& app_storage_file,
-    std::string* error, mocktail::legacy::RuntimeDependencies* dependencies) {
+    std::string* error, roblox::legacy::RuntimeDependencies* dependencies) {
   if (!IsRunning(options)) {
     return StepResult::kContinue;
   }
-  auto http_client = std::make_shared<mocktail::services::CurlHttpClient>();
-  mocktail::services::AuthService auth_service(*http_client);
-  mocktail::runtime::AuthRuntimeComposition composition =
-      mocktail::runtime::ComposeAuthRuntime(environment, auth_service);
+  auto http_client = std::make_shared<roblox::services::CurlHttpClient>();
+  roblox::services::AuthService auth_service(*http_client);
+  roblox::runtime::AuthRuntimeComposition composition =
+      roblox::runtime::ComposeAuthRuntime(environment, auth_service);
   if (!composition) {
     std::cerr << "[FATAL] Typed Roblox authentication preflight failed: "
               << composition.error;
@@ -555,7 +555,7 @@ StepResult BuildRuntimeDependencies(
       std::string(device_profile.soc_model),
   });
   const bool authenticated =
-      composition.status == mocktail::runtime::AuthRuntimeStatus::kAuthenticated;
+      composition.status == roblox::runtime::AuthRuntimeStatus::kAuthenticated;
   if (authenticated) {
     std::cout << "  [auth] typed Roblox identity resolved for production VM\n";
   } else {
@@ -563,15 +563,15 @@ StepResult BuildRuntimeDependencies(
   }
   if (config.desktop_playability()) {
     std::filesystem::path assets = paths.DefaultAssetPath();
-    if (environment.HasNonEmpty("MOCKTAIL_ASSET_PATH")) {
-      assets = environment.GetOr("MOCKTAIL_ASSET_PATH", "");
+    if (environment.HasNonEmpty("ROBLOX_ASSET_PATH")) {
+      assets = environment.GetOr("ROBLOX_ASSET_PATH", "");
     }
     const std::filesystem::path default_app_policy =
         assets / "guac/defaultConfigs/GuacDefaultPolicy-GlobalDist.json";
     const std::int64_t app_policy_user_id =
         authenticated ? composition.account_identity.user_id : -1;
-    const mocktail::runtime::DesktopAppPolicyResult desktop_policy =
-        mocktail::runtime::ApplyDesktopAppPolicy(
+    const roblox::runtime::DesktopAppPolicyResult desktop_policy =
+        roblox::runtime::ApplyDesktopAppPolicy(
             app_storage_file, default_app_policy, app_policy_user_id,
             config.theme_mode());
     if (!desktop_policy) {
@@ -580,15 +580,15 @@ StepResult BuildRuntimeDependencies(
       return StepResult::kExitFailure;
     }
     std::string desktop_client_settings;
-    if (!mocktail::runtime::MergeDesktopAppPolicyClientSettingsOverride(
+    if (!roblox::runtime::MergeDesktopAppPolicyClientSettingsOverride(
             desktop_policy.policy_json,
-            environment.GetOr("MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON", "{}"),
+            environment.GetOr("ROBLOX_CLIENT_SETTINGS_OVERRIDES_JSON", "{}"),
             &desktop_client_settings, error)) {
       std::cerr << "[FATAL] Cannot activate desktop Roblox app-policy: "
                 << *error << '\n';
       return StepResult::kExitFailure;
     }
-    if (setenv("MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON",
+    if (setenv("ROBLOX_CLIENT_SETTINGS_OVERRIDES_JSON",
                desktop_client_settings.c_str(), 1) != 0) {
       std::cerr << "[FATAL] Cannot export desktop Roblox app-policy\n";
       return StepResult::kExitFailure;
@@ -603,22 +603,22 @@ StepResult BuildRuntimeDependencies(
   android_window_callbacks.set_flags = &QueueAndroidWindowFlags;
   composition.jni_vm->SetAndroidWindowCallbacks(std::move(android_window_context),
                                                 android_window_callbacks);
-  const mocktail::Status audio_status =
-      mocktail::audio::InstallFmodJniAudioBridge(composition.jni_vm.get());
+  const roblox::Status audio_status =
+      roblox::audio::InstallFmodJniAudioBridge(composition.jni_vm.get());
   if (!audio_status.ok()) {
     std::cerr << "[FATAL] Typed FMOD Java audio composition failed: "
               << audio_status.message() << '\n';
     return StepResult::kExitFailure;
   }
-  const mocktail::Status voice_status =
-      mocktail::audio::InstallWebRtcJniAudioBridge(composition.jni_vm.get());
+  const roblox::Status voice_status =
+      roblox::audio::InstallWebRtcJniAudioBridge(composition.jni_vm.get());
   if (!voice_status.ok()) {
-    (void)mocktail::audio::ShutdownFmodJniAudioBridge(composition.jni_vm.get());
+    (void)roblox::audio::ShutdownFmodJniAudioBridge(composition.jni_vm.get());
     std::cerr << "[FATAL] WebRTC voice audio composition failed: "
               << voice_status.message() << '\n';
     return StepResult::kExitFailure;
   }
-  *dependencies = mocktail::legacy::RuntimeDependencies(
+  *dependencies = roblox::legacy::RuntimeDependencies(
       std::move(composition), &ShutdownPlatformBridges);
   return StepResult::kContinue;
 }
@@ -628,8 +628,8 @@ StepResult BuildRuntimeDependencies(
 // exit status.
 // ---------------------------------------------------------------------------
 int FinishRuntime(const CommandLineOptions& options, int runtime_status,
-                  mocktail::runtime::GameModeSession* game_mode_session) {
-  const mocktail::Status game_mode_stop_status = game_mode_session->Stop();
+                  roblox::runtime::GameModeSession* game_mode_session) {
+  const roblox::Status game_mode_stop_status = game_mode_session->Stop();
   if (!game_mode_stop_status.ok()) {
     std::cerr << "  [gamemode] release failed: "
               << game_mode_stop_status.message() << '\n';
@@ -653,27 +653,27 @@ int main(int argc, char* argv[]) {
   ConfigureHostDriverEnvironment();
   const auto process_started_at = std::chrono::system_clock::now();
 
-  mocktail::runtime::CommandLineParseResult command_line =
-      mocktail::runtime::ParseCommandLine(argc, argv);
+  roblox::runtime::CommandLineParseResult command_line =
+      roblox::runtime::ParseCommandLine(argc, argv);
   if (!command_line) {
     std::cerr << command_line.error << "\n\n"
-              << mocktail::runtime::CommandLineUsage(
+              << roblox::runtime::CommandLineUsage(
                      command_line.options.program_name);
     return EXIT_FAILURE;
   }
   const CommandLineOptions& options = command_line.options;
   if (options.mode == CommandMode::kHelp) {
-    std::cout << mocktail::runtime::CommandLineUsage(options.program_name);
+    std::cout << roblox::runtime::CommandLineUsage(options.program_name);
     return EXIT_SUCCESS;
   }
   // Normalize inherited process state before bootstrap or helpers can create
   // threads. Keep research/canary resource limits under their caller's control.
   const std::string process_launch_diagnostics =
       IsRunning(options)
-          ? mocktail::runtime::ApplyInteractiveProcessLaunchPolicy()
+          ? roblox::runtime::ApplyInteractiveProcessLaunchPolicy()
           : std::string{};
   std::string error;
-  if (!mocktail::runtime::ApplyCommandLineEnvironment(options, &error)) {
+  if (!roblox::runtime::ApplyCommandLineEnvironment(options, &error)) {
     std::cerr << error << '\n';
     return EXIT_FAILURE;
   }
@@ -685,12 +685,12 @@ int main(int argc, char* argv[]) {
   if (ResolveLaunchRequest(options, &launch_request) == StepResult::kExitFailure) {
     return EXIT_FAILURE;
   }
-  mocktail::runtime::ScrubCommandLineLaunchArguments(&command_line.options, argc, argv);
+  roblox::runtime::ScrubCommandLineLaunchArguments(&command_line.options, argc, argv);
 
   // Lifetime objects. Declared here so their destructors run in reverse order
   // after the engine has fully shut down.
-  mocktail::runtime::SessionLog session_log;
-  mocktail::legacy::RuntimeDependencies dependencies;
+  roblox::runtime::SessionLog session_log;
+  roblox::legacy::RuntimeDependencies dependencies;
 
   RuntimeConfig runtime_config;
   std::string config_error;
@@ -703,7 +703,7 @@ int main(int argc, char* argv[]) {
                        &session_log,
                        process_started_at, process_launch_diagnostics);
 
-  mocktail::runtime::GameModeSession game_mode_session =
+  roblox::runtime::GameModeSession game_mode_session =
       StartGameModeSession(options, runtime_config);
 
   std::filesystem::path app_storage_file;
@@ -720,7 +720,7 @@ int main(int argc, char* argv[]) {
   const libc_shim::HostCaBundleResolution ca_bundle =
       libc_shim::ResolveHostCaBundle();
   if (ca_bundle.status == libc_shim::HostCaBundleStatus::kInvalidOverride) {
-    std::cerr << "Invalid MOCKTAIL_CA_BUNDLE: expected a readable, non-empty "
+    std::cerr << "Invalid ROBLOX_CA_BUNDLE: expected a readable, non-empty "
                  "absolute regular file\n";
     return 2;
   }
@@ -737,17 +737,17 @@ int main(int argc, char* argv[]) {
   }
 
   if (IsRunning(options)) {
-    mocktail::runtime::LogProcessDiagnostics(
-        mocktail::runtime::ProcessDiagnosticStage::kNativeRuntime);
+    roblox::runtime::LogProcessDiagnostics(
+        roblox::runtime::ProcessDiagnosticStage::kNativeRuntime);
   }
   const int runtime_status =
-      mocktail::legacy::Run(command_line.options, std::move(dependencies));
+      roblox::legacy::Run(command_line.options, std::move(dependencies));
   // The engine has had its chance at the web-login ticket; it is a bearer
   // value, so it does not outlive native startup.
-  mocktail::runtime::ScrubEngineLaunchUri(&command_line.options);
+  roblox::runtime::ScrubEngineLaunchUri(&command_line.options);
   if (IsRunning(options)) {
-    mocktail::runtime::LogProcessDiagnostics(
-        mocktail::runtime::ProcessDiagnosticStage::kShutdown);
+    roblox::runtime::LogProcessDiagnostics(
+        roblox::runtime::ProcessDiagnosticStage::kShutdown);
     std::cerr << "[diagnostic] native runtime exit_status=" << runtime_status
               << '\n';
   }

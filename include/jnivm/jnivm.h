@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_JNIVM_JNIVM_H_
-#define MOCKTAIL_JNIVM_JNIVM_H_
+#ifndef ROBLOX_JNIVM_JNIVM_H_
+#define ROBLOX_JNIVM_JNIVM_H_
 
 #include <jni.h>
 
@@ -44,17 +44,17 @@ struct PlatformIdentity {
   bool keyboard_enabled = true;
   bool pc_hardware = true;
   std::string platform_name = "Linux";
-  std::string device_name = "Mocktail Headless";
-  std::string manufacturer = "Mocktail";
-  std::string model = "Mocktail Headless";
-  std::string brand = "Mocktail";
+  std::string device_name = "Roblox Headless";
+  std::string manufacturer = "Roblox";
+  std::string model = "Roblox Headless";
+  std::string brand = "Roblox";
 #if defined(__aarch64__)
   std::string device_code = "linux-arm64";
-  std::string device_sku = "mocktail-arm64";
+  std::string device_sku = "roblox-arm64";
   std::string soc_model = "aarch64";
 #else
   std::string device_code = "linux-x86_64";
-  std::string device_sku = "mocktail-x86_64";
+  std::string device_sku = "roblox-x86_64";
   std::string soc_model = "x86_64";
 #endif
 };
@@ -603,4 +603,4 @@ private:
 
 } // namespace jnivm
 
-#endif  // MOCKTAIL_JNIVM_JNIVM_H_
+#endif  // ROBLOX_JNIVM_JNIVM_H_

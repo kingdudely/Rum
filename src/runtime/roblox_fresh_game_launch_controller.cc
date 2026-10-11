@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -542,4 +542,4 @@ GameSessionSnapshot RobloxFreshGameLaunchController::Snapshot() const {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

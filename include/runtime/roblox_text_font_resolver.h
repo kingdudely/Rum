@@ -1,10 +1,10 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_TEXT_FONT_RESOLVER_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_TEXT_FONT_RESOLVER_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_TEXT_FONT_RESOLVER_H_
+#define ROBLOX_RUNTIME_ROBLOX_TEXT_FONT_RESOLVER_H_
 
 #include <cstdint>
 #include <string>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Android's RbxKeyboard resolves the Roblox Font enum through
@@ -21,6 +21,6 @@ RobloxTextFontSelection ResolveRobloxTextFont(
 RobloxTextFontSelection ResolveRobloxTextFont(int32_t font);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_TEXT_FONT_RESOLVER_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_TEXT_FONT_RESOLVER_H_

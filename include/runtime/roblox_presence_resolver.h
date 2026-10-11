@@ -1,12 +1,12 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_PRESENCE_RESOLVER_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_PRESENCE_RESOLVER_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_PRESENCE_RESOLVER_H_
+#define ROBLOX_RUNTIME_ROBLOX_PRESENCE_RESOLVER_H_
 
 #include <cstdint>
 #include <string>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 struct ResolvedFollowUserPlace {
@@ -14,7 +14,7 @@ struct ResolvedFollowUserPlace {
   std::string game_instance_id;  // Roblox's "gameId" for the running session.
 };
 
-// Reads the session cookie from MOCKTAIL_ROBLOSECURITY (or the
+// Reads the session cookie from ROBLOX_ROBLOSECURITY (or the
 // --roblosecurity flag that sets it). Returns an empty string when no
 // session was passed.
 std::string ReadRoblosecurityCookie();
@@ -30,6 +30,6 @@ Status ResolveFollowUserPlace(int64_t user_id, const std::string& auth_cookie,
                               ResolvedFollowUserPlace* out);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_PRESENCE_RESOLVER_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_PRESENCE_RESOLVER_H_

@@ -5,8 +5,8 @@
 #include "jni_fields.h"
 #include "jni_strings.h"
 
-#include "mocktail/audio/fmod_thread_floating_point.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/audio/fmod_thread_floating_point.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <algorithm>
 #include <atomic>

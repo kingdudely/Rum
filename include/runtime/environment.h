@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_RUNTIME_ENVIRONMENT_H_
-#define MOCKTAIL_RUNTIME_ENVIRONMENT_H_
+#ifndef ROBLOX_RUNTIME_ENVIRONMENT_H_
+#define ROBLOX_RUNTIME_ENVIRONMENT_H_
 
 #include <optional>
 #include <string>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Read-only environment abstraction. Production code uses ProcessEnvironment;
@@ -27,6 +27,6 @@ class ProcessEnvironment final : public Environment {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ENVIRONMENT_H_
+#endif  // ROBLOX_RUNTIME_ENVIRONMENT_H_

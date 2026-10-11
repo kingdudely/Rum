@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_GAME_SESSION_NATIVE_ADAPTER_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_GAME_SESSION_NATIVE_ADAPTER_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_GAME_SESSION_NATIVE_ADAPTER_H_
+#define ROBLOX_RUNTIME_ROBLOX_GAME_SESSION_NATIVE_ADAPTER_H_
 
 #include <jni.h>
 
@@ -9,12 +9,12 @@
 #include <string>
 #include <vector>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 #include "runtime/game_session_coordinator.h"
 #include "runtime/roblox_app_lifecycle.h"
 #include "runtime/roblox_capability_resolver.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 using NativeAppBridgeV2PauseGameFn = void (*)(JNIEnv* env, jclass clazz);
@@ -272,6 +272,6 @@ const char* RobloxGameSessionResolutionStatusName(
     RobloxGameSessionResolutionStatus status);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_GAME_SESSION_NATIVE_ADAPTER_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_GAME_SESSION_NATIVE_ADAPTER_H_

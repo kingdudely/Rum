@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_APP_LIFECYCLE_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_APP_LIFECYCLE_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_APP_LIFECYCLE_H_
+#define ROBLOX_RUNTIME_ROBLOX_APP_LIFECYCLE_H_
 
 #include <jni.h>
 
@@ -9,7 +9,7 @@
 
 #include "runtime/roblox_capability_resolver.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 using NativeAppBridgeV2PauseAppFn = void (*)(JNIEnv *env, jclass clazz);
@@ -110,6 +110,6 @@ const char *RobloxAppLifecycleResolutionStatusName(
 const char *RobloxAppShutdownStatusName(RobloxAppShutdownStatus status);
 
 } // namespace runtime
-} // namespace mocktail
+} // namespace roblox
 
-#endif // MOCKTAIL_RUNTIME_ROBLOX_APP_LIFECYCLE_H_
+#endif // ROBLOX_RUNTIME_ROBLOX_APP_LIFECYCLE_H_

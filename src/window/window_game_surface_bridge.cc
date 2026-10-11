@@ -5,7 +5,7 @@
 #include "runtime/roblox_game_session_native_adapter.h"
 #include "window/window.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 namespace {
 
@@ -151,4 +151,4 @@ WindowGameSurfaceDrainResult WindowGameSurfaceBridge::Fail(
 }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

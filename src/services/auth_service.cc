@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace services {
 namespace {
 
@@ -292,4 +292,4 @@ AuthCookieValidation AuthService::ValidateCookie(
 }
 
 }  // namespace services
-}  // namespace mocktail
+}  // namespace roblox

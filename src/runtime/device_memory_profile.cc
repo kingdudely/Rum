@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <limits>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -32,4 +32,4 @@ DeviceMemoryProfile BuildDeviceMemoryProfile(std::uint64_t host_memory_bytes) {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

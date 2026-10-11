@@ -2,8 +2,8 @@
 // purpose: every stub is its own shared object, so everything here is static
 // and no stub links another. Keeps the getenv/dlsym-cache helpers that used
 // to be copied into each stub in one place.
-#ifndef MOCKTAIL_STUBS_STUB_HELPERS_H_
-#define MOCKTAIL_STUBS_STUB_HELPERS_H_
+#ifndef ROBLOX_STUBS_STUB_HELPERS_H_
+#define ROBLOX_STUBS_STUB_HELPERS_H_
 
 #include <cstdlib>
 #include <cstring>
@@ -27,7 +27,7 @@ static inline bool StubAnyEnvSet(std::initializer_list<const char*> names) {
 }
 
 static inline bool StubTestGraphicsStubsEnabled() {
-  const char* value = std::getenv("MOCKTAIL_ENABLE_TEST_GRAPHICS_STUBS");
+  const char* value = std::getenv("ROBLOX_ENABLE_TEST_GRAPHICS_STUBS");
   return value != nullptr && std::strcmp(value, "1") == 0;
 }
 
@@ -49,4 +49,4 @@ static inline Fn StubResolveCached(Fn* slot, const char* name) {
   return fn;
 }
 
-#endif  // MOCKTAIL_STUBS_STUB_HELPERS_H_
+#endif  // ROBLOX_STUBS_STUB_HELPERS_H_

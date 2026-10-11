@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 Mocktail Project Authors
+# Copyright 2026 Roblox Project Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -101,7 +101,7 @@ if [[ -n "${CMAKE_SYSROOT}" ]]; then
   CMAKE_SYSROOT="$(cd -P -- "${CMAKE_SYSROOT}" && pwd)"
 fi
 
-info "Mocktail build: ${BUILD_TYPE}, -j${JOBS}"
+info "Roblox build: ${BUILD_TYPE}, -j${JOBS}"
 info "Project root: ${PROJECT_ROOT}"
 info "Build directory: ${BUILD_DIR}"
 
@@ -155,15 +155,15 @@ cmake "${cmake_arguments[@]}"
 
 success "CMake configuration complete."
 
-step "building Mocktail"
+step "building Roblox"
 
 cmake --build "${BUILD_DIR}" -j"${JOBS}"
 
-success "Build complete → ${BUILD_DIR}/mocktail"
+success "Build complete → ${BUILD_DIR}/roblox"
 
 echo
 success "Build successful."
 echo "Run:"
-echo -e "  ${CYAN}${BUILD_DIR}/mocktail${RESET}"
+echo -e "  ${CYAN}${BUILD_DIR}/roblox${RESET}"
 info "Place libroblox.so and assets/content next to the resulting executable."
 echo

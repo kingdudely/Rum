@@ -1,12 +1,12 @@
-#ifndef MOCKTAIL_RUNTIME_RUNTIME_PATHS_H_
-#define MOCKTAIL_RUNTIME_RUNTIME_PATHS_H_
+#ifndef ROBLOX_RUNTIME_RUNTIME_PATHS_H_
+#define ROBLOX_RUNTIME_RUNTIME_PATHS_H_
 
 #include <filesystem>
 #include <system_error>
 
 #include "runtime/environment.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 class RuntimePaths {
@@ -79,6 +79,6 @@ bool LooksLikeRobloxContentDirectory(
     const std::filesystem::path& content_root);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_RUNTIME_PATHS_H_
+#endif  // ROBLOX_RUNTIME_RUNTIME_PATHS_H_

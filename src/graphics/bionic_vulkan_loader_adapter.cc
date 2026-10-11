@@ -16,11 +16,11 @@
 #include <utility>
 #include <vector>
 
-#include "mocktail/graphics/android_vulkan_wsi_adapter.h"
-#include "mocktail/graphics/present_mode_policy.h"
-#include "mocktail/graphics/vulkan_etc2_emulation.h"
-#include "mocktail/graphics/vulkan_text_overlay_compositor.h"
-#include "mocktail/platform/platform_runtime.h"
+#include "roblox/graphics/android_vulkan_wsi_adapter.h"
+#include "roblox/graphics/present_mode_policy.h"
+#include "roblox/graphics/vulkan_etc2_emulation.h"
+#include "roblox/graphics/vulkan_text_overlay_compositor.h"
+#include "roblox/platform/platform_runtime.h"
 
 extern "C" {
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -176,8 +176,8 @@ struct AdapterState {
   };
 
   std::mutex mutex;
-  mocktail::graphics::SdlVulkanWsi host_wsi;
-  mocktail::graphics::AndroidVulkanWsiAdapter android_wsi;
+  roblox::graphics::SdlVulkanWsi host_wsi;
+  roblox::graphics::AndroidVulkanWsiAdapter android_wsi;
   PFN_vkGetInstanceProcAddr host_get_instance_proc_addr = nullptr;
   std::atomic<PFN_vkGetDeviceProcAddr> host_get_device_proc_addr{nullptr};
   std::vector<DeviceDispatch> device_dispatches;
@@ -189,8 +189,8 @@ struct AdapterState {
       nullptr;
   VkInstance latest_instance = VK_NULL_HANDLE;
   size_t active_instance_count = 0;
-  mocktail::graphics::VulkanTextOverlayCompositor text_overlay;
-  mocktail::graphics::VulkanEtc2Emulation etc2;
+  roblox::graphics::VulkanTextOverlayCompositor text_overlay;
+  roblox::graphics::VulkanEtc2Emulation etc2;
   std::atomic<NotePresentFn> note_present{nullptr};
   std::atomic<NoteHostPresentBeginFn> note_host_present_begin{nullptr};
   std::atomic<NoteHostPresentEndFn> note_host_present_end{nullptr};
@@ -222,32 +222,32 @@ bool EnsureInitialized() {
   }
 
   const BackendWindowFn backend_window =
-      ResolveProcessFunction<BackendWindowFn>("mocktail_window_backend_window");
+      ResolveProcessFunction<BackendWindowFn>("roblox_window_backend_window");
   const UsesDirectVulkanFn uses_direct_vulkan =
       ResolveProcessFunction<UsesDirectVulkanFn>(
-          "mocktail_window_uses_direct_vulkan");
+          "roblox_window_uses_direct_vulkan");
   state.note_present.store(ResolveProcessFunction<NotePresentFn>(
-                                "mocktail_window_note_vulkan_present"),
+                                "roblox_window_note_vulkan_present"),
                            std::memory_order_release);
   state.note_host_present_begin.store(
       ResolveProcessFunction<NoteHostPresentBeginFn>(
-          "mocktail_window_note_vulkan_host_present_begin"),
+          "roblox_window_note_vulkan_host_present_begin"),
       std::memory_order_release);
   state.note_host_present_end.store(
       ResolveProcessFunction<NoteHostPresentEndFn>(
-          "mocktail_window_note_vulkan_host_present_end"),
+          "roblox_window_note_vulkan_host_present_end"),
       std::memory_order_release);
   const auto call_begin = ResolveProcessFunction<NoteVulkanCallBeginFn>(
-      "mocktail_window_note_vulkan_call_begin");
+      "roblox_window_note_vulkan_call_begin");
   const auto call_end = ResolveProcessFunction<NoteVulkanCallEndFn>(
-      "mocktail_window_note_vulkan_call_end");
+      "roblox_window_note_vulkan_call_end");
   state.note_vulkan_call_begin.store(call_begin, std::memory_order_release);
   state.note_vulkan_call_end.store(call_end, std::memory_order_release);
   g_vulkan_call_observation_active.store(
       call_begin != nullptr && call_end != nullptr, std::memory_order_release);
   state.note_surface_out_of_date.store(
       ResolveProcessFunction<NoteSurfaceOutOfDateFn>(
-          "mocktail_window_note_vulkan_surface_out_of_date"),
+          "roblox_window_note_vulkan_surface_out_of_date"),
       std::memory_order_release);
   if (backend_window == nullptr || uses_direct_vulkan == nullptr ||
       !uses_direct_vulkan() || backend_window() == nullptr) {
@@ -256,10 +256,10 @@ bool EnsureInitialized() {
     return false;
   }
 
-  mocktail::platform::NativeWindowDescriptor descriptor;
-  descriptor.surface_api = mocktail::platform::WindowSurfaceApi::kDirectVulkan;
+  roblox::platform::NativeWindowDescriptor descriptor;
+  descriptor.surface_api = roblox::platform::WindowSurfaceApi::kDirectVulkan;
   descriptor.backend_window = backend_window();
-  mocktail::Status status = state.host_wsi.Initialize(descriptor);
+  roblox::Status status = state.host_wsi.Initialize(descriptor);
   if (!status.ok()) {
     std::fprintf(stderr, "  [vulkan] SDL WSI initialization failed: %s\n",
                  status.message().c_str());
@@ -298,7 +298,7 @@ VkResult NormalizeSwapchainResult(VkResult result) {
   if (result == VK_SUBOPTIMAL_KHR) {
     NoteSuboptimalTranslation();
   }
-  return mocktail::graphics::NormalizeAndroidSwapchainResult(result);
+  return roblox::graphics::NormalizeAndroidSwapchainResult(result);
 }
 
 PFN_vkVoidFunction HostInstanceProc(VkInstance instance, const char* name) {
@@ -673,12 +673,12 @@ std::vector<VkExtensionProperties> AndroidVisibleExtensions(
   const bool has_android =
       std::any_of(output.begin(), output.end(), [](const auto& property) {
         return std::strcmp(property.extensionName,
-                           mocktail::graphics::kAndroidSurfaceExtension) == 0;
+                           roblox::graphics::kAndroidSurfaceExtension) == 0;
       });
   if (!has_android) {
     VkExtensionProperties android{};
     std::strncpy(android.extensionName,
-                 mocktail::graphics::kAndroidSurfaceExtension,
+                 roblox::graphics::kAndroidSurfaceExtension,
                  sizeof(android.extensionName) - 1);
     android.specVersion = 6;
     output.push_back(android);
@@ -691,84 +691,84 @@ PFN_vkVoidFunction AdapterProc(const char* name) {
   if (name == nullptr) {
     return nullptr;
   }
-#define MOCKTAIL_VK_PROC(function)                         \
+#define ROBLOX_VK_PROC(function)                         \
   if (std::strcmp(name, #function) == 0) {                 \
     return reinterpret_cast<PFN_vkVoidFunction>(function); \
   }
-  MOCKTAIL_VK_PROC(vkCreateInstance)
-  MOCKTAIL_VK_PROC(vkDestroyInstance)
-  MOCKTAIL_VK_PROC(vkCreateAndroidSurfaceKHR)
-  MOCKTAIL_VK_PROC(vkDestroySurfaceKHR)
-  MOCKTAIL_VK_PROC(vkEnumerateInstanceExtensionProperties)
-  MOCKTAIL_VK_PROC(vkEnumerateInstanceLayerProperties)
-  MOCKTAIL_VK_PROC(vkGetInstanceProcAddr)
-  MOCKTAIL_VK_PROC(vkGetDeviceProcAddr)
-  MOCKTAIL_VK_PROC(vkCreateDevice)
-  MOCKTAIL_VK_PROC(vkDestroyDevice)
-  MOCKTAIL_VK_PROC(vkGetDeviceQueue)
-  MOCKTAIL_VK_PROC(vkGetDeviceQueue2)
-  MOCKTAIL_VK_PROC(vkCreateSwapchainKHR)
-  MOCKTAIL_VK_PROC(vkDestroySwapchainKHR)
-  MOCKTAIL_VK_PROC(vkAcquireNextImageKHR)
-  MOCKTAIL_VK_PROC(vkAcquireNextImage2KHR)
-  MOCKTAIL_VK_PROC(vkWaitForFences)
-  MOCKTAIL_VK_PROC(vkResetFences)
-  MOCKTAIL_VK_PROC(vkResetCommandPool)
-  MOCKTAIL_VK_PROC(vkGetQueryPoolResults)
-  MOCKTAIL_VK_PROC(vkAllocateCommandBuffers)
-  MOCKTAIL_VK_PROC(vkFreeCommandBuffers)
-  MOCKTAIL_VK_PROC(vkDestroyCommandPool)
-  MOCKTAIL_VK_PROC(vkBeginCommandBuffer)
-  MOCKTAIL_VK_PROC(vkEndCommandBuffer)
-  MOCKTAIL_VK_PROC(vkResetCommandBuffer)
-  MOCKTAIL_VK_PROC(vkWaitSemaphores)
-  MOCKTAIL_VK_PROC(vkWaitSemaphoresKHR)
-  MOCKTAIL_VK_PROC(vkQueueSubmit)
-  MOCKTAIL_VK_PROC(vkQueueSubmit2)
-  MOCKTAIL_VK_PROC(vkQueueSubmit2KHR)
-  MOCKTAIL_VK_PROC(vkQueueBindSparse)
-  MOCKTAIL_VK_PROC(vkQueueWaitIdle)
-  MOCKTAIL_VK_PROC(vkDeviceWaitIdle)
-  MOCKTAIL_VK_PROC(vkQueuePresentKHR)
-  MOCKTAIL_VK_PROC(vkGetPhysicalDeviceFeatures)
-  MOCKTAIL_VK_PROC(vkGetPhysicalDeviceFeatures2)
-  MOCKTAIL_VK_PROC(vkGetPhysicalDeviceFormatProperties)
-  MOCKTAIL_VK_PROC(vkGetPhysicalDeviceFormatProperties2)
-  MOCKTAIL_VK_PROC(vkGetPhysicalDeviceImageFormatProperties)
-  MOCKTAIL_VK_PROC(vkGetPhysicalDeviceImageFormatProperties2)
-  MOCKTAIL_VK_PROC(vkCreateImage)
-  MOCKTAIL_VK_PROC(vkDestroyImage)
-  MOCKTAIL_VK_PROC(vkCreateImageView)
-  MOCKTAIL_VK_PROC(vkBindBufferMemory)
-  MOCKTAIL_VK_PROC(vkBindBufferMemory2)
-  MOCKTAIL_VK_PROC(vkMapMemory)
-  MOCKTAIL_VK_PROC(vkMapMemory2)
-  MOCKTAIL_VK_PROC(vkUnmapMemory)
-  MOCKTAIL_VK_PROC(vkUnmapMemory2)
-  MOCKTAIL_VK_PROC(vkFreeMemory)
-  MOCKTAIL_VK_PROC(vkDestroyBuffer)
-  MOCKTAIL_VK_PROC(vkCmdCopyBufferToImage)
-  MOCKTAIL_VK_PROC(vkCmdCopyImage)
-  MOCKTAIL_VK_PROC(vkCmdCopyImage2)
-  MOCKTAIL_VK_PROC(vkCmdCopyBufferToImage2)
-  MOCKTAIL_VK_PROC(vkCmdExecuteCommands)
-#undef MOCKTAIL_VK_PROC
-#define MOCKTAIL_VK_ALIAS(alias, function)                 \
+  ROBLOX_VK_PROC(vkCreateInstance)
+  ROBLOX_VK_PROC(vkDestroyInstance)
+  ROBLOX_VK_PROC(vkCreateAndroidSurfaceKHR)
+  ROBLOX_VK_PROC(vkDestroySurfaceKHR)
+  ROBLOX_VK_PROC(vkEnumerateInstanceExtensionProperties)
+  ROBLOX_VK_PROC(vkEnumerateInstanceLayerProperties)
+  ROBLOX_VK_PROC(vkGetInstanceProcAddr)
+  ROBLOX_VK_PROC(vkGetDeviceProcAddr)
+  ROBLOX_VK_PROC(vkCreateDevice)
+  ROBLOX_VK_PROC(vkDestroyDevice)
+  ROBLOX_VK_PROC(vkGetDeviceQueue)
+  ROBLOX_VK_PROC(vkGetDeviceQueue2)
+  ROBLOX_VK_PROC(vkCreateSwapchainKHR)
+  ROBLOX_VK_PROC(vkDestroySwapchainKHR)
+  ROBLOX_VK_PROC(vkAcquireNextImageKHR)
+  ROBLOX_VK_PROC(vkAcquireNextImage2KHR)
+  ROBLOX_VK_PROC(vkWaitForFences)
+  ROBLOX_VK_PROC(vkResetFences)
+  ROBLOX_VK_PROC(vkResetCommandPool)
+  ROBLOX_VK_PROC(vkGetQueryPoolResults)
+  ROBLOX_VK_PROC(vkAllocateCommandBuffers)
+  ROBLOX_VK_PROC(vkFreeCommandBuffers)
+  ROBLOX_VK_PROC(vkDestroyCommandPool)
+  ROBLOX_VK_PROC(vkBeginCommandBuffer)
+  ROBLOX_VK_PROC(vkEndCommandBuffer)
+  ROBLOX_VK_PROC(vkResetCommandBuffer)
+  ROBLOX_VK_PROC(vkWaitSemaphores)
+  ROBLOX_VK_PROC(vkWaitSemaphoresKHR)
+  ROBLOX_VK_PROC(vkQueueSubmit)
+  ROBLOX_VK_PROC(vkQueueSubmit2)
+  ROBLOX_VK_PROC(vkQueueSubmit2KHR)
+  ROBLOX_VK_PROC(vkQueueBindSparse)
+  ROBLOX_VK_PROC(vkQueueWaitIdle)
+  ROBLOX_VK_PROC(vkDeviceWaitIdle)
+  ROBLOX_VK_PROC(vkQueuePresentKHR)
+  ROBLOX_VK_PROC(vkGetPhysicalDeviceFeatures)
+  ROBLOX_VK_PROC(vkGetPhysicalDeviceFeatures2)
+  ROBLOX_VK_PROC(vkGetPhysicalDeviceFormatProperties)
+  ROBLOX_VK_PROC(vkGetPhysicalDeviceFormatProperties2)
+  ROBLOX_VK_PROC(vkGetPhysicalDeviceImageFormatProperties)
+  ROBLOX_VK_PROC(vkGetPhysicalDeviceImageFormatProperties2)
+  ROBLOX_VK_PROC(vkCreateImage)
+  ROBLOX_VK_PROC(vkDestroyImage)
+  ROBLOX_VK_PROC(vkCreateImageView)
+  ROBLOX_VK_PROC(vkBindBufferMemory)
+  ROBLOX_VK_PROC(vkBindBufferMemory2)
+  ROBLOX_VK_PROC(vkMapMemory)
+  ROBLOX_VK_PROC(vkMapMemory2)
+  ROBLOX_VK_PROC(vkUnmapMemory)
+  ROBLOX_VK_PROC(vkUnmapMemory2)
+  ROBLOX_VK_PROC(vkFreeMemory)
+  ROBLOX_VK_PROC(vkDestroyBuffer)
+  ROBLOX_VK_PROC(vkCmdCopyBufferToImage)
+  ROBLOX_VK_PROC(vkCmdCopyImage)
+  ROBLOX_VK_PROC(vkCmdCopyImage2)
+  ROBLOX_VK_PROC(vkCmdCopyBufferToImage2)
+  ROBLOX_VK_PROC(vkCmdExecuteCommands)
+#undef ROBLOX_VK_PROC
+#define ROBLOX_VK_ALIAS(alias, function)                 \
   if (std::strcmp(name, #alias) == 0) {                    \
     return reinterpret_cast<PFN_vkVoidFunction>(function); \
   }
-  MOCKTAIL_VK_ALIAS(vkGetPhysicalDeviceFeatures2KHR,
+  ROBLOX_VK_ALIAS(vkGetPhysicalDeviceFeatures2KHR,
                     vkGetPhysicalDeviceFeatures2)
-  MOCKTAIL_VK_ALIAS(vkGetPhysicalDeviceFormatProperties2KHR,
+  ROBLOX_VK_ALIAS(vkGetPhysicalDeviceFormatProperties2KHR,
                     vkGetPhysicalDeviceFormatProperties2)
-  MOCKTAIL_VK_ALIAS(vkGetPhysicalDeviceImageFormatProperties2KHR,
+  ROBLOX_VK_ALIAS(vkGetPhysicalDeviceImageFormatProperties2KHR,
                     vkGetPhysicalDeviceImageFormatProperties2)
-  MOCKTAIL_VK_ALIAS(vkBindBufferMemory2KHR, vkBindBufferMemory2)
-  MOCKTAIL_VK_ALIAS(vkCmdCopyImage2KHR, vkCmdCopyImage2)
-  MOCKTAIL_VK_ALIAS(vkMapMemory2KHR, vkMapMemory2)
-  MOCKTAIL_VK_ALIAS(vkUnmapMemory2KHR, vkUnmapMemory2)
-  MOCKTAIL_VK_ALIAS(vkCmdCopyBufferToImage2KHR, vkCmdCopyBufferToImage2)
-#undef MOCKTAIL_VK_ALIAS
+  ROBLOX_VK_ALIAS(vkBindBufferMemory2KHR, vkBindBufferMemory2)
+  ROBLOX_VK_ALIAS(vkCmdCopyImage2KHR, vkCmdCopyImage2)
+  ROBLOX_VK_ALIAS(vkMapMemory2KHR, vkMapMemory2)
+  ROBLOX_VK_ALIAS(vkUnmapMemory2KHR, vkUnmapMemory2)
+  ROBLOX_VK_ALIAS(vkCmdCopyBufferToImage2KHR, vkCmdCopyBufferToImage2)
+#undef ROBLOX_VK_ALIAS
   return nullptr;
 }
 
@@ -1019,7 +1019,7 @@ VkResult WaitForSemaphoresObserved(const char* call_name,
 
 bool FpsTraceEnabled() {
   static const bool enabled = [] {
-    const char* value = std::getenv("MOCKTAIL_TRACE");
+    const char* value = std::getenv("ROBLOX_TRACE");
     return value != nullptr && value[0] != '\0' && std::strcmp(value, "0") != 0;
   }();
   return enabled;
@@ -1212,7 +1212,7 @@ vkCreateInstance(const VkInstanceCreateInfo* create_info,
     requested.emplace_back(extension);
   }
   std::vector<std::string> translated;
-  const mocktail::Status status =
+  const roblox::Status status =
       State().android_wsi.TranslateInstanceExtensions(requested, &translated);
   if (!status.ok()) {
     std::fprintf(stderr, "  [vulkan] instance extension rewrite failed: %s\n",
@@ -1639,9 +1639,9 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateSwapchainKHR(
     return VK_ERROR_INITIALIZATION_FAILED;
   }
   VkSwapchainCreateInfoKHR host_info = *create_info;
-  const mocktail::graphics::PresentModePolicy present_policy =
-      mocktail::graphics::CachedPresentModePolicy();
-  if (present_policy != mocktail::graphics::PresentModePolicy::kHostDefault) {
+  const roblox::graphics::PresentModePolicy present_policy =
+      roblox::graphics::CachedPresentModePolicy();
+  if (present_policy != roblox::graphics::PresentModePolicy::kHostDefault) {
     PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR host_caps = nullptr;
     PFN_vkGetPhysicalDeviceSurfacePresentModesKHR host_modes_query = nullptr;
     {
@@ -1664,7 +1664,7 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateSwapchainKHR(
         if (modes_result == VK_SUCCESS || modes_result == VK_INCOMPLETE) {
           host_modes.resize(host_count);
           const std::vector<VkPresentModeKHR> selected =
-              mocktail::graphics::FilterPresentModes(present_policy,
+              roblox::graphics::FilterPresentModes(present_policy,
                                                      host_modes);
           if (!selected.empty()) {
             static std::atomic<bool> mode_logged{false};
@@ -1672,9 +1672,9 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateSwapchainKHR(
               std::fprintf(
                   stderr,
                   "  [vulkan] swapchain presentMode requested=%s applied=%s\n",
-                  mocktail::graphics::PresentModeKhrName(
+                  roblox::graphics::PresentModeKhrName(
                       create_info->presentMode),
-                  mocktail::graphics::PresentModeKhrName(selected.front()));
+                  roblox::graphics::PresentModeKhrName(selected.front()));
             }
             host_info.presentMode = selected.front();
           }
@@ -1686,7 +1686,7 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateSwapchainKHR(
         host_caps(physical_device, create_info->surface, &capabilities) ==
             VK_SUCCESS) {
       const std::uint32_t preferred =
-          mocktail::graphics::PreferSwapchainMinImageCount(
+          roblox::graphics::PreferSwapchainMinImageCount(
               present_policy, create_info->minImageCount,
               capabilities.minImageCount, capabilities.maxImageCount);
       if (preferred != host_info.minImageCount) {
@@ -1696,7 +1696,7 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateSwapchainKHR(
           std::fprintf(stderr,
                        "  [vulkan] present policy=%s swapchain "
                        "minImageCount=%u (requested=%u max=%u)\n",
-                       mocktail::graphics::PresentModePolicyName(
+                       roblox::graphics::PresentModePolicyName(
                            present_policy),
                        preferred, create_info->minImageCount,
                        capabilities.maxImageCount);
@@ -2115,9 +2115,9 @@ VKAPI_ATTR VkResult VKAPI_CALL vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
   }
 
   const WindowDimensionFn window_width =
-      ResolveProcessFunction<WindowDimensionFn>("mocktail_window_width");
+      ResolveProcessFunction<WindowDimensionFn>("roblox_window_width");
   const WindowDimensionFn window_height =
-      ResolveProcessFunction<WindowDimensionFn>("mocktail_window_height");
+      ResolveProcessFunction<WindowDimensionFn>("roblox_window_height");
   if (window_width == nullptr || window_height == nullptr ||
       window_width() <= 0 || window_height() <= 0) {
     return result;
@@ -2169,16 +2169,16 @@ VKAPI_ATTR VkResult VKAPI_CALL vkGetPhysicalDeviceSurfacePresentModesKHR(
     }
     host_modes.resize(host_count);
   }
-  const mocktail::graphics::PresentModePolicy policy = mocktail::graphics::CachedPresentModePolicy();
+  const roblox::graphics::PresentModePolicy policy = roblox::graphics::CachedPresentModePolicy();
   const std::vector<VkPresentModeKHR> visible =
-      mocktail::graphics::FilterPresentModes(policy, host_modes);
+      roblox::graphics::FilterPresentModes(policy, host_modes);
   {
     AdapterState& state = State();
     std::lock_guard<std::mutex> lock(state.mutex);
     if (!state.present_policy_logged) {
       state.present_policy_logged = true;
       std::fprintf(stderr, "  [vulkan] present policy=%s modes=%zu\n",
-                   mocktail::graphics::PresentModePolicyName(policy),
+                   roblox::graphics::PresentModePolicyName(policy),
                    visible.size());
     }
   }
@@ -2239,7 +2239,7 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFeatures(
   }
   host(physical_device, features);
   if (Etc2EmulatedPhysicalDevice(physical_device) &&
-      mocktail::graphics::Etc2SupportAdvertised()) {
+      roblox::graphics::Etc2SupportAdvertised()) {
     features->textureCompressionETC2 = VK_TRUE;
   }
 }
@@ -2253,7 +2253,7 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFeatures2(
   }
   host(physical_device, features);
   if (Etc2EmulatedPhysicalDevice(physical_device) &&
-      mocktail::graphics::Etc2SupportAdvertised()) {
+      roblox::graphics::Etc2SupportAdvertised()) {
     features->features.textureCompressionETC2 = VK_TRUE;
   }
 }
@@ -2267,8 +2267,8 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFormatProperties(
   if (host == nullptr || properties == nullptr) {
     return;
   }
-  mocktail::graphics::Etc2EmulatedFormat mapped;
-  if (!mocktail::graphics::LookupEmulatedEtc2Format(format, &mapped) ||
+  roblox::graphics::Etc2EmulatedFormat mapped;
+  if (!roblox::graphics::LookupEmulatedEtc2Format(format, &mapped) ||
       !Etc2EmulatedPhysicalDevice(physical_device)) {
     host(physical_device, format, properties);
     return;
@@ -2276,7 +2276,7 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFormatProperties(
   host(physical_device, mapped.host_format, properties);
   properties->linearTilingFeatures = 0;
   properties->optimalTilingFeatures =
-      mocktail::graphics::EmulatedEtc2FormatFeatures(
+      roblox::graphics::EmulatedEtc2FormatFeatures(
           properties->optimalTilingFeatures);
   properties->bufferFeatures = 0;
 }
@@ -2291,8 +2291,8 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFormatProperties2(
   if (host == nullptr || properties == nullptr) {
     return;
   }
-  mocktail::graphics::Etc2EmulatedFormat mapped;
-  if (!mocktail::graphics::LookupEmulatedEtc2Format(format, &mapped) ||
+  roblox::graphics::Etc2EmulatedFormat mapped;
+  if (!roblox::graphics::LookupEmulatedEtc2Format(format, &mapped) ||
       !Etc2EmulatedPhysicalDevice(physical_device)) {
     host(physical_device, format, properties);
     return;
@@ -2301,7 +2301,7 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFormatProperties2(
   VkFormatProperties& base = properties->formatProperties;
   base.linearTilingFeatures = 0;
   base.optimalTilingFeatures =
-      mocktail::graphics::EmulatedEtc2FormatFeatures(base.optimalTilingFeatures);
+      roblox::graphics::EmulatedEtc2FormatFeatures(base.optimalTilingFeatures);
   base.bufferFeatures = 0;
   if (auto* extended = const_cast<VkFormatProperties3*>(
           reinterpret_cast<const VkFormatProperties3*>(FindFeature(
@@ -2309,7 +2309,7 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFormatProperties2(
       extended != nullptr) {
     extended->linearTilingFeatures = 0;
     extended->optimalTilingFeatures =
-        mocktail::graphics::EmulatedEtc2FormatFeatures(
+        roblox::graphics::EmulatedEtc2FormatFeatures(
             static_cast<VkFormatFeatureFlags>(
                 extended->optimalTilingFeatures));
     extended->bufferFeatures = 0;
@@ -2326,8 +2326,8 @@ VKAPI_ATTR VkResult VKAPI_CALL vkGetPhysicalDeviceImageFormatProperties(
   if (host == nullptr) {
     return VK_ERROR_INITIALIZATION_FAILED;
   }
-  mocktail::graphics::Etc2EmulatedFormat mapped;
-  if (!mocktail::graphics::LookupEmulatedEtc2Format(format, &mapped) ||
+  roblox::graphics::Etc2EmulatedFormat mapped;
+  if (!roblox::graphics::LookupEmulatedEtc2Format(format, &mapped) ||
       !Etc2EmulatedPhysicalDevice(physical_device)) {
     return host(physical_device, format, type, tiling, usage, flags,
                 properties);
@@ -2352,8 +2352,8 @@ VKAPI_ATTR VkResult VKAPI_CALL vkGetPhysicalDeviceImageFormatProperties2(
   if (host == nullptr || info == nullptr) {
     return VK_ERROR_INITIALIZATION_FAILED;
   }
-  mocktail::graphics::Etc2EmulatedFormat mapped;
-  if (!mocktail::graphics::LookupEmulatedEtc2Format(info->format, &mapped) ||
+  roblox::graphics::Etc2EmulatedFormat mapped;
+  if (!roblox::graphics::LookupEmulatedEtc2Format(info->format, &mapped) ||
       !Etc2EmulatedPhysicalDevice(physical_device)) {
     return host(physical_device, info, properties);
   }

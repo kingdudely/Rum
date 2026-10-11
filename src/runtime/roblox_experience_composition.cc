@@ -10,11 +10,11 @@
 #include <utility>
 
 #include "jnivm/jnivm.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/auth_runtime_composition.h"
 #include "window/window.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -423,8 +423,8 @@ Status RobloxExperienceComposition::OnLuaAppReady(
   if (status.ok()) {
     std::fprintf(stderr,
                  "  [theme] published SystemTheme.systemThemeUpdated (%s)\n",
-                 std::getenv("MOCKTAIL_RESOLVED_THEME_INTERNAL") != nullptr
-                     ? std::getenv("MOCKTAIL_RESOLVED_THEME_INTERNAL")
+                 std::getenv("ROBLOX_RESOLVED_THEME_INTERNAL") != nullptr
+                     ? std::getenv("ROBLOX_RESOLVED_THEME_INTERNAL")
                      : "Dark");
   }
   return status;
@@ -1270,7 +1270,7 @@ Status RobloxExperienceComposition::BuildLuaAppStartParams(
     app_starter_place = env->NewStringUTF("rbxasset://places/Mobile.rbxl");
     app_starter_script = env->NewStringUTF("LuaAppStarterScript");
     username = env->NewStringUTF(readiness.username.c_str());
-    const char* theme = std::getenv("MOCKTAIL_RESOLVED_THEME_INTERNAL");
+    const char* theme = std::getenv("ROBLOX_RESOLVED_THEME_INTERNAL");
     selected_theme = env->NewStringUTF(theme != nullptr ? theme : "Dark");
     const bool populated =
         app_starter_place != nullptr && app_starter_script != nullptr &&
@@ -1515,4 +1515,4 @@ Status RobloxExperienceComposition::ReleaseLuaAppGlobalObjects() {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

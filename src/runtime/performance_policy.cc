@@ -18,7 +18,7 @@
 #include "runtime/http_client_policy.h"
 #include "runtime/texture_memory_policy.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -234,7 +234,7 @@ bool MergePerformanceClientSettingsOverrides(const PerformancePolicy& policy,
     const std::string workers = std::to_string(render_worker_count);
     const std::string occlusion_workers =
         std::to_string(std::max(1, render_worker_count / 2));
-    const char* custom_quality = std::getenv("MOCKTAIL_GRAPHICS_QUALITY");
+    const char* custom_quality = std::getenv("ROBLOX_GRAPHICS_QUALITY");
     const std::string quality_str =
         (custom_quality != nullptr && custom_quality[0] != '\0')
             ? custom_quality
@@ -406,4 +406,4 @@ bool MergeAudioCaptureClientSettingsOverrides(bool microphone_enabled,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

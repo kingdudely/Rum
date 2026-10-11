@@ -1,11 +1,11 @@
-#include "mocktail/platform/sdl_application_metadata.h"
+#include "roblox/platform/sdl_application_metadata.h"
 
 #include <SDL3/SDL.h>
 
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace platform {
 namespace {
 
@@ -20,8 +20,8 @@ Status MetadataError(const char* operation) {
 }  // namespace
 
 Status ConfigureSdlApplicationMetadata() {
-  if (!SDL_SetAppMetadata(kMocktailApplicationName, MOCKTAIL_PROJECT_VERSION,
-                          kMocktailApplicationIdentifier)) {
+  if (!SDL_SetAppMetadata(kRobloxApplicationName, ROBLOX_PROJECT_VERSION,
+                          kRobloxApplicationIdentifier)) {
     return MetadataError("SDL_SetAppMetadata");
   }
   if (!SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_TYPE_STRING, "game")) {
@@ -31,4 +31,4 @@ Status ConfigureSdlApplicationMetadata() {
 }
 
 }  // namespace platform
-}  // namespace mocktail
+}  // namespace roblox

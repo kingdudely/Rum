@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -345,4 +345,4 @@ const char* RobloxGamepadApiName(RobloxGamepadApi api) {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

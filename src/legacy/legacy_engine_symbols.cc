@@ -20,7 +20,7 @@
 #include <link.h>
 
 #include "linker/linker.h"
-#include "mocktail/graphics/bionic_egl_bridge.h"
+#include "roblox/graphics/bionic_egl_bridge.h"
 #include "window/window.h"
 namespace legacy_internal {
 
@@ -54,7 +54,7 @@ SymbolResolveResult ResolveSymbolForBionic(const char* name, bool has_window,
   SymbolResolveResult result;
 
   if (is_gl_symbol && prefer_real_gles) {
-    result.address = mocktail::window::GetGLProcAddress(name);
+    result.address = roblox::window::GetGLProcAddress(name);
     if (result.address != nullptr) {
       result.source = SymbolResolveSource::kWindow;
       return result;
@@ -84,7 +84,7 @@ SymbolResolveResult ResolveSymbolForBionic(const char* name, bool has_window,
   return result;
 }
 
-bool IsMocktailStubGlesPath(const char* path) {
+bool IsRobloxStubGlesPath(const char* path) {
   if (path == nullptr || path[0] == '\0') {
     return true;
   }
@@ -94,7 +94,7 @@ bool IsMocktailStubGlesPath(const char* path) {
 }
 
 void* OpenRealGlesLibrary() {
-  const char* env_library = std::getenv("MOCKTAIL_GLES_LIBRARY");
+  const char* env_library = std::getenv("ROBLOX_GLES_LIBRARY");
   const char* candidates[] = {
       env_library,
       "/usr/lib/libGLESv2.so.2",
@@ -109,7 +109,7 @@ void* OpenRealGlesLibrary() {
       "/usr/lib/cef/libGLESv2.so",
   };
   for (const char* candidate : candidates) {
-    if (IsMocktailStubGlesPath(candidate)) {
+    if (IsRobloxStubGlesPath(candidate)) {
       continue;
     }
     void* handle = ::dlopen(candidate, RTLD_LAZY | RTLD_LOCAL);
@@ -123,7 +123,7 @@ void* OpenRealGlesLibrary() {
 }
 
 static std::string RuntimeBionicAdapterPath(const char* name) {
-  const char* override_dir = std::getenv("MOCKTAIL_RUNTIME_LIBRARY_DIR");
+  const char* override_dir = std::getenv("ROBLOX_RUNTIME_LIBRARY_DIR");
   std::string directory;
   if (override_dir != nullptr && override_dir[0] != '\0') {
     directory = override_dir;
@@ -173,7 +173,7 @@ constexpr const char* kSymbolsToRegister[] = {
     "SL_IID_PLAY",
     "SL_IID_RECORD",
     "SL_IID_VOLUME",
-    "mocktail_recover_stack_chk_fail",
+    "roblox_recover_stack_chk_fail",
 
     // pthread functions whose host ABI is already compatible.
     "pthread_kill",
@@ -235,7 +235,7 @@ constexpr const char* kSymbolsToRegister[] = {
 
 RobloxEngineSymbols ResolveRobloxEngineSymbols(
     void* roblox_handle,
-    const mocktail::runtime::RobloxStartupSymbols& startup_symbols,
+    const roblox::runtime::RobloxStartupSymbols& startup_symbols,
     jnivm::VM* jni_vm) {
   RobloxEngineSymbols symbols;
   symbols.global_init =
@@ -640,14 +640,14 @@ void TallyGlSymbol(const char* name, SymbolResolveSource source, void* address,
 }
 
 BionicStubPreload PreloadBionicStubs(
-    const mocktail::graphics::BionicEglBridge& bionic_egl_bridge) {
+    const roblox::graphics::BionicEglBridge& bionic_egl_bridge) {
   std::vector<const char*> stub_names = {
       "libc.so", "libdl.so", "libm.so", "libz.so",
       "libandroid.so", "liblog.so", "libmediandk.so",
       "libOpenSLES.so", "libOpenMAXAL.so",
       "libEGL.so", "libGLESv2.so",
   };
-  if (IsEnabled("MOCKTAIL_PRELOAD_VULKAN_SHIM")) {
+  if (IsEnabled("ROBLOX_PRELOAD_VULKAN_SHIM")) {
     stub_names.push_back("libvulkan.so");
   }
 

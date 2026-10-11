@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -884,4 +884,4 @@ const char* RobloxInputEventKindName(RobloxInputEventKind kind) {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

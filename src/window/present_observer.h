@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_WINDOW_PRESENT_OBSERVER_H_
-#define MOCKTAIL_WINDOW_PRESENT_OBSERVER_H_
+#ifndef ROBLOX_WINDOW_PRESENT_OBSERVER_H_
+#define ROBLOX_WINDOW_PRESENT_OBSERVER_H_
 
 #include <cstdint>
 #include <mutex>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 using PresentObserver = void (*)(void* context, uint64_t frame_serial);
@@ -136,6 +136,6 @@ class PresentLifecycleGate final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_PRESENT_OBSERVER_H_
+#endif  // ROBLOX_WINDOW_PRESENT_OBSERVER_H_

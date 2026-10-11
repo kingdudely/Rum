@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_WINDOW_VULKAN_SURFACE_RECOVERY_GATE_H_
-#define MOCKTAIL_WINDOW_VULKAN_SURFACE_RECOVERY_GATE_H_
+#ifndef ROBLOX_WINDOW_VULKAN_SURFACE_RECOVERY_GATE_H_
+#define ROBLOX_WINDOW_VULKAN_SURFACE_RECOVERY_GATE_H_
 
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 struct VulkanSurfaceRecoveryRequest {
@@ -109,6 +109,6 @@ class VulkanSurfaceRecoveryGate final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_VULKAN_SURFACE_RECOVERY_GATE_H_
+#endif  // ROBLOX_WINDOW_VULKAN_SURFACE_RECOVERY_GATE_H_

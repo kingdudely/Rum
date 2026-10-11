@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 bool Environment::HasNonEmpty(std::string_view name) const {
@@ -32,4 +32,4 @@ std::optional<std::string> ProcessEnvironment::Get(
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

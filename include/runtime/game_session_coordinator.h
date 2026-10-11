@@ -1,13 +1,13 @@
-#ifndef MOCKTAIL_RUNTIME_GAME_SESSION_COORDINATOR_H_
-#define MOCKTAIL_RUNTIME_GAME_SESSION_COORDINATOR_H_
+#ifndef ROBLOX_RUNTIME_GAME_SESSION_COORDINATOR_H_
+#define ROBLOX_RUNTIME_GAME_SESSION_COORDINATOR_H_
 
 #include <cstdint>
 #include <mutex>
 #include <string>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 enum class GameSessionPrincipalKind {
@@ -259,6 +259,6 @@ const char* GamePresentBackendName(GamePresentBackend backend);
 const char* GameSessionPrincipalKindName(GameSessionPrincipalKind kind);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_GAME_SESSION_COORDINATOR_H_
+#endif  // ROBLOX_RUNTIME_GAME_SESSION_COORDINATOR_H_

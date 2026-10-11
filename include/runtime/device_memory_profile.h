@@ -1,9 +1,9 @@
-#ifndef MOCKTAIL_RUNTIME_DEVICE_MEMORY_PROFILE_H_
-#define MOCKTAIL_RUNTIME_DEVICE_MEMORY_PROFILE_H_
+#ifndef ROBLOX_RUNTIME_DEVICE_MEMORY_PROFILE_H_
+#define ROBLOX_RUNTIME_DEVICE_MEMORY_PROFILE_H_
 
 #include <cstdint>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 struct DeviceMemoryProfile {
@@ -18,6 +18,6 @@ struct DeviceMemoryProfile {
 DeviceMemoryProfile BuildDeviceMemoryProfile(std::uint64_t host_memory_bytes);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_DEVICE_MEMORY_PROFILE_H_
+#endif  // ROBLOX_RUNTIME_DEVICE_MEMORY_PROFILE_H_

@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_COMPAT_BIONIC_PTHREAD_CREATE_RUNTIME_H_
-#define MOCKTAIL_COMPAT_BIONIC_PTHREAD_CREATE_RUNTIME_H_
+#ifndef ROBLOX_COMPAT_BIONIC_PTHREAD_CREATE_RUNTIME_H_
+#define ROBLOX_COMPAT_BIONIC_PTHREAD_CREATE_RUNTIME_H_
 
 #include <pthread.h>
 #include <sched.h>
@@ -7,7 +7,7 @@
 
 #include <cstddef>
 
-namespace mocktail::compat {
+namespace roblox::compat {
 
 using NativeThreadInitializer = void (*)();
 
@@ -23,19 +23,19 @@ inline constexpr size_t kBionicLp64FallbackThreadStackSize = 2U * 1024U * 1024U;
 void ConfigureBionicPthreadThreadInitializer(
     NativeThreadInitializer initializer) noexcept;
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
-struct MocktailBionicPthreadAttr;
+struct RobloxBionicPthreadAttr;
 
 // Rebuilds attributes instead of passing Android pthread_attr_t to glibc.
-extern "C" int mocktail_bionic_pthread_create(
-    pthread_t* thread, const MocktailBionicPthreadAttr* attr,
+extern "C" int roblox_bionic_pthread_create(
+    pthread_t* thread, const RobloxBionicPthreadAttr* attr,
     void* (*start_routine)(void*), void* argument);
 
 // Guest real-time scheduling is denied to avoid the host RLIMIT_RTTIME watchdog.
-extern "C" int mocktail_bionic_pthread_setschedparam(
+extern "C" int roblox_bionic_pthread_setschedparam(
     pthread_t thread, int policy, const struct sched_param* parameters);
-extern "C" int mocktail_bionic_sched_setscheduler(
+extern "C" int roblox_bionic_sched_setscheduler(
     pid_t tid, int policy, const struct sched_param* parameters);
 
-#endif  // MOCKTAIL_COMPAT_BIONIC_PTHREAD_CREATE_RUNTIME_H_
+#endif  // ROBLOX_COMPAT_BIONIC_PTHREAD_CREATE_RUNTIME_H_

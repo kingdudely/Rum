@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_WINDOW_WINDOW_TEXT_INPUT_OWNER_H_
-#define MOCKTAIL_WINDOW_WINDOW_TEXT_INPUT_OWNER_H_
+#ifndef ROBLOX_WINDOW_WINDOW_TEXT_INPUT_OWNER_H_
+#define ROBLOX_WINDOW_WINDOW_TEXT_INPUT_OWNER_H_
 
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 struct TextInputArea {
@@ -106,6 +106,6 @@ class SdlTextInputBackend final : public TextInputBackend {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_WINDOW_TEXT_INPUT_OWNER_H_
+#endif  // ROBLOX_WINDOW_WINDOW_TEXT_INPUT_OWNER_H_

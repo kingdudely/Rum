@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_
-#define MOCKTAIL_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_
+#ifndef ROBLOX_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_
+#define ROBLOX_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_
 
 #include <filesystem>
 #include <memory>
@@ -9,7 +9,7 @@
 
 #include "jnivm/jnivm.h"
 
-namespace mocktail {
+namespace roblox {
 namespace services {
 class AuthService;
 class HttpClient;
@@ -85,7 +85,7 @@ struct AuthRuntimeComposition {
 };
 
 // A VM requires authentication or explicit guest mode. The credential comes
-// only from MOCKTAIL_ROBLOSECURITY and is never written to disk.
+// only from ROBLOX_ROBLOSECURITY and is never written to disk.
 AuthRuntimeComposition ComposeAuthRuntime(const Environment& environment,
                                           services::AuthService& auth_service);
 
@@ -95,6 +95,6 @@ AuthRuntimeComposition ComposeAuthRuntime(
     std::shared_ptr<services::HttpClient> live_auth_http_client);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_
+#endif  // ROBLOX_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_

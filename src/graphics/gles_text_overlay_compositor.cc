@@ -1,4 +1,4 @@
-#include "mocktail/graphics/gles_text_overlay_compositor.h"
+#include "roblox/graphics/gles_text_overlay_compositor.h"
 
 #include <GLES3/gl3.h>
 #include <SDL3/SDL.h>
@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <vector>
 
-namespace mocktail::graphics {
+namespace roblox::graphics {
 namespace {
 
 constexpr std::uint64_t kMaximumOverlayBytes = 64ULL * 1024ULL * 1024ULL;
@@ -159,10 +159,10 @@ struct PixelCopy {
   std::vector<std::uint8_t> pixels;
 };
 
-bool ValidFrame(const MocktailTextOverlayFrameInfo &frame) {
+bool ValidFrame(const RobloxTextOverlayFrameInfo &frame) {
   const std::uint64_t row_bytes = std::uint64_t{frame.width} * 4;
   const std::uint64_t bytes = row_bytes * frame.height;
-  return frame.abi_version == MocktailTextOverlayFrameInfo::kAbiVersion &&
+  return frame.abi_version == RobloxTextOverlayFrameInfo::kAbiVersion &&
          frame.coordinate_width != 0 && frame.coordinate_height != 0 &&
          frame.width != 0 && frame.height != 0 &&
          row_bytes <= kMaximumOverlayBytes && bytes <= kMaximumOverlayBytes &&
@@ -286,7 +286,7 @@ bool GlesTextOverlayCompositor::Draw(SDL_Window *window) {
     return true;
   if (source.query == nullptr || source.copy == nullptr)
     return true;
-  MocktailTextOverlayFrameInfo frame{};
+  RobloxTextOverlayFrameInfo frame{};
   if (!source.query(&frame) || frame.visible == 0)
     return true;
   if (!ValidFrame(frame))
@@ -372,4 +372,4 @@ bool GlesTextOverlayCompositor::Draw(SDL_Window *window) {
   return true;
 }
 
-} // namespace mocktail::graphics
+} // namespace roblox::graphics

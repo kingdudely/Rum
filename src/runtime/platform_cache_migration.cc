@@ -17,12 +17,12 @@
 #include <string>
 #include <string_view>
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/atomic_json_file.h"
 #include "runtime/environment.h"
 #include "runtime/runtime_paths.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -37,7 +37,7 @@ using platform::ScopedFileDescriptor;
 using platform::WriteAll;
 
 constexpr AtomicJsonWriteNames kAtomicWriteNames{
-    "platform cache metadata", ".mocktail-platform-cache.tmp."};
+    "platform cache metadata", ".roblox-platform-cache.tmp."};
 
 enum class ReadStatus { kMissing, kReady, kInvalid };
 
@@ -156,16 +156,16 @@ PlatformCacheMigrationResult MigratePlatformProfileCaches(
   }
 
   const std::filesystem::path runtime_root =
-      environment.HasNonEmpty("MOCKTAIL_RUNTIME_ROOT")
+      environment.HasNonEmpty("ROBLOX_RUNTIME_ROOT")
           ? std::filesystem::path(
-                environment.GetOr("MOCKTAIL_RUNTIME_ROOT", ""))
+                environment.GetOr("ROBLOX_RUNTIME_ROOT", ""))
           : paths.android_runtime_root();
   const std::filesystem::path data_root = runtime_root / "data";
   std::filesystem::path files_root = data_root / "files";
-  if (environment.HasNonEmpty("MOCKTAIL_ANDROID_FILES_DIR")) {
+  if (environment.HasNonEmpty("ROBLOX_ANDROID_FILES_DIR")) {
     const std::optional<std::filesystem::path> translated =
         TranslateAndroidFilesPath(
-            environment.GetOr("MOCKTAIL_ANDROID_FILES_DIR", ""), data_root);
+            environment.GetOr("ROBLOX_ANDROID_FILES_DIR", ""), data_root);
     if (!translated.has_value()) {
       result.error = "configured Android files directory is not absolute";
       return result;
@@ -177,21 +177,21 @@ PlatformCacheMigrationResult MigratePlatformProfileCaches(
   const std::filesystem::path normalized_files = files_root.lexically_normal();
   if (!normalized_data.is_absolute() || !normalized_files.is_absolute() ||
       !HasPathPrefix(normalized_files, normalized_data)) {
-    result.error = "platform cache path escapes the Mocktail Android data root";
+    result.error = "platform cache path escapes the Roblox Android data root";
     return result;
   }
 
   result.app_storage_file =
       normalized_files / "appData/LocalStorage/appStorage.json";
-  result.fingerprint_file = normalized_data / ".mocktail-platform-profile.json";
+  result.fingerprint_file = normalized_data / ".roblox-platform-profile.json";
   std::error_code filesystem_error;
   if (!RuntimePaths::EnsureDirectory(normalized_data, &filesystem_error)) {
-    result.error = "cannot create Mocktail Android data root";
+    result.error = "cannot create Roblox Android data root";
     return result;
   }
 
   const std::filesystem::path lock_path =
-      normalized_data / ".mocktail-platform-profile.lock";
+      normalized_data / ".roblox-platform-profile.lock";
   const int lock_descriptor =
       open(lock_path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
   if (lock_descriptor < 0) {
@@ -366,4 +366,4 @@ bool ApplyRobloxThemeCacheOverride(
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

@@ -1,12 +1,12 @@
-#ifndef MOCKTAIL_SERVICES_HTTP_CLIENT_H_
-#define MOCKTAIL_SERVICES_HTTP_CLIENT_H_
+#ifndef ROBLOX_SERVICES_HTTP_CLIENT_H_
+#define ROBLOX_SERVICES_HTTP_CLIENT_H_
 
 #include <cstddef>
 #include <string>
 #include <utility>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace services {
 
 struct HttpRequest {
@@ -57,6 +57,6 @@ class CurlHttpClient final : public HttpClient {
 };
 
 }  // namespace services
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_SERVICES_HTTP_CLIENT_H_
+#endif  // ROBLOX_SERVICES_HTTP_CLIENT_H_

@@ -5,8 +5,8 @@
 #include "jni_fields.h"
 #include "jni_strings.h"
 
-#include "mocktail/audio/fmod_thread_floating_point.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/audio/fmod_thread_floating_point.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <algorithm>
 #include <atomic>
@@ -54,12 +54,12 @@ const MethodCallback* Class::FindMethod(const std::string& method_name,
 }
 
 extern "C" {
-void* mocktail_gameactivity_on_start_native = nullptr;
-void* mocktail_gameactivity_on_resume_native = nullptr;
-void* mocktail_gameactivity_on_surface_created_native = nullptr;
-void* mocktail_gameactivity_on_surface_changed_native = nullptr;
-void* mocktail_gameactivity_on_surface_redraw_needed_native = nullptr;
-void* mocktail_gameactivity_on_trim_memory_native = nullptr;
+void* roblox_gameactivity_on_start_native = nullptr;
+void* roblox_gameactivity_on_resume_native = nullptr;
+void* roblox_gameactivity_on_surface_created_native = nullptr;
+void* roblox_gameactivity_on_surface_changed_native = nullptr;
+void* roblox_gameactivity_on_surface_redraw_needed_native = nullptr;
+void* roblox_gameactivity_on_trim_memory_native = nullptr;
 }
 
 namespace internal {
@@ -67,7 +67,7 @@ namespace internal {
 thread_local JNIEnv* g_thread_local_env = nullptr;
 thread_local JNIEnv g_thread_env_storage = {};
 thread_local VM* g_thread_vm_instance = nullptr;
-thread_local mocktail::audio::FmodThreadFloatingPointMode g_thread_audio_fp_mode;
+thread_local roblox::audio::FmodThreadFloatingPointMode g_thread_audio_fp_mode;
 
 // Authentication preflight can briefly own a second VM. Keep every live
 // owner registered so discarding that candidate cannot disable the VM that
@@ -80,7 +80,7 @@ bool IsLiveVmLocked(const VM* vm) {
 }
 
 bool JniVmTraceEnabled() {
-  static const bool enabled = std::getenv("MOCKTAIL_TRACE") != nullptr;
+  static const bool enabled = std::getenv("ROBLOX_TRACE") != nullptr;
   return enabled;
 }
 
@@ -123,7 +123,7 @@ std::string g_cookie_header;
 // under the data root keeps it stable even if the host id later changes.
 const char* RobloxAndroidId() {
   static const std::string value = [] {
-    const char* data_root = std::getenv("MOCKTAIL_DATA_ROOT");
+    const char* data_root = std::getenv("ROBLOX_DATA_ROOT");
     const std::string cache_path =
         data_root != nullptr && data_root[0] != '\0'
             ? std::string(data_root) + "/android-id"
@@ -182,7 +182,7 @@ bool EnvironmentTraceEnabled(const char* name) {
 
 bool StringTraceEnabled() {
   static const bool enabled =
-      EnvironmentTraceEnabled("MOCKTAIL_TRACE");
+      EnvironmentTraceEnabled("ROBLOX_TRACE");
   return enabled;
 }
 
@@ -320,29 +320,29 @@ std::string GetterFieldName(const char* method_name) {
 }
 
 bool ResolvedDarkTheme() {
-  const char* theme = std::getenv("MOCKTAIL_RESOLVED_THEME_INTERNAL");
+  const char* theme = std::getenv("ROBLOX_RESOLVED_THEME_INTERNAL");
   return theme == nullptr || std::strcmp(theme, "Light") != 0;
 }
 
 jint IntResultForName(const char* name) {
   if (std::strcmp(name, "getScreenWidth") == 0) {
-    return mocktail::runtime::ParseDisplaySize(
-               std::getenv(mocktail::runtime::kDisplaySizeEnvironment))
+    return roblox::runtime::ParseDisplaySize(
+               std::getenv(roblox::runtime::kDisplaySizeEnvironment))
         .width;
   }
   if (std::strcmp(name, "getScreenHeight") == 0) {
-    return mocktail::runtime::ParseDisplaySize(
-               std::getenv(mocktail::runtime::kDisplaySizeEnvironment))
+    return roblox::runtime::ParseDisplaySize(
+               std::getenv(roblox::runtime::kDisplaySizeEnvironment))
         .height;
   }
   if (std::strcmp(name, "getWidth") == 0) {
-    return mocktail::runtime::ParseDisplaySize(
-               std::getenv(mocktail::runtime::kWindowSizeEnvironment))
+    return roblox::runtime::ParseDisplaySize(
+               std::getenv(roblox::runtime::kWindowSizeEnvironment))
         .width;
   }
   if (std::strcmp(name, "getHeight") == 0) {
-    return mocktail::runtime::ParseDisplaySize(
-               std::getenv(mocktail::runtime::kWindowSizeEnvironment))
+    return roblox::runtime::ParseDisplaySize(
+               std::getenv(roblox::runtime::kWindowSizeEnvironment))
         .height;
   }
   if (std::strcmp(name, "getDensityDpi") == 0) {
@@ -664,7 +664,7 @@ void EnsureCookieStoreLoadedLocked() {
   }
   g_cookie_store_loaded = true;
 
-  const char* env_cookie = std::getenv("MOCKTAIL_ROBLOX_COOKIES");
+  const char* env_cookie = std::getenv("ROBLOX_ROBLOX_COOKIES");
   g_cookie_header = NormalizeCookieHeader(env_cookie ? env_cookie : "");
   if (TraceEnabled()) {
     std::cout << "  [JNI] cookie store loaded bytes="
@@ -1286,7 +1286,7 @@ void HandleVoidMethod(jobject obj, jmethodID method_id, va_list args) {
       SetBooleanFieldRaw(obj, "bootstrapStarted", JNI_TRUE);
       if (TraceEnabled()) {
         std::cout << "  [JNI] MainGameActivity.bootstrapTheApp no-op; "
-                  << "native bootstrap is driven by Mocktail\n";
+                  << "native bootstrap is driven by Roblox\n";
       }
       return;
     }
@@ -1501,10 +1501,10 @@ jobject MakePackageInfoObject() {
   jobject object = SingletonObject("android/content/pm/PackageInfo");
   SetStringFieldRaw(object, "packageName", "com.roblox.client");
   SetObjectFieldRaw(object, "applicationInfo", MakeApplicationInfoObject());
-  const char* version_name = std::getenv("MOCKTAIL_ROBLOX_VERSION");
+  const char* version_name = std::getenv("ROBLOX_ROBLOX_VERSION");
   SetStringFieldRaw(object, "versionName",
                     version_name != nullptr ? version_name : "unknown");
-  const char* version_code = std::getenv("MOCKTAIL_ROBLOX_VERSION_CODE");
+  const char* version_code = std::getenv("ROBLOX_ROBLOX_VERSION_CODE");
   const int parsed_version_code =
       version_code != nullptr ? std::atoi(version_code) : 0;
   SetIntFieldRaw(object, "versionCode", parsed_version_code);
@@ -1519,7 +1519,7 @@ jobject MakeDeviceStaticParamsObject() {
     const PlatformIdentity identity = CurrentPlatformIdentity();
     SetStringFieldRaw(object, "osVersion", "Android 13");
     SetStringFieldRaw(object, "deviceName", identity.device_name.c_str());
-    const char* app_version = std::getenv("MOCKTAIL_ROBLOX_VERSION");
+    const char* app_version = std::getenv("ROBLOX_ROBLOX_VERSION");
     SetStringFieldRaw(object, "appVersion", app_version != nullptr ? app_version : "unknown");
     SetStringFieldRaw(object, "manufacturer", identity.manufacturer.c_str());
     SetStringFieldRaw(object, "model", identity.model.c_str());
@@ -1530,9 +1530,9 @@ jobject MakeDeviceStaticParamsObject() {
     SetStringFieldRaw(object, "socModel", identity.soc_model.c_str());
     SetStringFieldRaw(object, "soc_model", identity.soc_model.c_str());
     SetBooleanFieldRaw(object, "cpu64Bit", JNI_TRUE);
-    const mocktail::runtime::DisplaySize host_display =
-        mocktail::runtime::ParseDisplaySize(
-            std::getenv(mocktail::runtime::kDisplaySizeEnvironment));
+    const roblox::runtime::DisplaySize host_display =
+        roblox::runtime::ParseDisplaySize(
+            std::getenv(roblox::runtime::kDisplaySizeEnvironment));
     SetIntFieldRaw(object, "screenWidth", host_display.width);
     SetIntFieldRaw(object, "screenHeight", host_display.height);
     SetIntFieldRaw(object, "screenDensityDpi", 160);
@@ -1704,9 +1704,9 @@ void EnsureAndroidObjectGraph() {
   SetObjectFieldRaw(decor_view, "holder", surface_holder);
   SetObjectFieldRaw(decor_view, "surface", surface);
   SetObjectFieldRaw(decor_view, "display", display);
-  const mocktail::runtime::DisplaySize host_window =
-      mocktail::runtime::ParseDisplaySize(
-          std::getenv(mocktail::runtime::kWindowSizeEnvironment));
+  const roblox::runtime::DisplaySize host_window =
+      roblox::runtime::ParseDisplaySize(
+          std::getenv(roblox::runtime::kWindowSizeEnvironment));
   SetIntFieldRaw(decor_view, "width", host_window.width);
   SetIntFieldRaw(decor_view, "height", host_window.height);
 
@@ -1722,9 +1722,9 @@ void EnsureAndroidObjectGraph() {
   SetBooleanFieldRaw(surface, "valid", JNI_TRUE);
   SetBooleanFieldRaw(surface, "isValid", JNI_TRUE);
 
-  const mocktail::runtime::DisplaySize host_display =
-      mocktail::runtime::ParseDisplaySize(
-          std::getenv(mocktail::runtime::kDisplaySizeEnvironment));
+  const roblox::runtime::DisplaySize host_display =
+      roblox::runtime::ParseDisplaySize(
+          std::getenv(roblox::runtime::kDisplaySizeEnvironment));
   SetIntFieldRaw(display, "width", host_display.width);
   SetIntFieldRaw(display, "height", host_display.height);
   SetIntFieldRaw(display, "rotation", 0);
@@ -2455,7 +2455,7 @@ bool DispatchRobloxTextInputShow(jlong text_box, jboolean show_native_input,
   if (vm != nullptr) {
     (void)vm->DispatchRobloxTextInputShow(request);
   }
-  mocktail::platform::SecureClear(&request.text);
+  roblox::platform::SecureClear(&request.text);
   return true;
 }
 
@@ -2472,7 +2472,7 @@ void DispatchRobloxTextInputReplaceText(jstring text) {
   if (vm != nullptr) {
     (void)vm->DispatchRobloxTextInputReplaceText(snapshot);
   }
-  mocktail::platform::SecureClear(&snapshot);
+  roblox::platform::SecureClear(&snapshot);
 }
 
 bool HandleRobloxTextInputStaticVoidMethodV(jclass clazz,
@@ -2692,7 +2692,7 @@ bool HandleFmodAudioDeviceBooleanMethodV(jobject obj, jmethodID method_id,
   const bool initialized = DispatchFmodAudioDeviceInit(
       obj, channels, sample_rate_hz, block_size_frames, block_count);
   if (!initialized) {
-    std::cerr << "  [mocktail][audio] FMOD AudioDevice.init rejected by "
+    std::cerr << "  [roblox][audio] FMOD AudioDevice.init rejected by "
                  "host bridge\n";
   }
   if (result != nullptr) {
@@ -2712,7 +2712,7 @@ bool HandleFmodAudioDeviceBooleanMethodA(jobject obj, jmethodID method_id,
       DispatchFmodAudioDeviceInit(obj, args[0].i, args[1].i, args[2].i,
                                   args[3].i);
   if (!initialized) {
-    std::cerr << "  [mocktail][audio] FMOD AudioDevice.init rejected by "
+    std::cerr << "  [roblox][audio] FMOD AudioDevice.init rejected by "
                  "host bridge\n";
   }
   if (result != nullptr) {
@@ -3088,7 +3088,7 @@ jobject StaticObjectResultForMethod(jmethodID method_id) {
     return MakeString("/data/user/0/com.roblox.client/files");
   }
   if (std::strcmp(name, "getAppVersion") == 0) {
-    const char* app_version = std::getenv("MOCKTAIL_ROBLOX_VERSION");
+    const char* app_version = std::getenv("ROBLOX_ROBLOX_VERSION");
     return MakeString(app_version != nullptr ? app_version : "unknown");
   }
   if (std::strcmp(name, "getLastLoggedInUserId") == 0) {

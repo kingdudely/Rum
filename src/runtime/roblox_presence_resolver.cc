@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -22,11 +22,11 @@ size_t WriteToString(char* data, size_t size, size_t nmemb, void* userdata) {
 
 }  // namespace
 
-// Reads the session cookie from MOCKTAIL_ROBLOSECURITY (or the
+// Reads the session cookie from ROBLOX_ROBLOSECURITY (or the
 // --roblosecurity flag that sets it). Returns an empty string when no
 // session was passed on this launch.
 std::string ReadRoblosecurityCookie() {
-  const char* cookie = std::getenv("MOCKTAIL_ROBLOSECURITY");
+  const char* cookie = std::getenv("ROBLOX_ROBLOSECURITY");
   std::string value = cookie != nullptr ? std::string(cookie) : std::string();
   constexpr std::string_view kPrefix = ".ROBLOSECURITY=";
   if (value.compare(0, kPrefix.size(), kPrefix) == 0) {
@@ -115,4 +115,4 @@ Status ResolveFollowUserPlace(int64_t user_id, const std::string& auth_cookie,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

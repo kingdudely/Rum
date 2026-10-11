@@ -1,4 +1,4 @@
-#include "mocktail/audio/fmod_jni_audio_bridge.h"
+#include "roblox/audio/fmod_jni_audio_bridge.h"
 
 #include <atomic>
 #include <cstddef>
@@ -12,10 +12,10 @@
 #include <vector>
 
 #include "jnivm/jnivm.h"
-#include "mocktail/audio/fmod_java_audio_runtime.h"
-#include "mocktail/audio/sdl_audio_sink.h"
+#include "roblox/audio/fmod_java_audio_runtime.h"
+#include "roblox/audio/sdl_audio_sink.h"
 
-namespace mocktail::audio {
+namespace roblox::audio {
 namespace {
 
 struct FmodJniAudioBridgeContext {
@@ -28,7 +28,7 @@ struct FmodJniAudioBridgeContext {
 void LogRuntimeStats(const char* event, FmodJniAudioBridgeContext* context) {
   const FmodJavaAudioRuntimeStats stats = context->runtime.GetStats();
   std::lock_guard<std::mutex> lock(context->log_mutex);
-  std::cout << "  [mocktail][audio] fmod_java " << event
+  std::cout << "  [roblox][audio] fmod_java " << event
             << " submitted_buffers=" << stats.submitted_buffers
             << " submitted_bytes=" << stats.submitted_bytes
             << " consumed_buffers=" << stats.consumed_buffers
@@ -46,11 +46,11 @@ bool Init(void* opaque_context, const void* identity, int channels,
       identity, channels, sample_rate_hz, block_size_frames, block_count);
   std::lock_guard<std::mutex> lock(context->log_mutex);
   if (!status.ok()) {
-    std::cerr << "  [mocktail][audio] fmod_java init_failed reason="
+    std::cerr << "  [roblox][audio] fmod_java init_failed reason="
               << status.message() << '\n';
     return false;
   }
-  std::cout << "  [mocktail][audio] fmod_java initialized channels="
+  std::cout << "  [roblox][audio] fmod_java initialized channels="
             << channels << " sample_rate_hz=" << sample_rate_hz
             << " block_size_frames=" << block_size_frames
             << " block_count=" << block_count << '\n'
@@ -67,7 +67,7 @@ bool Write(void* opaque_context, const void* identity,
         context->rejected_writes.fetch_add(1, std::memory_order_relaxed) + 1;
     if (rejected <= 3 || (rejected & (rejected - 1)) == 0) {
       std::lock_guard<std::mutex> lock(context->log_mutex);
-      std::cerr << "  [mocktail][audio] fmod_java write_failed count="
+      std::cerr << "  [roblox][audio] fmod_java write_failed count="
                 << rejected << " reason=" << status.message() << '\n';
     }
     return false;
@@ -84,7 +84,7 @@ bool Close(void* opaque_context, const void* identity) {
   const Status status = context->runtime.Close(identity);
   if (!status.ok()) {
     std::lock_guard<std::mutex> lock(context->log_mutex);
-    std::cerr << "  [mocktail][audio] fmod_java close_failed reason="
+    std::cerr << "  [roblox][audio] fmod_java close_failed reason="
               << status.message() << '\n';
     return false;
   }
@@ -109,7 +109,7 @@ Status InstallFmodJniAudioBridge(jnivm::VM* vm) {
   if (!status.ok()) {
     return status;
   }
-  const char* configured = std::getenv("MOCKTAIL_AUDIO_OUTPUT_DEVICE");
+  const char* configured = std::getenv("ROBLOX_AUDIO_OUTPUT_DEVICE");
   const std::string requested =
       configured != nullptr && configured[0] != '\0' ? configured : "default";
   std::vector<SdlPlaybackDevice> available_devices;
@@ -120,12 +120,12 @@ Status InstallFmodJniAudioBridge(jnivm::VM* vm) {
     (void)ShutdownSdlAudioSubsystem();
     return status;
   }
-  std::cout << "  [mocktail][audio] SDL playback devices:\n"
+  std::cout << "  [roblox][audio] SDL playback devices:\n"
             << "    - default (follows the host system default)\n";
   for (const SdlPlaybackDevice& device : available_devices) {
     std::cout << "    - " << device.name << '\n';
   }
-  std::cout << "  [mocktail][audio] selected output=" << resolved_name << '\n'
+  std::cout << "  [roblox][audio] selected output=" << resolved_name << '\n'
             << std::flush;
   auto context = std::shared_ptr<FmodJniAudioBridgeContext>(
       new (std::nothrow) FmodJniAudioBridgeContext());
@@ -155,4 +155,4 @@ Status ShutdownFmodJniAudioBridge(jnivm::VM* vm) {
   return ShutdownSdlAudioSubsystem();
 }
 
-}  // namespace mocktail::audio
+}  // namespace roblox::audio

@@ -6,7 +6,7 @@
 #include <cerrno>
 #include <cstring>
 
-namespace mocktail {
+namespace roblox {
 namespace compat {
 namespace {
 
@@ -99,4 +99,4 @@ void ApplyHttpClientSpinGuard() {
 }
 
 }  // namespace compat
-}  // namespace mocktail
+}  // namespace roblox

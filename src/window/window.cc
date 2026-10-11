@@ -18,12 +18,12 @@
 #include <utility>
 #include <vector>
 
-#include "mocktail/graphics/gles_text_overlay_compositor.h"
-#include "mocktail/graphics/present_mode_policy.h"
-#include "mocktail/platform/display_refresh_capabilities.h"
-#include "mocktail/platform/sdl_application_metadata.h"
-#include "mocktail/platform/sdl_event_converter.h"
-#include "mocktail/platform/sdl_window_icon.h"
+#include "roblox/graphics/gles_text_overlay_compositor.h"
+#include "roblox/graphics/present_mode_policy.h"
+#include "roblox/platform/display_refresh_capabilities.h"
+#include "roblox/platform/sdl_application_metadata.h"
+#include "roblox/platform/sdl_event_converter.h"
+#include "roblox/platform/sdl_window_icon.h"
 #include "window/input_pump_pacer.h"
 #include "window/main_thread_command_gate.h"
 #include "window/roblox_fullscreen_menu_request_gate.h"
@@ -37,7 +37,7 @@
 #include "window/window_state_store.h"
 #include "window/window_text_input_owner.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 // Local EGL declarations avoid conflicts with the stub headers.
@@ -194,12 +194,12 @@ bool TraceFlagEnabled(const char* name) {
 }
 
 bool WindowTraceEnabled() {
-  static const bool enabled = TraceFlagEnabled("MOCKTAIL_TRACE");
+  static const bool enabled = TraceFlagEnabled("ROBLOX_TRACE");
   return enabled;
 }
 
 bool SdlEventTraceEnabled() {
-  static const bool enabled = TraceFlagEnabled("MOCKTAIL_TRACE");
+  static const bool enabled = TraceFlagEnabled("ROBLOX_TRACE");
   return enabled;
 }
 
@@ -233,7 +233,7 @@ bool IsDisabledEnv(const char* name) {
 }
 
 bool WindowStatePersistenceSuppressed() {
-  return IsEnabledEnv("MOCKTAIL_AUTO_EXIT_AFTER_PRESENT_MS");
+  return IsEnabledEnv("ROBLOX_AUTO_EXIT_AFTER_PRESENT_MS");
 }
 
 bool IsWaylandVideoDriver() {
@@ -396,26 +396,26 @@ bool JoinExistingLibraryPath(const char* dir, const char* soname, char* out,
 }
 
 bool ShouldUseAngleBackend() {
-  const char* backend = GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND");
+  const char* backend = GetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND");
   return StartsWith(backend, "angle") ||
-         GetEnvNonEmpty("MOCKTAIL_ANGLE_LIB_DIR") != nullptr;
+         GetEnvNonEmpty("ROBLOX_ANGLE_LIB_DIR") != nullptr;
 }
 
 bool ShouldUseNativeVulkanBackend() {
-  const char* backend = GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND");
+  const char* backend = GetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND");
   return StringEquals(backend, "vulkan") ||
          StringEquals(backend, "native-vulkan") ||
          StringEquals(backend, "direct-vulkan");
 }
 
 bool ShouldUseAngleVulkanBackend() {
-  const char* backend = GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND");
+  const char* backend = GetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND");
   return StringEquals(backend, "angle-vulkan") ||
          StringEquals(backend, "angle-swiftshader");
 }
 
 bool ShouldUseAngleSwiftShader() {
-  return StringEquals(GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND"),
+  return StringEquals(GetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND"),
                       "angle-swiftshader");
 }
 
@@ -429,12 +429,12 @@ VideoDriverChoice ResolveConfiguredVideoDriverChoice() {
   input.has_explicit_sdl_driver =
       GetEnvNonEmpty("SDL_VIDEODRIVER") != nullptr ||
       GetEnvNonEmpty("SDL_VIDEO_DRIVER") != nullptr;
-  input.force_wayland = IsEnabledEnv("MOCKTAIL_FORCE_WAYLAND");
-  input.force_x11 = IsEnabledEnv("MOCKTAIL_FORCE_X11") ||
-                    IsEnabledEnv("MOCKTAIL_ANGLE_FORCE_X11");
+  input.force_wayland = IsEnabledEnv("ROBLOX_FORCE_WAYLAND");
+  input.force_x11 = IsEnabledEnv("ROBLOX_FORCE_X11") ||
+                    IsEnabledEnv("ROBLOX_ANGLE_FORCE_X11");
   input.prefer_wayland =
-      !IsDisabledEnv("MOCKTAIL_PREFER_WAYLAND") &&
-      !StringEquals(GetEnvNonEmpty("MOCKTAIL_FORCE_WAYLAND"), "0");
+      !IsDisabledEnv("ROBLOX_PREFER_WAYLAND") &&
+      !StringEquals(GetEnvNonEmpty("ROBLOX_FORCE_WAYLAND"), "0");
   input.has_wayland_session = HasWaylandSession();
   input.has_x11_display = GetEnvNonEmpty("DISPLAY") != nullptr;
   input.uses_direct_vulkan = ShouldUseNativeVulkanBackend();
@@ -494,10 +494,10 @@ void SanitizeSdlVideoDriverOverrides() {
 }
 
 bool ShouldShowWindowImmediately() {
-  if (IsEnabledEnv("MOCKTAIL_HIDE_WINDOW_UNTIL_FIRST_SWAP")) {
+  if (IsEnabledEnv("ROBLOX_HIDE_WINDOW_UNTIL_FIRST_SWAP")) {
     return false;
   }
-  return IsEnabledEnv("MOCKTAIL_DEBUG_SHOW_WINDOW_BEFORE_FRAME");
+  return IsEnabledEnv("ROBLOX_DEBUG_SHOW_WINDOW_BEFORE_FRAME");
 }
 
 const char* FindAngleLibrary(const char* explicit_env, const char* soname,
@@ -507,7 +507,7 @@ const char* FindAngleLibrary(const char* explicit_env, const char* soname,
     return explicit_path;
   }
 
-  const char* angle_dir = GetEnvNonEmpty("MOCKTAIL_ANGLE_LIB_DIR");
+  const char* angle_dir = GetEnvNonEmpty("ROBLOX_ANGLE_LIB_DIR");
   if (JoinExistingLibraryPath(angle_dir, soname, out, out_size)) {
     return out;
   }
@@ -580,7 +580,7 @@ SDL_EGLAttrib* SDLCALL AnglePlatformAttributes(void* /*userdata*/) {
   attrs[i++] = ShouldUseAngleSwiftShader()
                    ? EGL_PLATFORM_ANGLE_DEVICE_TYPE_SWIFTSHADER_ANGLE_VAL
                    : EGL_PLATFORM_ANGLE_DEVICE_TYPE_HARDWARE_ANGLE_VAL;
-  if (IsEnabledEnv("MOCKTAIL_ANGLE_DEBUG_LAYERS")) {
+  if (IsEnabledEnv("ROBLOX_ANGLE_DEBUG_LAYERS")) {
     attrs[i++] = EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED_ANGLE_VAL;
     attrs[i++] = EGL_TRUE_VAL;
   }
@@ -618,18 +618,18 @@ void ConfigureGraphicsBackendBeforeSDL() {
   }
 
   const char* egl_library = FindAngleLibrary(
-      "MOCKTAIL_EGL_LIBRARY", "libEGL.so", g_preferred_egl_library,
+      "ROBLOX_EGL_LIBRARY", "libEGL.so", g_preferred_egl_library,
       sizeof(g_preferred_egl_library));
   const char* gles_library = FindAngleLibrary(
-      "MOCKTAIL_GLES_LIBRARY", "libGLESv2.so", g_preferred_gles_library,
+      "ROBLOX_GLES_LIBRARY", "libGLESv2.so", g_preferred_gles_library,
       sizeof(g_preferred_gles_library));
 
   if (egl_library != nullptr) {
-    setenv("MOCKTAIL_EGL_LIBRARY", egl_library, 0);
+    setenv("ROBLOX_EGL_LIBRARY", egl_library, 0);
     SDL_SetHint(SDL_HINT_EGL_LIBRARY, egl_library);
   }
   if (gles_library != nullptr) {
-    setenv("MOCKTAIL_GLES_LIBRARY", gles_library, 0);
+    setenv("ROBLOX_GLES_LIBRARY", gles_library, 0);
     SDL_SetHint(SDL_HINT_OPENGL_LIBRARY, gles_library);
     SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
   }
@@ -641,8 +641,8 @@ void ConfigureGraphicsBackendBeforeSDL() {
   if (ShouldUseAngleBackend() || egl_library != nullptr ||
       gles_library != nullptr || WindowTraceEnabled()) {
     fprintf(stderr, "  [window] graphics backend=%s video=%s egl=%s gles=%s\n",
-            GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND")
-                ? GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND")
+            GetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND")
+                ? GetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND")
                 : "system",
             GetEnvNonEmpty("SDL_VIDEODRIVER")
                 ? GetEnvNonEmpty("SDL_VIDEODRIVER")
@@ -653,7 +653,7 @@ void ConfigureGraphicsBackendBeforeSDL() {
 }
 
 void ConfigureGraphicsBackendAfterSDLInit() {
-  const char* gles_library = GetEnvNonEmpty("MOCKTAIL_GLES_LIBRARY");
+  const char* gles_library = GetEnvNonEmpty("ROBLOX_GLES_LIBRARY");
   if (gles_library != nullptr) {
     if (!SDL_GL_LoadLibrary(gles_library)) {
       fprintf(stderr, "  [window] SDL_GL_LoadLibrary(%s) failed: %s\n",
@@ -771,7 +771,7 @@ bool ActivateWindowEventLifecycles() {
 }
 
 bool CreateSoftwareWaitingWindow(int width, int height, const char* title) {
-  if (!StringEquals(GetEnvNonEmpty("MOCKTAIL_ENABLE_TEST_GRAPHICS_STUBS"),
+  if (!StringEquals(GetEnvNonEmpty("ROBLOX_ENABLE_TEST_GRAPHICS_STUBS"),
                     "1")) {
     fprintf(stderr,
             "  [window] real EGL window setup failed; software waiting "
@@ -785,7 +785,7 @@ bool CreateSoftwareWaitingWindow(int width, int height, const char* title) {
   const WindowStartupPresentationPlan presentation =
       RestoredWindowPresentationPlan();
   SDL_WindowFlags window_flags = ApplyHighPixelDensityWindowFlag(
-      SDL_WINDOW_RESIZABLE, IsEnabledEnv("MOCKTAIL_WIN_HIGH_DPI"));
+      SDL_WINDOW_RESIZABLE, IsEnabledEnv("ROBLOX_WIN_HIGH_DPI"));
   if (presentation.fullscreen_at_creation) {
     window_flags |= SDL_WINDOW_FULLSCREEN;
   }
@@ -793,7 +793,7 @@ bool CreateSoftwareWaitingWindow(int width, int height, const char* title) {
     window_flags |= SDL_WINDOW_HIDDEN;
   }
 
-  g_state.sdl_window = SDL_CreateWindow(title ? title : "Mocktail — Roblox",
+  g_state.sdl_window = SDL_CreateWindow(title ? title : "Roblox",
                                         width, height, window_flags);
   if (g_state.sdl_window == nullptr) {
     fprintf(stderr, "  [window] SDL fallback window failed: %s\n",
@@ -822,8 +822,8 @@ bool CreateSoftwareWaitingWindow(int width, int height, const char* title) {
 bool RetryWithAutoAngleFallback(int width, int height, const char* title,
                                 const char* failed_step) {
   const bool disable_auto =
-      IsEnabledEnv("MOCKTAIL_DISABLE_AUTO_ANGLE_FALLBACK");
-  const char* backend = GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND");
+      IsEnabledEnv("ROBLOX_DISABLE_AUTO_ANGLE_FALLBACK");
+  const char* backend = GetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND");
   const bool explicit_backend = backend != nullptr &&
                                 !StringEquals(backend, "system") &&
                                 !IsAutoGraphicsBackend(backend);
@@ -843,7 +843,7 @@ bool RetryWithAutoAngleFallback(int width, int height, const char* title,
   fprintf(stderr, "  [window] %s failed; retrying with ANGLE Vulkan backend\n",
           failed_step ? failed_step : "EGL window setup");
   SDL_Quit();
-  setenv("MOCKTAIL_GRAPHICS_BACKEND", "angle-vulkan", 1);
+  setenv("ROBLOX_GRAPHICS_BACKEND", "angle-vulkan", 1);
   return Init(width, height, title);
 }
 
@@ -910,7 +910,7 @@ bool Init(int width, int height, const char* title) {
 
   ConfigureGraphicsBackendBeforeSDL();
 
-  if (StringEquals(GetEnvNonEmpty("MOCKTAIL_GRAPHICS_BACKEND"),
+  if (StringEquals(GetEnvNonEmpty("ROBLOX_GRAPHICS_BACKEND"),
                    "direct-vulkan")) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
       fprintf(stderr, "  [window] SDL_Init failed: %s\n", SDL_GetError());
@@ -920,14 +920,14 @@ bool Init(int width, int height, const char* title) {
         RestoredWindowPresentationPlan();
     SDL_WindowFlags window_flags = ApplyHighPixelDensityWindowFlag(
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE,
-        IsEnabledEnv("MOCKTAIL_WIN_HIGH_DPI"));
+        IsEnabledEnv("ROBLOX_WIN_HIGH_DPI"));
     if (presentation.fullscreen_at_creation) {
       window_flags |= SDL_WINDOW_FULLSCREEN;
     }
     if (!ShouldShowWindowImmediately()) {
       window_flags |= SDL_WINDOW_HIDDEN;
     }
-    g_state.sdl_window = SDL_CreateWindow(title ? title : "Mocktail — Roblox",
+    g_state.sdl_window = SDL_CreateWindow(title ? title : "Roblox",
                                           width, height, window_flags);
     if (g_state.sdl_window == nullptr) {
       fprintf(stderr, "  [window] SDL Vulkan window failed: %s\n",
@@ -1071,7 +1071,7 @@ bool Init(int width, int height, const char* title) {
       RestoredWindowPresentationPlan();
   SDL_WindowFlags window_flags = ApplyHighPixelDensityWindowFlag(
       SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE,
-      IsEnabledEnv("MOCKTAIL_WIN_HIGH_DPI"));
+      IsEnabledEnv("ROBLOX_WIN_HIGH_DPI"));
   if (presentation.fullscreen_at_creation) {
     window_flags |= SDL_WINDOW_FULLSCREEN;
   }
@@ -1079,14 +1079,14 @@ bool Init(int width, int height, const char* title) {
     window_flags |= SDL_WINDOW_HIDDEN;
   }
 
-  g_state.sdl_window = SDL_CreateWindow(title ? title : "Mocktail — Roblox",
+  g_state.sdl_window = SDL_CreateWindow(title ? title : "Roblox",
                                         width, height, window_flags);
   if (!g_state.sdl_window) {
     fprintf(stderr, "  [window] SDL_CreateWindow failed: %s\n", SDL_GetError());
     if (RetryWithAutoAngleFallback(width, height, title, "SDL_CreateWindow")) {
       return true;
     }
-    if (IsDisabledEnv("MOCKTAIL_SOFTWARE_WINDOW_FALLBACK")) {
+    if (IsDisabledEnv("ROBLOX_SOFTWARE_WINDOW_FALLBACK")) {
       SDL_Quit();
       return false;
     }
@@ -1111,7 +1111,7 @@ bool Init(int width, int height, const char* title) {
                                    "SDL_GL_CreateContext")) {
       return true;
     }
-    if (IsDisabledEnv("MOCKTAIL_SOFTWARE_WINDOW_FALLBACK")) {
+    if (IsDisabledEnv("ROBLOX_SOFTWARE_WINDOW_FALLBACK")) {
       SDL_Quit();
       return false;
     }
@@ -1128,7 +1128,7 @@ bool Init(int width, int height, const char* title) {
                                    "SDL_GL_MakeCurrent")) {
       return true;
     }
-    if (IsDisabledEnv("MOCKTAIL_SOFTWARE_WINDOW_FALLBACK")) {
+    if (IsDisabledEnv("ROBLOX_SOFTWARE_WINDOW_FALLBACK")) {
       SDL_Quit();
       return false;
     }
@@ -1162,7 +1162,7 @@ bool Init(int width, int height, const char* title) {
                                    "OpenGL ES version check")) {
       return true;
     }
-    if (IsDisabledEnv("MOCKTAIL_SOFTWARE_WINDOW_FALLBACK")) {
+    if (IsDisabledEnv("ROBLOX_SOFTWARE_WINDOW_FALLBACK")) {
       SDL_Quit();
       return false;
     }
@@ -1190,7 +1190,7 @@ bool Init(int width, int height, const char* title) {
                                    "SDL_EGL handle query")) {
       return true;
     }
-    if (IsDisabledEnv("MOCKTAIL_SOFTWARE_WINDOW_FALLBACK")) {
+    if (IsDisabledEnv("ROBLOX_SOFTWARE_WINDOW_FALLBACK")) {
       SDL_Quit();
       return false;
     }
@@ -1372,7 +1372,7 @@ void* GetGLProcAddress(const char* name) {
 
 void ShowIfHidden() {
   if (!g_state.initialised || !g_state.sdl_window || g_state.visible ||
-      IsDisabledEnv("MOCKTAIL_SHOW_WINDOW_ON_FIRST_SWAP")) {
+      IsDisabledEnv("ROBLOX_SHOW_WINDOW_ON_FIRST_SWAP")) {
     return;
   }
   SDL_ShowWindow(g_state.sdl_window);
@@ -1381,31 +1381,31 @@ void ShowIfHidden() {
   fprintf(stderr, "  [window] shown on first Roblox frame\n");
 }
 
-extern "C" void mocktail_window_show_if_hidden() { ShowIfHidden(); }
+extern "C" void roblox_window_show_if_hidden() { ShowIfHidden(); }
 
-extern "C" bool mocktail_window_swap_buffers() { return SwapBuffers(); }
+extern "C" bool roblox_window_swap_buffers() { return SwapBuffers(); }
 
-extern "C" bool mocktail_window_make_current() { return MakeCurrentOnThread(); }
+extern "C" bool roblox_window_make_current() { return MakeCurrentOnThread(); }
 
-extern "C" bool mocktail_window_release_current() {
+extern "C" bool roblox_window_release_current() {
   return ReleaseCurrentOnThread();
 }
 
-extern "C" bool mocktail_window_has_presented_frame() {
+extern "C" bool roblox_window_has_presented_frame() {
   return HasPresentedFrame();
 }
 
-extern "C" int mocktail_window_width() {
+extern "C" int roblox_window_width() {
   const auto surface = g_window_surface_lifecycle.Snapshot();
   return surface.generation != 0 ? static_cast<int>(surface.width) : GetWidth();
 }
 
-extern "C" int mocktail_window_height() {
+extern "C" int roblox_window_height() {
   const auto surface = g_window_surface_lifecycle.Snapshot();
   return surface.generation != 0 ? static_cast<int>(surface.height) : GetHeight();
 }
 
-extern "C" void* mocktail_gl_proc_address(const char* name) {
+extern "C" void* roblox_gl_proc_address(const char* name) {
   return GetGLProcAddress(name);
 }
 
@@ -1435,11 +1435,11 @@ bool SwapBuffers() {
   if (g_gles_text_overlay == nullptr) {
     graphics::GlesTextOverlaySource source;
     source.may_present = reinterpret_cast<decltype(source.may_present)>(
-        dlsym(RTLD_DEFAULT, "mocktail_text_overlay_may_present"));
+        dlsym(RTLD_DEFAULT, "roblox_text_overlay_may_present"));
     source.query = reinterpret_cast<decltype(source.query)>(
-        dlsym(RTLD_DEFAULT, "mocktail_text_overlay_query"));
+        dlsym(RTLD_DEFAULT, "roblox_text_overlay_query"));
     source.copy = reinterpret_cast<decltype(source.copy)>(
-        dlsym(RTLD_DEFAULT, "mocktail_text_overlay_copy"));
+        dlsym(RTLD_DEFAULT, "roblox_text_overlay_copy"));
     g_gles_text_overlay =
         std::make_unique<graphics::GlesTextOverlayCompositor>(source);
   }
@@ -1534,57 +1534,57 @@ void ScopedPresentObserver::Reset() {
   registered_ = false;
 }
 
-extern "C" void* mocktail_window_backend_window() { return GetBackendWindow(); }
+extern "C" void* roblox_window_backend_window() { return GetBackendWindow(); }
 
-extern "C" bool mocktail_window_uses_direct_vulkan() {
+extern "C" bool roblox_window_uses_direct_vulkan() {
   return UsesDirectVulkan();
 }
 
-extern "C" void mocktail_window_note_vulkan_present() { NoteVulkanPresent(); }
+extern "C" void roblox_window_note_vulkan_present() { NoteVulkanPresent(); }
 
-extern "C" void mocktail_window_note_vulkan_host_present_begin() {
+extern "C" void roblox_window_note_vulkan_host_present_begin() {
   g_vulkan_host_present_sequence =
       g_vulkan_present_progress_gate.NotifyHostPresentBegin(
           SDL_GetTicksNS(), SDL_GetCurrentThreadID());
 }
 
-extern "C" void mocktail_window_note_vulkan_host_present_end(
+extern "C" void roblox_window_note_vulkan_host_present_end(
     std::int32_t /*result*/) {
   g_vulkan_present_progress_gate.NotifyHostPresentEnd(
       g_vulkan_host_present_sequence);
   g_vulkan_host_present_sequence = 0;
 }
 
-extern "C" std::uint64_t mocktail_window_note_vulkan_call_begin(
+extern "C" std::uint64_t roblox_window_note_vulkan_call_begin(
     const char* call_name) {
   return g_vulkan_present_progress_gate.NotifyCallBegin(
       call_name, SDL_GetTicksNS(), SDL_GetCurrentThreadID());
 }
 
-extern "C" void mocktail_window_note_vulkan_call_end(std::uint64_t sequence,
+extern "C" void roblox_window_note_vulkan_call_end(std::uint64_t sequence,
                                                      std::int32_t result) {
   g_vulkan_present_progress_gate.NotifyCallEnd(
       sequence, result, SDL_GetTicksNS(), SDL_GetCurrentThreadID());
 }
 
-extern "C" void mocktail_window_note_vulkan_surface_out_of_date() {
+extern "C" void roblox_window_note_vulkan_surface_out_of_date() {
   NoteVulkanSurfaceOutOfDate();
 }
 
 bool ShouldIgnoreCloseRequest() {
-  const char* explicit_ignore = std::getenv("MOCKTAIL_IGNORE_WINDOW_CLOSE");
+  const char* explicit_ignore = std::getenv("ROBLOX_IGNORE_WINDOW_CLOSE");
   if (explicit_ignore && explicit_ignore[0] != '\0' &&
       std::strcmp(explicit_ignore, "0") != 0) {
     return true;
   }
-  const char* keepalive_ms = std::getenv("MOCKTAIL_KEEPALIVE_MS");
+  const char* keepalive_ms = std::getenv("ROBLOX_KEEPALIVE_MS");
   return keepalive_ms && keepalive_ms[0] != '\0' &&
          std::strcmp(keepalive_ms, "0") != 0;
 }
 
 
 bool FullscreenShortcutEnabled() {
-  const char* value = GetEnvNonEmpty("MOCKTAIL_F11_FULLSCREEN");
+  const char* value = GetEnvNonEmpty("ROBLOX_F11_FULLSCREEN");
   return value == nullptr || !StringEquals(value, "0");
 }
 
@@ -1968,7 +1968,7 @@ bool PumpEvents() {
   MaybeRecoverVulkanSurface();
   MaybeReportVulkanPresentStall();
   static const char* auto_exit_value =
-      GetEnvNonEmpty("MOCKTAIL_AUTO_EXIT_AFTER_PRESENT_MS");
+      GetEnvNonEmpty("ROBLOX_AUTO_EXIT_AFTER_PRESENT_MS");
   if (!g_state.quit_requested && auto_exit_value != nullptr) {
     char* end = nullptr;
     const long delay_ms = std::strtol(auto_exit_value, &end, 10);
@@ -2094,4 +2094,4 @@ bool SetFullscreenStateSyncCallback(FullscreenStateSyncCallback callback,
 void ClearFullscreenStateSyncCallback() { g_fullscreen_state_sync.Clear(); }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

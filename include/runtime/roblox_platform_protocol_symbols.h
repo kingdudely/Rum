@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_PLATFORM_PROTOCOL_SYMBOLS_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_PLATFORM_PROTOCOL_SYMBOLS_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_PLATFORM_PROTOCOL_SYMBOLS_H_
+#define ROBLOX_RUNTIME_ROBLOX_PLATFORM_PROTOCOL_SYMBOLS_H_
 
 #include "runtime/roblox_experience_composition.h"
 #include "runtime/roblox_message_bus_request_bridge.h"
 #include "runtime/roblox_permissions_bridge.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Exported platform-protocol entrypoints resolved as one capability. The
@@ -26,6 +26,6 @@ RobloxPlatformProtocolSymbols ResolveRobloxPlatformProtocolSymbols(
     void* roblox_library, DeleteMessageBusConnectionFn delete_connection);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_PLATFORM_PROTOCOL_SYMBOLS_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_PLATFORM_PROTOCOL_SYMBOLS_H_

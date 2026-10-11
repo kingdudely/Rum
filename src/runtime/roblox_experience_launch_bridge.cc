@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -132,7 +132,7 @@ Status ParseRobloxExperienceLaunchJson(const std::string &json,
   if (!status.ok()) {
     return status;
   }
-  // This matches APK ug.l: a launch must identify a place or a user. Mocktail
+  // This matches APK ug.l: a launch must identify a place or a user. Roblox
   // currently supports place joins only, so reject follow-user requests at the
   // boundary rather than silently launching place 0.
   if (parsed.place_id <= 0) {
@@ -449,4 +449,4 @@ void RobloxExperienceLaunchBridge::RawMessageCallback(void *context,
 }
 
 } // namespace runtime
-} // namespace mocktail
+} // namespace roblox

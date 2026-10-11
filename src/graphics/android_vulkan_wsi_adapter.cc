@@ -1,9 +1,9 @@
-#include "mocktail/graphics/android_vulkan_wsi_adapter.h"
+#include "roblox/graphics/android_vulkan_wsi_adapter.h"
 
 #include <algorithm>
 #include <cstring>
 
-namespace mocktail {
+namespace roblox {
 namespace graphics {
 namespace {
 
@@ -271,4 +271,4 @@ VkResult AndroidVulkanWsiAdapter::QueuePresent(
 }
 
 }  // namespace graphics
-}  // namespace mocktail
+}  // namespace roblox

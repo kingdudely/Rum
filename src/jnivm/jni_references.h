@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_JNIVM_JNI_REFERENCES_H_
-#define MOCKTAIL_JNIVM_JNI_REFERENCES_H_
+#ifndef ROBLOX_JNIVM_JNI_REFERENCES_H_
+#define ROBLOX_JNIVM_JNI_REFERENCES_H_
 
 #include <string_view>
 #include <unordered_set>

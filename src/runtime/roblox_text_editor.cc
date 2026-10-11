@@ -1,6 +1,6 @@
 #include "runtime/roblox_text_editor.h"
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <SDL3/SDL_keycode.h>
 #include <SDL3/SDL_scancode.h>
@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -799,4 +799,4 @@ void RobloxTextEditor::ClearLocked() {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

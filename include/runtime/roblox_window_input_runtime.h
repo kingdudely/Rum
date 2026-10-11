@@ -1,15 +1,15 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_WINDOW_INPUT_RUNTIME_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_WINDOW_INPUT_RUNTIME_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_WINDOW_INPUT_RUNTIME_H_
+#define ROBLOX_RUNTIME_ROBLOX_WINDOW_INPUT_RUNTIME_H_
 
 #include <memory>
 
-#include "mocktail/platform/sdl_gamepad_manager.h"
-#include "mocktail/platform/text_clipboard.h"
-#include "mocktail/status.h"
+#include "roblox/platform/sdl_gamepad_manager.h"
+#include "roblox/platform/text_clipboard.h"
+#include "roblox/status.h"
 #include "runtime/roblox_input_native_adapter.h"
 #include "runtime/roblox_text_surface_overlay.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Composition owner for the single SDL event observer. It queries logical and
@@ -54,6 +54,6 @@ class RobloxWindowInputRuntime final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_WINDOW_INPUT_RUNTIME_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_WINDOW_INPUT_RUNTIME_H_

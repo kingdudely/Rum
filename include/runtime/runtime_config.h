@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_RUNTIME_CONFIG_H_
-#define MOCKTAIL_RUNTIME_RUNTIME_CONFIG_H_
+#ifndef ROBLOX_RUNTIME_RUNTIME_CONFIG_H_
+#define ROBLOX_RUNTIME_RUNTIME_CONFIG_H_
 
 #include <filesystem>
 #include <optional>
@@ -13,7 +13,7 @@
 #include "runtime/performance_policy.h"
 #include "runtime/runtime_paths.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 enum class GraphicsBackend {
@@ -52,7 +52,7 @@ std::optional<NetworkProxyConfig> ParseNetworkProxyConfig(
     std::string_view scheme = "http");
 std::string BuildNetworkProxyUrl(const NetworkProxyConfig& proxy);
 
-// Immutable, supported runtime options. Advanced MOCKTAIL_PATCH_* controls
+// Immutable, supported runtime options. Advanced ROBLOX_PATCH_* controls
 // intentionally do not belong here; they remain isolated in the legacy path.
 class RuntimeConfig {
  public:
@@ -148,6 +148,6 @@ bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
                                     std::string* error = nullptr);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_RUNTIME_CONFIG_H_
+#endif  // ROBLOX_RUNTIME_RUNTIME_CONFIG_H_

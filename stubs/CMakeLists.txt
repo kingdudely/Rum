@@ -1,5 +1,5 @@
 # Includes changes by vii from CoderDayton/nightcap.
-# Copyright 2026 Mocktail Project Authors
+# Copyright 2026 Roblox Project Authors
 # Licensed under the Apache License, Version 2.0.
 
 function(configure_stub TARGET SONAME)
@@ -60,7 +60,7 @@ configure_stub(stub_mediandk "libmediandk.so")
 add_library(stub_openmax SHARED libopensl_stub.cc)
 configure_stub(stub_openmax "libOpenMAXAL.so")
 
-# Fake EGL handles require MOCKTAIL_ENABLE_TEST_GRAPHICS_STUBS=1.
+# Fake EGL handles require ROBLOX_ENABLE_TEST_GRAPHICS_STUBS=1.
 add_library(stub_egl SHARED libegl_stub.cc)
 configure_stub(stub_egl "libEGL.so")
 target_link_libraries(stub_egl PRIVATE dl)
@@ -83,7 +83,7 @@ target_include_directories(stub_vulkan PRIVATE ${CMAKE_SOURCE_DIR}/include)
 pkg_check_modules(LIBPLACEBO REQUIRED IMPORTED_TARGET libplacebo)
 pkg_check_modules(LIBPNG REQUIRED IMPORTED_TARGET libpng)
 target_link_libraries(stub_vulkan PRIVATE
-  Mocktail::SdlVulkanWsi
+  Roblox::SdlVulkanWsi
   PkgConfig::LIBPLACEBO
   PkgConfig::LIBPNG
   Threads::Threads
@@ -92,6 +92,6 @@ target_link_libraries(stub_vulkan PRIVATE
 
 add_custom_target(all_stubs DEPENDS
   stub_sys_m stub_sys_z stub_sys_dl stub_sys_c
-  stub_android stub_log stub_mediandk mocktail_opensles stub_openmax
+  stub_android stub_log stub_mediandk roblox_opensles stub_openmax
   stub_egl stub_glesv2 stub_vulkan
 )

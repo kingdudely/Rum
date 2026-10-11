@@ -1,12 +1,12 @@
-#ifndef MOCKTAIL_COMPAT_BIONIC_PTHREAD_KEY_RUNTIME_H_
-#define MOCKTAIL_COMPAT_BIONIC_PTHREAD_KEY_RUNTIME_H_
+#ifndef ROBLOX_COMPAT_BIONIC_PTHREAD_KEY_RUNTIME_H_
+#define ROBLOX_COMPAT_BIONIC_PTHREAD_KEY_RUNTIME_H_
 
 #include <pthread.h>
 
 #include <cstddef>
 #include <cstdint>
 
-namespace mocktail::compat {
+namespace roblox::compat {
 
 // Android Bionic exposes pthread keys as 0x80000000 | index. Its current
 // public key pool includes two libc-reserved slots and PTHREAD_KEYS_MAX
@@ -34,17 +34,17 @@ class BionicPthreadKeyRuntime {
 
 bool IsBionicPthreadKey(pthread_key_t key) noexcept;
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
 extern "C" {
 
-int mocktail_bionic_pthread_key_create(
+int roblox_bionic_pthread_key_create(
     pthread_key_t* key, void (*destructor)(void*));
-int mocktail_bionic_pthread_key_delete(pthread_key_t key);
-void* mocktail_bionic_pthread_getspecific(pthread_key_t key);
-int mocktail_bionic_pthread_setspecific(pthread_key_t key,
+int roblox_bionic_pthread_key_delete(pthread_key_t key);
+void* roblox_bionic_pthread_getspecific(pthread_key_t key);
+int roblox_bionic_pthread_setspecific(pthread_key_t key,
                                         const void* value);
 
 }  // extern "C"
 
-#endif  // MOCKTAIL_COMPAT_BIONIC_PTHREAD_KEY_RUNTIME_H_
+#endif  // ROBLOX_COMPAT_BIONIC_PTHREAD_KEY_RUNTIME_H_

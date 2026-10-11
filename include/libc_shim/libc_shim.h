@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_LIBC_SHIM_LIBC_SHIM_H_
-#define MOCKTAIL_LIBC_SHIM_LIBC_SHIM_H_
+#ifndef ROBLOX_LIBC_SHIM_LIBC_SHIM_H_
+#define ROBLOX_LIBC_SHIM_LIBC_SHIM_H_
 
 #include <cstdio>
 #include <dirent.h>
@@ -37,7 +37,7 @@ void ConfigureGuestAllocator(GuestAllocator allocator) noexcept;
 void Install();
 
 // Resolves the host TLS trust bundle without weakening certificate
-// verification. MOCKTAIL_CA_BUNDLE, when present, is authoritative and must
+// verification. ROBLOX_CA_BUNDLE, when present, is authoritative and must
 // name a readable, non-empty, absolute regular file; an invalid override never
 // falls back to a system path.
 HostCaBundleResolution ResolveHostCaBundle();
@@ -61,23 +61,23 @@ void ClearPathMappings();
 }  // namespace libc_shim
 
 extern "C" {
-int mocktail_open(const char* path, int flags, ...);
-int mocktail___open_2(const char* path, int flags);
-FILE* mocktail_fopen(const char* path, const char* mode);
-int mocktail_access(const char* path, int mode);
-int mocktail_stat(const char* path, struct stat* statbuf);
-int mocktail_lstat(const char* path, struct stat* statbuf);
-int mocktail_statvfs(const char* path, struct statvfs* statbuf);
-int mocktail_statfs(const char* path, struct statfs* statbuf);
-int mocktail_mkdir(const char* path, mode_t mode);
-DIR* mocktail_opendir(const char* path);
-int mocktail_rename(const char* old_path, const char* new_path);
-int mocktail_unlink(const char* path);
-int mocktail_rmdir(const char* path);
-char* mocktail_realpath(const char* path, char* resolved_path);
-ssize_t mocktail_readlink(const char* path, char* buf, size_t bufsiz);
-ssize_t mocktail___readlink_chk(const char* path, char* buf, size_t len,
+int roblox_open(const char* path, int flags, ...);
+int roblox___open_2(const char* path, int flags);
+FILE* roblox_fopen(const char* path, const char* mode);
+int roblox_access(const char* path, int mode);
+int roblox_stat(const char* path, struct stat* statbuf);
+int roblox_lstat(const char* path, struct stat* statbuf);
+int roblox_statvfs(const char* path, struct statvfs* statbuf);
+int roblox_statfs(const char* path, struct statfs* statbuf);
+int roblox_mkdir(const char* path, mode_t mode);
+DIR* roblox_opendir(const char* path);
+int roblox_rename(const char* old_path, const char* new_path);
+int roblox_unlink(const char* path);
+int roblox_rmdir(const char* path);
+char* roblox_realpath(const char* path, char* resolved_path);
+ssize_t roblox_readlink(const char* path, char* buf, size_t bufsiz);
+ssize_t roblox___readlink_chk(const char* path, char* buf, size_t len,
                                 size_t buf_len);
 }
 
-#endif  // MOCKTAIL_LIBC_SHIM_LIBC_SHIM_H_
+#endif  // ROBLOX_LIBC_SHIM_LIBC_SHIM_H_

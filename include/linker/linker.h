@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_LINKER_LINKER_H_
-#define MOCKTAIL_LINKER_LINKER_H_
+#ifndef ROBLOX_LINKER_LINKER_H_
+#define ROBLOX_LINKER_LINKER_H_
 
 #include <cstdint>
 #include <string>
@@ -60,7 +60,7 @@ LibraryHandle LoadLibrary(const std::string& real_path,
 
 void* ResolveSymbol(LibraryHandle handle, const std::string& symbol_name);
 
-// Crashpad execution is intentionally outside Mocktail's supported JNI
+// Crashpad execution is intentionally outside Roblox's supported JNI
 // surface. These exports are never returned to the host composition even when
 // a Roblox payload contains them.
 bool IsBlockedRobloxCrashReportNativeSymbol(
@@ -86,4 +86,4 @@ const std::unordered_map<std::string, LibraryHandle>& GetSymbolTable();
 
 }  // namespace linker
 
-#endif  // MOCKTAIL_LINKER_LINKER_H_
+#endif  // ROBLOX_LINKER_LINKER_H_

@@ -1,7 +1,7 @@
-#ifndef MOCKTAIL_COMPAT_BIONIC_ATFORK_RUNTIME_H_
-#define MOCKTAIL_COMPAT_BIONIC_ATFORK_RUNTIME_H_
+#ifndef ROBLOX_COMPAT_BIONIC_ATFORK_RUNTIME_H_
+#define ROBLOX_COMPAT_BIONIC_ATFORK_RUNTIME_H_
 
-namespace mocktail::compat {
+namespace roblox::compat {
 
 using BionicAtForkCallback = void (*)(void);
 
@@ -11,15 +11,15 @@ int RegisterBionicAtFork(BionicAtForkCallback prepare,
                          BionicAtForkCallback parent,
                          BionicAtForkCallback child, void* dso_handle) noexcept;
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
 extern "C" {
 
-int mocktail_bionic_register_atfork(
-    mocktail::compat::BionicAtForkCallback prepare,
-    mocktail::compat::BionicAtForkCallback parent,
-    mocktail::compat::BionicAtForkCallback child, void* dso_handle);
+int roblox_bionic_register_atfork(
+    roblox::compat::BionicAtForkCallback prepare,
+    roblox::compat::BionicAtForkCallback parent,
+    roblox::compat::BionicAtForkCallback child, void* dso_handle);
 
 }  // extern "C"
 
-#endif  // MOCKTAIL_COMPAT_BIONIC_ATFORK_RUNTIME_H_
+#endif  // ROBLOX_COMPAT_BIONIC_ATFORK_RUNTIME_H_

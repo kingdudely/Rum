@@ -7,7 +7,7 @@
 
 #include "runtime/owned_pthread.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -929,4 +929,4 @@ const char* RobloxGameSessionResolutionStatusName(
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

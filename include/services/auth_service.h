@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_SERVICES_AUTH_SERVICE_H_
-#define MOCKTAIL_SERVICES_AUTH_SERVICE_H_
+#ifndef ROBLOX_SERVICES_AUTH_SERVICE_H_
+#define ROBLOX_SERVICES_AUTH_SERVICE_H_
 
 #include <cstdint>
 #include <string>
@@ -7,7 +7,7 @@
 
 #include "services/http_client.h"
 
-namespace mocktail {
+namespace roblox {
 namespace services {
 
 enum class AuthCookieStatus {
@@ -72,6 +72,6 @@ class AuthService {
 };
 
 }  // namespace services
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_SERVICES_AUTH_SERVICE_H_
+#endif  // ROBLOX_SERVICES_AUTH_SERVICE_H_

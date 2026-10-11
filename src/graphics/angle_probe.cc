@@ -1,4 +1,4 @@
-#include "mocktail/graphics/angle_probe.h"
+#include "roblox/graphics/angle_probe.h"
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -10,7 +10,7 @@
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace graphics {
 namespace {
 
@@ -174,4 +174,4 @@ BackendCapability ProbeAngleVulkan(const AngleProbeOptions& options) {
 }
 
 }  // namespace graphics
-}  // namespace mocktail
+}  // namespace roblox

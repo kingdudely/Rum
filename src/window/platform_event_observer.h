@@ -1,13 +1,13 @@
-#ifndef MOCKTAIL_WINDOW_PLATFORM_EVENT_OBSERVER_H_
-#define MOCKTAIL_WINDOW_PLATFORM_EVENT_OBSERVER_H_
+#ifndef ROBLOX_WINDOW_PLATFORM_EVENT_OBSERVER_H_
+#define ROBLOX_WINDOW_PLATFORM_EVENT_OBSERVER_H_
 
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
 
-#include "mocktail/platform/platform_runtime.h"
+#include "roblox/platform/platform_runtime.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 using PlatformEventObserver = void (*)(void* context,
@@ -100,6 +100,6 @@ class PlatformEventObserverGate final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_PLATFORM_EVENT_OBSERVER_H_
+#endif  // ROBLOX_WINDOW_PLATFORM_EVENT_OBSERVER_H_

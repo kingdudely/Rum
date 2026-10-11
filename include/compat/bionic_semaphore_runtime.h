@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_COMPAT_BIONIC_SEMAPHORE_RUNTIME_H_
-#define MOCKTAIL_COMPAT_BIONIC_SEMAPHORE_RUNTIME_H_
+#ifndef ROBLOX_COMPAT_BIONIC_SEMAPHORE_RUNTIME_H_
+#define ROBLOX_COMPAT_BIONIC_SEMAPHORE_RUNTIME_H_
 
 #include <semaphore.h>
 
@@ -8,12 +8,12 @@
 // waiters wake. Process-shared semaphores are rejected.
 extern "C" {
 
-int mocktail_bionic_sem_init(sem_t* semaphore, int process_shared,
+int roblox_bionic_sem_init(sem_t* semaphore, int process_shared,
                              unsigned int value);
-int mocktail_bionic_sem_destroy(sem_t* semaphore);
-int mocktail_bionic_sem_wait(sem_t* semaphore);
-int mocktail_bionic_sem_post(sem_t* semaphore);
+int roblox_bionic_sem_destroy(sem_t* semaphore);
+int roblox_bionic_sem_wait(sem_t* semaphore);
+int roblox_bionic_sem_post(sem_t* semaphore);
 
 }  // extern "C"
 
-#endif  // MOCKTAIL_COMPAT_BIONIC_SEMAPHORE_RUNTIME_H_
+#endif  // ROBLOX_COMPAT_BIONIC_SEMAPHORE_RUNTIME_H_

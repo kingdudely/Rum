@@ -1,4 +1,4 @@
-#include "mocktail/audio/fmod_java_audio_runtime.h"
+#include "roblox/audio/fmod_java_audio_runtime.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -10,9 +10,9 @@
 #include <unordered_set>
 #include <utility>
 
-#include "mocktail/audio/sdl_audio_sink.h"
+#include "roblox/audio/sdl_audio_sink.h"
 
-namespace mocktail::audio {
+namespace roblox::audio {
 namespace {
 
 struct RuntimeCounters {
@@ -692,4 +692,4 @@ void FmodJavaAudioRuntime::Shutdown() {
   state->shutdown_cv.notify_all();
 }
 
-}  // namespace mocktail::audio
+}  // namespace roblox::audio

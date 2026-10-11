@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_PLATFORM_CACHE_MIGRATION_H_
-#define MOCKTAIL_RUNTIME_PLATFORM_CACHE_MIGRATION_H_
+#ifndef ROBLOX_RUNTIME_PLATFORM_CACHE_MIGRATION_H_
+#define ROBLOX_RUNTIME_PLATFORM_CACHE_MIGRATION_H_
 
 #include <cstdint>
 #include <filesystem>
@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 class Environment;
@@ -59,6 +59,6 @@ bool ApplyRobloxThemeCacheOverride(
     std::int64_t authenticated_user_id, bool dark_theme, std::string* error);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_PLATFORM_CACHE_MIGRATION_H_
+#endif  // ROBLOX_RUNTIME_PLATFORM_CACHE_MIGRATION_H_

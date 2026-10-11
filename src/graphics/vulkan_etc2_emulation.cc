@@ -1,6 +1,6 @@
-#include "mocktail/graphics/vulkan_etc2_emulation.h"
+#include "roblox/graphics/vulkan_etc2_emulation.h"
 
-#include "mocktail/graphics/texture_override.h"
+#include "roblox/graphics/texture_override.h"
 
 #include <algorithm>
 #include <atomic>
@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-namespace mocktail::graphics {
+namespace roblox::graphics {
 
 bool LookupEmulatedEtc2Format(VkFormat format, Etc2EmulatedFormat* out) {
   Etc2EmulatedFormat mapped;
@@ -1283,4 +1283,4 @@ void VulkanEtc2Emulation::ReleaseCommandBuffer(VkCommandBuffer command_buffer) {
   }
 }
 
-}  // namespace mocktail::graphics
+}  // namespace roblox::graphics

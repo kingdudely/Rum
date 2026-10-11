@@ -1,8 +1,8 @@
-#include "mocktail/graphics/graphics_backend.h"
+#include "roblox/graphics/graphics_backend.h"
 
 #include <string>
 
-namespace mocktail {
+namespace roblox {
 namespace graphics {
 namespace {
 
@@ -101,4 +101,4 @@ const char* GraphicsBackendName(GraphicsBackendKind backend) {
 }
 
 }  // namespace graphics
-}  // namespace mocktail
+}  // namespace roblox

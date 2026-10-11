@@ -1,13 +1,13 @@
-#ifndef MOCKTAIL_WINDOW_WINDOW_SURFACE_LIFECYCLE_H_
-#define MOCKTAIL_WINDOW_WINDOW_SURFACE_LIFECYCLE_H_
+#ifndef ROBLOX_WINDOW_WINDOW_SURFACE_LIFECYCLE_H_
+#define ROBLOX_WINDOW_WINDOW_SURFACE_LIFECYCLE_H_
 
 #include <cstdint>
 #include <deque>
 #include <mutex>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 enum class WindowSurfaceEventType {
@@ -69,6 +69,6 @@ class WindowSurfaceLifecycle final {
 const char* WindowSurfaceEventTypeName(WindowSurfaceEventType type);
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_WINDOW_SURFACE_LIFECYCLE_H_
+#endif  // ROBLOX_WINDOW_WINDOW_SURFACE_LIFECYCLE_H_

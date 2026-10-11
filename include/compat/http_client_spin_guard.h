@@ -1,9 +1,9 @@
-#ifndef MOCKTAIL_COMPAT_HTTP_CLIENT_SPIN_GUARD_H_
-#define MOCKTAIL_COMPAT_HTTP_CLIENT_SPIN_GUARD_H_
+#ifndef ROBLOX_COMPAT_HTTP_CLIENT_SPIN_GUARD_H_
+#define ROBLOX_COMPAT_HTTP_CLIENT_SPIN_GUARD_H_
 
 #include <cstdint>
 
-namespace mocktail {
+namespace roblox {
 namespace compat {
 
 constexpr std::uint32_t kHttpClientSpinBatchSize = 256;
@@ -26,6 +26,6 @@ class HttpClientSpinRateLimiter {
 void ApplyHttpClientSpinGuard();
 
 }  // namespace compat
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_COMPAT_HTTP_CLIENT_SPIN_GUARD_H_
+#endif  // ROBLOX_COMPAT_HTTP_CLIENT_SPIN_GUARD_H_

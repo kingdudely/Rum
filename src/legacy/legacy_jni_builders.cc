@@ -127,7 +127,7 @@ jobject NewObject(JNIEnv* env, const char* class_name) {
 }
 
 void InstallNativeGlJavaImplementation(JNIEnv* env, jclass native_gl_java_class) {
-  if (IsDisabled("MOCKTAIL_SET_NATIVE_GL_JAVA_IMPLEMENTATION")) {
+  if (IsDisabled("ROBLOX_SET_NATIVE_GL_JAVA_IMPLEMENTATION")) {
     return;
   }
   if (env == nullptr || native_gl_java_class == nullptr) {
@@ -164,19 +164,19 @@ void InstallNativeGlJavaImplementation(JNIEnv* env, jclass native_gl_java_class)
             << std::flush;
 }
 
-mocktail::runtime::DisplaySize HostDisplaySize() {
-  return mocktail::runtime::ParseDisplaySize(
-      std::getenv(mocktail::runtime::kDisplaySizeEnvironment));
+roblox::runtime::DisplaySize HostDisplaySize() {
+  return roblox::runtime::ParseDisplaySize(
+      std::getenv(roblox::runtime::kDisplaySizeEnvironment));
 }
 
-mocktail::runtime::DisplaySize HostWindowPixelSize() {
-  const mocktail::window::WindowViewportSnapshot viewport =
-      mocktail::window::GetWindowViewportSnapshot();
+roblox::runtime::DisplaySize HostWindowPixelSize() {
+  const roblox::window::WindowViewportSnapshot viewport =
+      roblox::window::GetWindowViewportSnapshot();
   if (viewport.valid()) {
     return {viewport.pixel_width, viewport.pixel_height};
   }
-  return mocktail::runtime::ParseDisplaySize(
-      std::getenv(mocktail::runtime::kWindowSizeEnvironment));
+  return roblox::runtime::ParseDisplaySize(
+      std::getenv(roblox::runtime::kWindowSizeEnvironment));
 }
 
 jobject BuildDeviceParams(JNIEnv* env) {
@@ -186,25 +186,25 @@ jobject BuildDeviceParams(JNIEnv* env) {
   }
 
   const std::string device_name =
-      GetEnvString("MOCKTAIL_DEVICE_NAME", "Pixel 7");
+      GetEnvString("ROBLOX_DEVICE_NAME", "Pixel 7");
   const std::string manufacturer =
-      GetEnvString("MOCKTAIL_DEVICE_MANUFACTURER", "Google");
+      GetEnvString("ROBLOX_DEVICE_MANUFACTURER", "Google");
   const std::string device_sku = GetEnvString(
-      "MOCKTAIL_DEVICE_SKU",
-      std::string(mocktail::compat::kGuestCpuName).c_str());
+      "ROBLOX_DEVICE_SKU",
+      std::string(roblox::compat::kGuestCpuName).c_str());
   const std::string soc_model =
-      GetEnvString("MOCKTAIL_DEVICE_SOC_MODEL",
-                   std::string(mocktail::compat::kGuestCpuName).c_str());
+      GetEnvString("ROBLOX_DEVICE_SOC_MODEL",
+                   std::string(roblox::compat::kGuestCpuName).c_str());
   SetStringField(env, params, "osVersion", "33");
   SetStringField(env, params, "deviceName", device_name.c_str());
   const std::string app_version =
-      GetEnvString("MOCKTAIL_ROBLOX_VERSION", "unknown");
+      GetEnvString("ROBLOX_ROBLOX_VERSION", "unknown");
   SetStringField(env, params, "appVersion", app_version.c_str());
   SetStringField(env, params, "country", "US");
   SetStringField(env, params, "manufacturer", manufacturer.c_str());
-  const mocktail::runtime::DisplaySize display_size =
-      mocktail::runtime::ParseDisplaySize(
-          std::getenv(mocktail::runtime::kDisplaySizeEnvironment));
+  const roblox::runtime::DisplaySize display_size =
+      roblox::runtime::ParseDisplaySize(
+          std::getenv(roblox::runtime::kDisplaySizeEnvironment));
   const std::string display_resolution = std::to_string(display_size.width) +
                                          "x" +
                                          std::to_string(display_size.height);
@@ -215,13 +215,13 @@ jobject BuildDeviceParams(JNIEnv* env) {
   SetStringField(env, params, "appBuildVariant", "googleProdRelease");
   SetStringField(env, params, "testDeviceName", device_name.c_str());
 
-  std::uint64_t host_memory_bytes = mocktail::runtime::DetectHostMemoryBytes();
-  if (IsEnabled("MOCKTAIL_DISABLE_LOW_RAM_DEVICE")) {
+  std::uint64_t host_memory_bytes = roblox::runtime::DetectHostMemoryBytes();
+  if (IsEnabled("ROBLOX_DISABLE_LOW_RAM_DEVICE")) {
     host_memory_bytes =
         std::max<std::uint64_t>(host_memory_bytes, 4096ULL * 1024ULL * 1024ULL);
   }
-  const mocktail::runtime::DeviceMemoryProfile memory =
-      mocktail::runtime::BuildDeviceMemoryProfile(host_memory_bytes);
+  const roblox::runtime::DeviceMemoryProfile memory =
+      roblox::runtime::BuildDeviceMemoryProfile(host_memory_bytes);
   SetIntField(env, params, "deviceTotalMemoryMB", memory.total_memory_mb);
   SetIntField(env, params, "displayPhysicalWidthPixels", display_size.width);
   SetIntField(env, params, "displayPhysicalHeightPixels",
@@ -257,35 +257,35 @@ jobject BuildPlatformParams(JNIEnv* env, jobject surface) {
   SetObjectField(env, params, "surface", "Landroid/view/Surface;", surface);
   SetStringField(env, params, "platform", "Android");
   const std::string platform_device_name =
-      GetEnvString("MOCKTAIL_DEVICE_NAME", "Pixel 7");
+      GetEnvString("ROBLOX_DEVICE_NAME", "Pixel 7");
   SetStringField(env, params, "deviceName", platform_device_name.c_str());
   SetStringField(env, params, "locale", "en_us");
   SetStringField(env, params, "assetFolderPath", DefaultAssetPath().c_str());
-  const mocktail::runtime::DisplaySize platform_window = HostWindowPixelSize();
-  const mocktail::runtime::DisplaySize platform_display = HostDisplaySize();
+  const roblox::runtime::DisplaySize platform_window = HostWindowPixelSize();
+  const roblox::runtime::DisplaySize platform_display = HostDisplaySize();
   SetIntField(env, params, "width", platform_window.width);
   SetIntField(env, params, "height", platform_window.height);
   SetIntField(env, params, "screenWidth", platform_display.width);
   SetIntField(env, params, "screenHeight", platform_display.height);
   SetIntField(env, params, "densityDpi", 160);
   SetIntField(env, params, "viewportWidthMm",
-              mocktail::runtime::PixelsToMillimetersAt160Dpi(
+              roblox::runtime::PixelsToMillimetersAt160Dpi(
                   platform_window.width));
   SetIntField(env, params, "viewportHeightMm",
-              mocktail::runtime::PixelsToMillimetersAt160Dpi(
+              roblox::runtime::PixelsToMillimetersAt160Dpi(
                   platform_window.height));
-  const mocktail::window::WindowViewportSnapshot viewport =
-      mocktail::window::GetWindowViewportSnapshot();
+  const roblox::window::WindowViewportSnapshot viewport =
+      roblox::window::GetWindowViewportSnapshot();
   SetFloatField(env, params, "dpiScale", viewport.dpi_scale);
   SetBooleanField(
       env, params, "isKeyboardDevice",
-      IsEnabled("MOCKTAIL_KEYBOARD_ENABLED_INTERNAL") ? JNI_TRUE : JNI_FALSE);
+      IsEnabled("ROBLOX_KEYBOARD_ENABLED_INTERNAL") ? JNI_TRUE : JNI_FALSE);
   SetBooleanField(
       env, params, "isMouseDevice",
-      IsEnabled("MOCKTAIL_MOUSE_ENABLED_INTERNAL") ? JNI_TRUE : JNI_FALSE);
+      IsEnabled("ROBLOX_MOUSE_ENABLED_INTERNAL") ? JNI_TRUE : JNI_FALSE);
   SetBooleanField(
       env, params, "isTouchDevice",
-      IsEnabled("MOCKTAIL_TOUCH_ENABLED_INTERNAL") ? JNI_TRUE : JNI_FALSE);
+      IsEnabled("ROBLOX_TOUCH_ENABLED_INTERNAL") ? JNI_TRUE : JNI_FALSE);
   SetBooleanField(env, params, "isLuaHomePageEnabled", JNI_TRUE);
   SetBooleanField(env, params, "isLuaGamesPageEnabled", JNI_TRUE);
   SetBooleanField(env, params, "isLuaChatEnabled", JNI_TRUE);
@@ -300,7 +300,7 @@ jobject BuildMockSurface(JNIEnv* env) {
   if (!surface) {
     return nullptr;
   }
-  const mocktail::runtime::DisplaySize surface_size = HostWindowPixelSize();
+  const roblox::runtime::DisplaySize surface_size = HostWindowPixelSize();
   SetIntField(env, surface, "width", surface_size.width);
   SetIntField(env, surface, "height", surface_size.height);
   SetBooleanField(env, surface, "valid", JNI_TRUE);

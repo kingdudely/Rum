@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <unistd.h>
 
-namespace mocktail::compat {
+namespace roblox::compat {
 
 long BionicSysconf(int name) noexcept {
   switch (static_cast<BionicSysconfName>(name)) {
@@ -35,8 +35,8 @@ long BionicSysconf(int name) noexcept {
   return -1;
 }
 
-} // namespace mocktail::compat
+} // namespace roblox::compat
 
-extern "C" long mocktail_bionic_sysconf(int name) {
-  return mocktail::compat::BionicSysconf(name);
+extern "C" long roblox_bionic_sysconf(int name) {
+  return roblox::compat::BionicSysconf(name);
 }

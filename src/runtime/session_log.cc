@@ -1,6 +1,6 @@
 #include "runtime/session_log.h"
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <fcntl.h>
 #include <poll.h>
@@ -28,32 +28,32 @@
 #include <utility>
 #include <vector>
 
-#ifndef MOCKTAIL_PROJECT_VERSION
-#define MOCKTAIL_PROJECT_VERSION "unknown"
+#ifndef ROBLOX_PROJECT_VERSION
+#define ROBLOX_PROJECT_VERSION "unknown"
 #endif
-#ifndef MOCKTAIL_BUILD_GIT_COMMIT
-#define MOCKTAIL_BUILD_GIT_COMMIT "unknown"
+#ifndef ROBLOX_BUILD_GIT_COMMIT
+#define ROBLOX_BUILD_GIT_COMMIT "unknown"
 #endif
-#ifndef MOCKTAIL_BUILD_GIT_DIRTY
-#define MOCKTAIL_BUILD_GIT_DIRTY "unknown"
+#ifndef ROBLOX_BUILD_GIT_DIRTY
+#define ROBLOX_BUILD_GIT_DIRTY "unknown"
 #endif
-#ifndef MOCKTAIL_BUILD_TYPE
-#define MOCKTAIL_BUILD_TYPE "unknown"
+#ifndef ROBLOX_BUILD_TYPE
+#define ROBLOX_BUILD_TYPE "unknown"
 #endif
-#ifndef MOCKTAIL_BUILD_COMPILER_ID
-#define MOCKTAIL_BUILD_COMPILER_ID "unknown"
+#ifndef ROBLOX_BUILD_COMPILER_ID
+#define ROBLOX_BUILD_COMPILER_ID "unknown"
 #endif
-#ifndef MOCKTAIL_BUILD_COMPILER_VERSION
-#define MOCKTAIL_BUILD_COMPILER_VERSION "unknown"
+#ifndef ROBLOX_BUILD_COMPILER_VERSION
+#define ROBLOX_BUILD_COMPILER_VERSION "unknown"
 #endif
-#ifndef MOCKTAIL_BUILD_TARGET_SYSTEM
-#define MOCKTAIL_BUILD_TARGET_SYSTEM "unknown"
+#ifndef ROBLOX_BUILD_TARGET_SYSTEM
+#define ROBLOX_BUILD_TARGET_SYSTEM "unknown"
 #endif
-#ifndef MOCKTAIL_BUILD_TARGET_PROCESSOR
-#define MOCKTAIL_BUILD_TARGET_PROCESSOR "unknown"
+#ifndef ROBLOX_BUILD_TARGET_PROCESSOR
+#define ROBLOX_BUILD_TARGET_PROCESSOR "unknown"
 #endif
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -140,7 +140,7 @@ int CreateSessionFile(const std::filesystem::path& sessions,
       return -1;
     }
   }
-  *error = "too many Mocktail sessions started in the same second";
+  *error = "too many Roblox sessions started in the same second";
   return -1;
 }
 
@@ -507,14 +507,14 @@ GraphicsHardware DetectGraphicsHardware() {
 
 SessionBuildInformation CurrentSessionBuildInformation() {
   SessionBuildInformation information;
-  information.version = MOCKTAIL_PROJECT_VERSION;
-  information.git_commit = MOCKTAIL_BUILD_GIT_COMMIT;
-  information.git_dirty = MOCKTAIL_BUILD_GIT_DIRTY;
-  information.build_type = MOCKTAIL_BUILD_TYPE;
-  information.compiler = std::string(MOCKTAIL_BUILD_COMPILER_ID) + " " +
-                         MOCKTAIL_BUILD_COMPILER_VERSION;
-  information.target = std::string(MOCKTAIL_BUILD_TARGET_SYSTEM) + "/" +
-                       MOCKTAIL_BUILD_TARGET_PROCESSOR;
+  information.version = ROBLOX_PROJECT_VERSION;
+  information.git_commit = ROBLOX_BUILD_GIT_COMMIT;
+  information.git_dirty = ROBLOX_BUILD_GIT_DIRTY;
+  information.build_type = ROBLOX_BUILD_TYPE;
+  information.compiler = std::string(ROBLOX_BUILD_COMPILER_ID) + " " +
+                         ROBLOX_BUILD_COMPILER_VERSION;
+  information.target = std::string(ROBLOX_BUILD_TARGET_SYSTEM) + "/" +
+                       ROBLOX_BUILD_TARGET_PROCESSOR;
   return information;
 }
 
@@ -550,7 +550,7 @@ SessionLog SessionLog::Start(const Environment& environment,
                              std::chrono::system_clock::time_point started_at) {
   SessionLog result;
   result.started_at_ = started_at;
-  if (Enabled(environment, "MOCKTAIL_DISABLE_SESSION_LOG")) {
+  if (Enabled(environment, "ROBLOX_DISABLE_SESSION_LOG")) {
     return result;
   }
   result.attempted_ = true;
@@ -663,7 +663,7 @@ std::string SessionLog::Header(const Environment& environment,
   const unsigned int threads = std::thread::hardware_concurrency();
 
   std::ostringstream output;
-  output << "[mocktail] version=" << build.version
+  output << "[roblox] version=" << build.version
          << " commit=" << build.git_commit;
   if (build.git_dirty == "true") {
     output << " dirty=true";
@@ -672,7 +672,7 @@ std::string SessionLog::Header(const Environment& environment,
   }
   output << " build=" << build.build_type << " compiler=\"" << build.compiler
          << "\"\n"
-         << "[mocktail] started=" << IsoLocalTimestamp(started_at_)
+         << "[roblox] started=" << IsoLocalTimestamp(started_at_)
          << " package=" << PackageKind(environment, executable)
          << " target=" << build.target;
   if (has_system) {
@@ -680,7 +680,7 @@ std::string SessionLog::Header(const Environment& environment,
            << system.machine << '"';
   }
   output << " pid=" << getpid() << '\n'
-         << "[mocktail] cpu=\"" << CpuModel() << "\" threads=";
+         << "[roblox] cpu=\"" << CpuModel() << "\" threads=";
   if (threads == 0) {
     output << "unknown";
   } else {
@@ -690,9 +690,9 @@ std::string SessionLog::Header(const Environment& environment,
          << "\" gpu_driver=\"" << graphics.drivers
          << "\" display=" << DisplayServer(environment) << " graphics="
          << (graphics_backend.empty() ? "unknown" : graphics_backend) << '\n'
-         << "[mocktail] executable=" << DisplayPath(executable, paths) << '\n'
-         << "[mocktail] log=" << DisplayPath(path_, paths) << '\n';
-  if (!warning_.empty()) output << "[mocktail] warning=" << warning_ << '\n';
+         << "[roblox] executable=" << DisplayPath(executable, paths) << '\n'
+         << "[roblox] log=" << DisplayPath(path_, paths) << '\n';
+  if (!warning_.empty()) output << "[roblox] warning=" << warning_ << '\n';
   return output.str();
 }
 
@@ -715,4 +715,4 @@ void SessionLog::Stop() {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

@@ -1,10 +1,10 @@
-#ifndef MOCKTAIL_WINDOW_ROBLOX_FULLSCREEN_MENU_REQUEST_GATE_H_
-#define MOCKTAIL_WINDOW_ROBLOX_FULLSCREEN_MENU_REQUEST_GATE_H_
+#ifndef ROBLOX_WINDOW_ROBLOX_FULLSCREEN_MENU_REQUEST_GATE_H_
+#define ROBLOX_WINDOW_ROBLOX_FULLSCREEN_MENU_REQUEST_GATE_H_
 
 #include <cstdint>
 #include <mutex>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 // The Android CoreScript calls GuiService.ToggleFullscreen, but the Android
@@ -26,6 +26,6 @@ class RobloxFullscreenMenuRequestGate final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_ROBLOX_FULLSCREEN_MENU_REQUEST_GATE_H_
+#endif  // ROBLOX_WINDOW_ROBLOX_FULLSCREEN_MENU_REQUEST_GATE_H_

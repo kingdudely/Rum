@@ -8,7 +8,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -82,4 +82,4 @@ bool MergeTextureMemoryClientSettingsOverrides(std::uint64_t budget_bytes,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

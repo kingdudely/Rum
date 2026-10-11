@@ -12,7 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace mocktail::runtime {
+namespace roblox::runtime {
 namespace {
 
 volatile sig_atomic_t current_stage = 0;
@@ -178,4 +178,4 @@ void LogProcessDiagnostics(ProcessDiagnosticStage stage) {
   Snapshot();
 }
 
-}  // namespace mocktail::runtime
+}  // namespace roblox::runtime

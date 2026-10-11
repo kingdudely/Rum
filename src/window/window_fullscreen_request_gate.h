@@ -1,10 +1,10 @@
-#ifndef MOCKTAIL_WINDOW_WINDOW_FULLSCREEN_REQUEST_GATE_H_
-#define MOCKTAIL_WINDOW_WINDOW_FULLSCREEN_REQUEST_GATE_H_
+#ifndef ROBLOX_WINDOW_WINDOW_FULLSCREEN_REQUEST_GATE_H_
+#define ROBLOX_WINDOW_WINDOW_FULLSCREEN_REQUEST_GATE_H_
 
 #include <cstdint>
 #include <mutex>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 // Android WindowManager.LayoutParams flags used by GameActivity.setWindowFlags.
@@ -28,6 +28,6 @@ class WindowFullscreenRequestGate final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_WINDOW_FULLSCREEN_REQUEST_GATE_H_
+#endif  // ROBLOX_WINDOW_WINDOW_FULLSCREEN_REQUEST_GATE_H_

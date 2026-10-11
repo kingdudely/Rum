@@ -1,4 +1,4 @@
-#include "mocktail/platform/display_refresh_capabilities.h"
+#include "roblox/platform/display_refresh_capabilities.h"
 
 #include <SDL3/SDL.h>
 
@@ -6,7 +6,7 @@
 #include <cmath>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace platform {
 namespace {
 
@@ -73,4 +73,4 @@ QuerySdlDisplayRefreshCapabilities(SDL_Window *window) {
 }
 
 } // namespace platform
-} // namespace mocktail
+} // namespace roblox

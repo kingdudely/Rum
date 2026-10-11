@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_WINDOW_WINDOW_POINTER_CAPTURE_OWNER_H_
-#define MOCKTAIL_WINDOW_WINDOW_POINTER_CAPTURE_OWNER_H_
+#ifndef ROBLOX_WINDOW_WINDOW_POINTER_CAPTURE_OWNER_H_
+#define ROBLOX_WINDOW_WINDOW_POINTER_CAPTURE_OWNER_H_
 
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 using MouseLockQueryCallback = bool (*)(void* context, bool* locked_center);
@@ -86,6 +86,6 @@ class SdlPointerCaptureBackend final : public PointerCaptureBackend {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_WINDOW_POINTER_CAPTURE_OWNER_H_
+#endif  // ROBLOX_WINDOW_WINDOW_POINTER_CAPTURE_OWNER_H_

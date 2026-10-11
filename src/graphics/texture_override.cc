@@ -1,4 +1,4 @@
-#include "mocktail/graphics/texture_override.h"
+#include "roblox/graphics/texture_override.h"
 
 #include <png.h>
 
@@ -7,7 +7,7 @@
 #include <cstring>
 #include <filesystem>
 
-namespace mocktail::graphics {
+namespace roblox::graphics {
 
 std::uint64_t HashBytes(const std::uint8_t* data, std::size_t size) {
   std::uint64_t hash = 0xcbf29ce484222325ULL;
@@ -129,8 +129,8 @@ TextureOverrides::TextureOverrides(std::string override_dir,
     : override_dir_(std::move(override_dir)), dump_dir_(std::move(dump_dir)) {}
 
 TextureOverrides TextureOverrides::FromEnvironment() {
-  return TextureOverrides(EnvironmentString("MOCKTAIL_TEXTURE_OVERRIDE_DIR"),
-                          EnvironmentString("MOCKTAIL_TEXTURE_DUMP_DIR"));
+  return TextureOverrides(EnvironmentString("ROBLOX_TEXTURE_OVERRIDE_DIR"),
+                          EnvironmentString("ROBLOX_TEXTURE_DUMP_DIR"));
 }
 
 std::shared_ptr<const RgbaImage> TextureOverrides::Lookup(std::uint64_t hash) {
@@ -179,4 +179,4 @@ void TextureOverrides::Dump(std::uint64_t hash, std::uint32_t width,
   }
 }
 
-}  // namespace mocktail::graphics
+}  // namespace roblox::graphics

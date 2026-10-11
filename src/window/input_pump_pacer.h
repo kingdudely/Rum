@@ -1,10 +1,10 @@
-#ifndef MOCKTAIL_WINDOW_INPUT_PUMP_PACER_H_
-#define MOCKTAIL_WINDOW_INPUT_PUMP_PACER_H_
+#ifndef ROBLOX_WINDOW_INPUT_PUMP_PACER_H_
+#define ROBLOX_WINDOW_INPUT_PUMP_PACER_H_
 
 #include <cstdint>
 #include <limits>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 inline constexpr uint64_t kProductionInputPumpHz = 240;
@@ -50,6 +50,6 @@ class InputPumpPacer final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_INPUT_PUMP_PACER_H_
+#endif  // ROBLOX_WINDOW_INPUT_PUMP_PACER_H_

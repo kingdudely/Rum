@@ -7,7 +7,7 @@
 #include <cstring>
 #include <sstream>
 
-namespace mocktail::runtime {
+namespace roblox::runtime {
 namespace {
 
 std::string LimitValue(rlim_t value) {
@@ -79,4 +79,4 @@ std::string ApplyInteractiveProcessLaunchPolicy() {
   return log.str();
 }
 
-}  // namespace mocktail::runtime
+}  // namespace roblox::runtime

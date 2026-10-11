@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_DESKTOP_APP_POLICY_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_DESKTOP_APP_POLICY_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_DESKTOP_APP_POLICY_H_
+#define ROBLOX_RUNTIME_ROBLOX_DESKTOP_APP_POLICY_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 struct DesktopAppPolicyResult {
@@ -39,6 +39,6 @@ bool MergeDesktopAppPolicyClientSettingsOverride(std::string_view policy_json,
                                                  std::string* error);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_DESKTOP_APP_POLICY_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_DESKTOP_APP_POLICY_H_

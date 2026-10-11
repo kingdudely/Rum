@@ -28,7 +28,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
 #include <mcpelauncher/linker.h>
 
 namespace linker::libdl {
@@ -79,9 +79,9 @@ bool HasPrefix(std::string_view value, std::string_view prefix) {
          value.compare(0, prefix.size(), prefix) == 0;
 }
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
 bool LinkerTraceEnabled() {
-  static const bool enabled = std::getenv("MOCKTAIL_TRACE") != nullptr;
+  static const bool enabled = std::getenv("ROBLOX_TRACE") != nullptr;
   return enabled;
 }
 
@@ -191,7 +191,7 @@ const SymbolMap& GetBionicSymbols() {
 }
 
 void* BionicDlIteratePhdrAddress() {
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   using Callback = int (*)(dl_phdr_info*, size_t, void*);
   using Function = int (*)(Callback, void*);
   return reinterpret_cast<void*>(
@@ -205,7 +205,7 @@ ProgramHeaderValidation ValidateBionicProgramHeaders(LibraryHandle handle) {
   if (handle == nullptr) {
     return {false, "null Android library handle"};
   }
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   const uintptr_t base = ::linker::get_library_base(handle);
   if (base == 0) {
     return {false, "Bionic linker returned a zero load base"};
@@ -250,7 +250,7 @@ std::uintptr_t FindLoadedAndroidLibraryBase(
   if (loaded == g_symbol_table.end() || loaded->second == nullptr) {
     return 0;
   }
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   return static_cast<std::uintptr_t>(
       ::linker::get_library_base(loaded->second));
 #else
@@ -270,7 +270,7 @@ void RegisterSyntheticSymbol(const std::string& soname,
     }
   }
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   if (loaded_handle != nullptr) {
     ::linker::relocate(loaded_handle, SymbolMap{{name, address}});
   }
@@ -282,209 +282,209 @@ void RegisterSyntheticSymbol(const std::string& soname,
 void RegisterBionicPthreadKeyRuntimeForLibc() {
   RegisterSyntheticSymbol(
       "libc.so", "pthread_key_create",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_key_create));
+      reinterpret_cast<void*>(roblox_bionic_pthread_key_create));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_key_delete",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_key_delete));
+      reinterpret_cast<void*>(roblox_bionic_pthread_key_delete));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_getspecific",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_getspecific));
+      reinterpret_cast<void*>(roblox_bionic_pthread_getspecific));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_setspecific",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_setspecific));
+      reinterpret_cast<void*>(roblox_bionic_pthread_setspecific));
   RegisterSyntheticSymbol("libc.so", "sem_init",
-                          reinterpret_cast<void*>(mocktail_bionic_sem_init));
+                          reinterpret_cast<void*>(roblox_bionic_sem_init));
   RegisterSyntheticSymbol("libc.so", "sem_destroy",
-                          reinterpret_cast<void*>(mocktail_bionic_sem_destroy));
+                          reinterpret_cast<void*>(roblox_bionic_sem_destroy));
   RegisterSyntheticSymbol("libc.so", "sem_wait",
-                          reinterpret_cast<void*>(mocktail_bionic_sem_wait));
+                          reinterpret_cast<void*>(roblox_bionic_sem_wait));
   RegisterSyntheticSymbol("libc.so", "sem_post",
-                          reinterpret_cast<void*>(mocktail_bionic_sem_post));
+                          reinterpret_cast<void*>(roblox_bionic_sem_post));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_rwlock_init",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_rwlock_init));
+      reinterpret_cast<void*>(roblox_bionic_pthread_rwlock_init));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_rwlock_destroy",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_rwlock_destroy));
+      reinterpret_cast<void*>(roblox_bionic_pthread_rwlock_destroy));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_rwlock_rdlock",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_rwlock_rdlock));
+      reinterpret_cast<void*>(roblox_bionic_pthread_rwlock_rdlock));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_rwlock_wrlock",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_rwlock_wrlock));
+      reinterpret_cast<void*>(roblox_bionic_pthread_rwlock_wrlock));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_rwlock_unlock",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_rwlock_unlock));
+      reinterpret_cast<void*>(roblox_bionic_pthread_rwlock_unlock));
   RegisterSyntheticSymbol("libc.so", "pthread_once",
-                          reinterpret_cast<void*>(mocktail_pthread_once));
+                          reinterpret_cast<void*>(roblox_pthread_once));
   RegisterSyntheticSymbol("libc.so", "pthread_spin_init",
-                          reinterpret_cast<void*>(mocktail_pthread_spin_init));
+                          reinterpret_cast<void*>(roblox_pthread_spin_init));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_spin_destroy",
-      reinterpret_cast<void*>(mocktail_pthread_spin_destroy));
+      reinterpret_cast<void*>(roblox_pthread_spin_destroy));
   RegisterSyntheticSymbol("libc.so", "pthread_spin_lock",
-                          reinterpret_cast<void*>(mocktail_pthread_spin_lock));
+                          reinterpret_cast<void*>(roblox_pthread_spin_lock));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_spin_trylock",
-      reinterpret_cast<void*>(mocktail_pthread_spin_trylock));
+      reinterpret_cast<void*>(roblox_pthread_spin_trylock));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_spin_unlock",
-      reinterpret_cast<void*>(mocktail_pthread_spin_unlock));
+      reinterpret_cast<void*>(roblox_pthread_spin_unlock));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_barrier_init",
-      reinterpret_cast<void*>(mocktail_pthread_barrier_init));
+      reinterpret_cast<void*>(roblox_pthread_barrier_init));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_barrier_destroy",
-      reinterpret_cast<void*>(mocktail_pthread_barrier_destroy));
+      reinterpret_cast<void*>(roblox_pthread_barrier_destroy));
   RegisterSyntheticSymbol(
       "libc.so", "pthread_barrier_wait",
-      reinterpret_cast<void*>(mocktail_pthread_barrier_wait));
+      reinterpret_cast<void*>(roblox_pthread_barrier_wait));
 }
 
 void RegisterBionicAtForkRuntimeForLibc() {
   RegisterSyntheticSymbol(
       "libc.so", "__register_atfork",
-      reinterpret_cast<void*>(mocktail_bionic_register_atfork));
+      reinterpret_cast<void*>(roblox_bionic_register_atfork));
 }
 
 void RegisterBionicLargeFileRuntimeForLibc() {
   RegisterSyntheticSymbol("libc.so", "pread64",
-                          reinterpret_cast<void*>(mocktail_bionic_pread64));
+                          reinterpret_cast<void*>(roblox_bionic_pread64));
   RegisterSyntheticSymbol("libc.so", "pwrite64",
-                          reinterpret_cast<void*>(mocktail_bionic_pwrite64));
+                          reinterpret_cast<void*>(roblox_bionic_pwrite64));
   RegisterSyntheticSymbol("libc.so", "lseek64",
-                          reinterpret_cast<void*>(mocktail_bionic_lseek64));
+                          reinterpret_cast<void*>(roblox_bionic_lseek64));
 }
 
 void RegisterBionicHostLibcRuntimeForLibc() {
   RegisterSyntheticSymbol("libc.so", "getaddrinfo",
-                          reinterpret_cast<void*>(mocktail_bionic_getaddrinfo));
+                          reinterpret_cast<void*>(roblox_bionic_getaddrinfo));
   RegisterSyntheticSymbol(
       "libc.so", "freeaddrinfo",
-      reinterpret_cast<void*>(mocktail_bionic_freeaddrinfo));
+      reinterpret_cast<void*>(roblox_bionic_freeaddrinfo));
   RegisterSyntheticSymbol(
       "libc.so", "gethostbyname",
-      reinterpret_cast<void*>(mocktail_bionic_gethostbyname));
+      reinterpret_cast<void*>(roblox_bionic_gethostbyname));
   // Replace legacy DNS wrappers before libc.so snapshots the global map, so
   // every payload crosses the upload deny boundary.
   RegisterSymbol("getaddrinfo",
-                 reinterpret_cast<void*>(mocktail_bionic_getaddrinfo));
+                 reinterpret_cast<void*>(roblox_bionic_getaddrinfo));
   RegisterSymbol("freeaddrinfo",
-                 reinterpret_cast<void*>(mocktail_bionic_freeaddrinfo));
+                 reinterpret_cast<void*>(roblox_bionic_freeaddrinfo));
   RegisterSymbol("gethostbyname",
-                 reinterpret_cast<void*>(mocktail_bionic_gethostbyname));
+                 reinterpret_cast<void*>(roblox_bionic_gethostbyname));
   RegisterSyntheticSymbol("libc.so", "__cmsg_nxthdr",
                           reinterpret_cast<void*>(
-                              mocktail_bionic_cmsg_nxthdr));
+                              roblox_bionic_cmsg_nxthdr));
   RegisterSyntheticSymbol(
       "libc.so", "__cxa_thread_atexit_impl",
-      reinterpret_cast<void*>(mocktail_bionic_cxa_thread_atexit_impl));
+      reinterpret_cast<void*>(roblox_bionic_cxa_thread_atexit_impl));
   RegisterSyntheticSymbol("libc.so", "__readlink_chk",
-                          reinterpret_cast<void*>(mocktail___readlink_chk));
+                          reinterpret_cast<void*>(roblox___readlink_chk));
   RegisterSyntheticSymbol("libc.so", "arc4random_buf",
                           reinterpret_cast<void*>(
-                              mocktail_bionic_arc4random_buf));
+                              roblox_bionic_arc4random_buf));
   RegisterSyntheticSymbol("libc.so", "mallinfo",
-                          reinterpret_cast<void*>(mocktail_bionic_mallinfo));
+                          reinterpret_cast<void*>(roblox_bionic_mallinfo));
   RegisterSyntheticSymbol("libc.so", "sysinfo",
-                          reinterpret_cast<void*>(mocktail_bionic_sysinfo));
+                          reinterpret_cast<void*>(roblox_bionic_sysinfo));
   RegisterSyntheticSymbol("libc.so", "uname",
-                          reinterpret_cast<void*>(mocktail_bionic_uname));
+                          reinterpret_cast<void*>(roblox_bionic_uname));
   RegisterSyntheticSymbol("libc.so", "getuid",
-                          reinterpret_cast<void*>(mocktail_bionic_getuid));
+                          reinterpret_cast<void*>(roblox_bionic_getuid));
   RegisterSyntheticSymbol("libc.so", "geteuid",
-                          reinterpret_cast<void*>(mocktail_bionic_geteuid));
-  RegisterSymbol("sysinfo", reinterpret_cast<void*>(mocktail_bionic_sysinfo));
-  RegisterSymbol("uname", reinterpret_cast<void*>(mocktail_bionic_uname));
-  RegisterSymbol("getuid", reinterpret_cast<void*>(mocktail_bionic_getuid));
-  RegisterSymbol("geteuid", reinterpret_cast<void*>(mocktail_bionic_geteuid));
+                          reinterpret_cast<void*>(roblox_bionic_geteuid));
+  RegisterSymbol("sysinfo", reinterpret_cast<void*>(roblox_bionic_sysinfo));
+  RegisterSymbol("uname", reinterpret_cast<void*>(roblox_bionic_uname));
+  RegisterSymbol("getuid", reinterpret_cast<void*>(roblox_bionic_getuid));
+  RegisterSymbol("geteuid", reinterpret_cast<void*>(roblox_bionic_geteuid));
   RegisterSyntheticSymbol("libc.so", "strerror_r",
-                          reinterpret_cast<void*>(mocktail_bionic_strerror_r));
+                          reinterpret_cast<void*>(roblox_bionic_strerror_r));
   // Publish this before relocation to prevent binding glibc's incompatible
   // GNU char*-returning strerror_r.
   RegisterSymbol("strerror_r",
-                 reinterpret_cast<void*>(mocktail_bionic_strerror_r));
+                 reinterpret_cast<void*>(roblox_bionic_strerror_r));
   RegisterSyntheticSymbol("libc.so", "strtoll_l",
-                          reinterpret_cast<void*>(mocktail_bionic_strtoll_l));
+                          reinterpret_cast<void*>(roblox_bionic_strtoll_l));
   RegisterSyntheticSymbol("libc.so", "strtoull_l",
-                          reinterpret_cast<void*>(mocktail_bionic_strtoull_l));
+                          reinterpret_cast<void*>(roblox_bionic_strtoull_l));
 }
 
 void RegisterBionicSysconfRuntimeForLibc() {
   RegisterSyntheticSymbol("libc.so", "sysconf",
-                          reinterpret_cast<void*>(mocktail_bionic_sysconf));
+                          reinterpret_cast<void*>(roblox_bionic_sysconf));
 }
 
 void RegisterBionicSignalRuntimeForLibc() {
   RegisterSyntheticSymbol("libc.so", "sigaction",
-                          reinterpret_cast<void*>(mocktail_bionic_sigaction));
+                          reinterpret_cast<void*>(roblox_bionic_sigaction));
 }
 
 void RegisterBionicStdioRuntimeForLibc() {
   RegisterSyntheticSymbol("libc.so", "__sF",
-                          mocktail::compat::BionicFileArraySymbolAddress());
+                          roblox::compat::BionicFileArraySymbolAddress());
   RegisterSyntheticSymbol("libc.so", "stdin",
-                          mocktail::compat::BionicStdinSymbolAddress());
+                          roblox::compat::BionicStdinSymbolAddress());
   RegisterSyntheticSymbol("libc.so", "stdout",
-                          mocktail::compat::BionicStdoutSymbolAddress());
+                          roblox::compat::BionicStdoutSymbolAddress());
   RegisterSyntheticSymbol("libc.so", "stderr",
-                          mocktail::compat::BionicStderrSymbolAddress());
+                          roblox::compat::BionicStderrSymbolAddress());
   RegisterSyntheticSymbol("libc.so", "__fread_chk",
-                          reinterpret_cast<void*>(mocktail___fread_chk));
+                          reinterpret_cast<void*>(roblox___fread_chk));
   RegisterSyntheticSymbol("libc.so", "__fwrite_chk",
-                          reinterpret_cast<void*>(mocktail___fwrite_chk));
+                          reinterpret_cast<void*>(roblox___fwrite_chk));
   RegisterSyntheticSymbol("libc.so", "clearerr",
-                          reinterpret_cast<void*>(mocktail_clearerr));
+                          reinterpret_cast<void*>(roblox_clearerr));
   RegisterSyntheticSymbol("libc.so", "fclose",
-                          reinterpret_cast<void*>(mocktail_fclose));
+                          reinterpret_cast<void*>(roblox_fclose));
   RegisterSyntheticSymbol("libc.so", "feof",
-                          reinterpret_cast<void*>(mocktail_feof));
+                          reinterpret_cast<void*>(roblox_feof));
   RegisterSyntheticSymbol("libc.so", "ferror",
-                          reinterpret_cast<void*>(mocktail_ferror));
+                          reinterpret_cast<void*>(roblox_ferror));
   RegisterSyntheticSymbol("libc.so", "fflush",
-                          reinterpret_cast<void*>(mocktail_fflush));
+                          reinterpret_cast<void*>(roblox_fflush));
   RegisterSyntheticSymbol("libc.so", "fgetc",
-                          reinterpret_cast<void*>(mocktail_getc));
+                          reinterpret_cast<void*>(roblox_getc));
   RegisterSyntheticSymbol("libc.so", "fgets",
-                          reinterpret_cast<void*>(mocktail_fgets));
+                          reinterpret_cast<void*>(roblox_fgets));
   RegisterSyntheticSymbol("libc.so", "fileno",
-                          reinterpret_cast<void*>(mocktail_fileno));
+                          reinterpret_cast<void*>(roblox_fileno));
   RegisterSyntheticSymbol("libc.so", "fprintf",
-                          reinterpret_cast<void*>(mocktail_fprintf));
+                          reinterpret_cast<void*>(roblox_fprintf));
   RegisterSyntheticSymbol("libc.so", "fputc",
-                          reinterpret_cast<void*>(mocktail_fputc));
+                          reinterpret_cast<void*>(roblox_fputc));
   RegisterSyntheticSymbol("libc.so", "fputs",
-                          reinterpret_cast<void*>(mocktail_fputs));
+                          reinterpret_cast<void*>(roblox_fputs));
   RegisterSyntheticSymbol("libc.so", "fputwc",
-                          reinterpret_cast<void*>(mocktail_fputwc));
+                          reinterpret_cast<void*>(roblox_fputwc));
   RegisterSyntheticSymbol("libc.so", "fread",
-                          reinterpret_cast<void*>(mocktail_fread));
+                          reinterpret_cast<void*>(roblox_fread));
   RegisterSyntheticSymbol("libc.so", "fscanf",
-                          reinterpret_cast<void*>(mocktail_fscanf));
+                          reinterpret_cast<void*>(roblox_fscanf));
   RegisterSyntheticSymbol("libc.so", "fseek",
-                          reinterpret_cast<void*>(mocktail_fseek));
+                          reinterpret_cast<void*>(roblox_fseek));
   RegisterSyntheticSymbol("libc.so", "fseeko",
-                          reinterpret_cast<void*>(mocktail_fseeko));
+                          reinterpret_cast<void*>(roblox_fseeko));
   RegisterSyntheticSymbol("libc.so", "ftell",
-                          reinterpret_cast<void*>(mocktail_ftell));
+                          reinterpret_cast<void*>(roblox_ftell));
   RegisterSyntheticSymbol("libc.so", "ftello",
-                          reinterpret_cast<void*>(mocktail_ftello));
+                          reinterpret_cast<void*>(roblox_ftello));
   RegisterSyntheticSymbol("libc.so", "fwrite",
-                          reinterpret_cast<void*>(mocktail_fwrite));
+                          reinterpret_cast<void*>(roblox_fwrite));
   RegisterSyntheticSymbol("libc.so", "getc",
-                          reinterpret_cast<void*>(mocktail_getc));
+                          reinterpret_cast<void*>(roblox_getc));
   RegisterSyntheticSymbol("libc.so", "setvbuf",
-                          reinterpret_cast<void*>(mocktail_setvbuf));
+                          reinterpret_cast<void*>(roblox_setvbuf));
   RegisterSyntheticSymbol("libc.so", "ungetc",
-                          reinterpret_cast<void*>(mocktail_ungetc));
+                          reinterpret_cast<void*>(roblox_ungetc));
   RegisterSyntheticSymbol("libc.so", "vfprintf",
-                          reinterpret_cast<void*>(mocktail_vfprintf));
+                          reinterpret_cast<void*>(roblox_vfprintf));
   RegisterSyntheticSymbol("libc.so", "vfscanf",
-                          reinterpret_cast<void*>(mocktail_vfscanf));
+                          reinterpret_cast<void*>(roblox_vfscanf));
 }
 
 void RegisterBionicDynamicLoaderForLibdl() {
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   for (const auto& [name, address] : libdl::get_dl_symbols()) {
     RegisterSyntheticSymbol("libdl.so", name, address);
   }
@@ -527,7 +527,7 @@ LibraryHandle AddSyntheticLibrary(const std::string& soname,
   }
 
   if (existing_handle != nullptr) {
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
     if (!exports.empty()) {
       ::linker::relocate(existing_handle, exports);
     }
@@ -535,7 +535,7 @@ LibraryHandle AddSyntheticLibrary(const std::string& soname,
     return existing_handle;
   }
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   const char* persistent_soname = nullptr;
   {
     std::lock_guard<std::mutex> lock(g_registry_mutex);
@@ -548,7 +548,7 @@ LibraryHandle AddSyntheticLibrary(const std::string& soname,
   LibraryHandle handle = ::dlopen(soname.c_str(), RTLD_LAZY | RTLD_GLOBAL);
 #endif
   if (!handle) {
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
     std::cerr << "  [bionic-linker] failed to register synthetic library '"
               << soname << "': " << ::linker::dlerror() << '\n';
 #else
@@ -570,7 +570,7 @@ LibraryHandle AddSyntheticLibrary(const std::string& soname,
 }
 
 void UpdateAndroidLibraryPath(const std::string& search_path) {
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   if (!search_path.empty()) {
     ::linker::update_LD_LIBRARY_PATH(search_path.c_str());
   }
@@ -610,13 +610,13 @@ LibraryHandle OpenAndroidLibrary(const std::string& real_path,
                                              : real_path.substr(0, separator));
   }
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   LibraryHandle handle = ::linker::dlopen(real_path.c_str(), RTLD_NOW);
 #else
   LibraryHandle handle = ::dlopen(real_path.c_str(), RTLD_LAZY | RTLD_GLOBAL);
 #endif
   if (!handle) {
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
     std::cerr << "  [bionic-linker] failed to load '" << real_path
               << "': " << ::linker::dlerror() << '\n';
 #else
@@ -638,7 +638,7 @@ LibraryHandle OpenAndroidLibrary(const std::string& real_path,
   }
 
   std::uintptr_t image_base = 0;
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   image_base = static_cast<std::uintptr_t>(::linker::get_library_base(handle));
 #endif
   if (observer != nullptr &&
@@ -647,7 +647,7 @@ LibraryHandle OpenAndroidLibrary(const std::string& real_path,
       std::lock_guard<std::mutex> lock(g_registry_mutex);
       RemoveHandleFromRegistry(handle);
     }
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
     ::linker::dlclose(handle);
 #else
     ::dlclose(handle);
@@ -723,7 +723,7 @@ void* ResolveSymbol(LibraryHandle handle, const std::string& symbol_name) {
     return nullptr;
   }
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   void* sym = ::linker::dlsym(handle, symbol_name.c_str());
   if (!sym) {
     char* err = ::linker::dlerror();
@@ -754,7 +754,7 @@ void UnloadLibrary(LibraryHandle handle) {
     RemoveHandleFromRegistry(handle);
   }
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   if (synthetic) {
     ::linker::unload_library(handle);
   } else {

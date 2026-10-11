@@ -1,6 +1,6 @@
 #include "runtime/roblox_text_display_state.h"
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <utf8proc.h>
 
@@ -12,7 +12,7 @@
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -319,4 +319,4 @@ Status RobloxTextDisplayState::Apply(const RobloxTextDisplayUpdate& update,
 void RobloxTextDisplayState::Reset() { presentation_.ClearSensitive(); }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

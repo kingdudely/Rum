@@ -1,7 +1,7 @@
 // Shared declarations for the split legacy runtime. Each name is
 // defined once; the .cc files below only carry implementations.
-#ifndef MOCKTAIL_LEGACY_LEGACY_RUNTIME_INTERNAL_H_
-#define MOCKTAIL_LEGACY_LEGACY_RUNTIME_INTERNAL_H_
+#ifndef ROBLOX_LEGACY_LEGACY_RUNTIME_INTERNAL_H_
+#define ROBLOX_LEGACY_LEGACY_RUNTIME_INTERNAL_H_
 
 #include <jni.h>
 #include <netdb.h>
@@ -23,9 +23,9 @@
 #include "runtime/game_session_coordinator.h"
 #include "runtime/roblox_fresh_game_launch_controller.h"
 #include "runtime/roblox_game_session_native_adapter.h"
-#include "mocktail/graphics/bionic_egl_bridge.h"
-#include "mocktail/platform/display_refresh_capabilities.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/graphics/bionic_egl_bridge.h"
+#include "roblox/platform/display_refresh_capabilities.h"
+#include "roblox/platform/posix_primitives.h"
 
 namespace legacy_internal {
 
@@ -116,8 +116,8 @@ struct EngineStartupContext {
   // tickets). Empty when the launch was already normalized to a place.
   const std::string* raw_launch_uri;
   jnivm::RobloxAuthIdentity account_identity;
-  const mocktail::runtime::SecureRobloxCredential* roblox_credential;
-  mocktail::runtime::RobloxGameSessionRuntime* game_session_runtime;
+  const roblox::runtime::SecureRobloxCredential* roblox_credential;
+  roblox::runtime::RobloxGameSessionRuntime* game_session_runtime;
   bool run_prepare_jni;
   bool run_set_asset_path;
   bool call_real_set_asset_path;
@@ -208,7 +208,7 @@ struct NativeSettingsValues {
   jlong http_proxy_port = 0;
   std::string cookie_base_url;
   std::string cookie_domain;
-  const mocktail::runtime::SecureRobloxCredential* credential = nullptr;
+  const roblox::runtime::SecureRobloxCredential* credential = nullptr;
   std::string_view roblox_cookies;
   std::string cookie_manager_cookies;
   std::string android_id;
@@ -324,7 +324,7 @@ struct BionicStubPreload {
 };
 
 struct ExperienceLifecycleTarget {
-  std::weak_ptr<mocktail::runtime::RobloxExperienceComposition> composition;
+  std::weak_ptr<roblox::runtime::RobloxExperienceComposition> composition;
 };
 
 extern volatile uintptr_t g_stage6_jni_env;
@@ -398,8 +398,8 @@ void SetBooleanField(JNIEnv* env, jobject object, const char* name,
 void SetRobloxServiceUrlFields(JNIEnv* env, jobject object);
 jobject NewObject(JNIEnv* env, const char* class_name);
 void InstallNativeGlJavaImplementation(JNIEnv* env, jclass native_gl_java_class);
-mocktail::runtime::DisplaySize HostDisplaySize();
-mocktail::runtime::DisplaySize HostWindowPixelSize();
+roblox::runtime::DisplaySize HostDisplaySize();
+roblox::runtime::DisplaySize HostWindowPixelSize();
 jobject BuildDeviceParams(JNIEnv* env);
 jobject BuildApplicationExitInfoList(JNIEnv* env);
 jobject BuildPlatformParams(JNIEnv* env, jobject surface);
@@ -437,16 +437,16 @@ SymbolResolveResult ResolveSymbolForBionic(const char* name, bool has_window,
 bool StubOwnsSymbolAddress(void* handle, void* address);
 bool IsGlSymbol(const char* name);
 void* OpenRealGlesLibrary();
-bool IsMocktailStubGlesPath(const char* path);
+bool IsRobloxStubGlesPath(const char* path);
 void ReportResolvedEngineSymbols(const RobloxEngineSymbols& symbols);
 RobloxEngineSymbols ResolveRobloxEngineSymbols(
     void* roblox_handle,
-    const mocktail::runtime::RobloxStartupSymbols& startup_symbols,
+    const roblox::runtime::RobloxStartupSymbols& startup_symbols,
     jnivm::VM* jni_vm);
 void TallyGlSymbol(const char* name, SymbolResolveSource source, void* address,
                    GlSymbolStats* stats);
 BionicStubPreload PreloadBionicStubs(
-    const mocktail::graphics::BionicEglBridge& bionic_egl_bridge);
+    const roblox::graphics::BionicEglBridge& bionic_egl_bridge);
 GlSymbolStats RegisterEngineSymbols(bool has_window,
                                      void* real_gles_handle,
                                      const std::vector<void*>& stub_handles);
@@ -504,12 +504,12 @@ addrinfo HostHintsFromBionic(const BionicAddrInfo* hints);
 BionicAddrInfo* BionicAddrInfoFromHost(const addrinfo* host);
 void RegisterBionicDnsWrappers();
 void RegisterBionicPathWrappers();
-mocktail::runtime::RuntimePaths CurrentRuntimePaths();
-std::string MocktailCacheRoot();
-std::string MocktailConfigRoot();
+roblox::runtime::RuntimePaths CurrentRuntimePaths();
+std::string RobloxCacheRoot();
+std::string RobloxConfigRoot();
 std::string DefaultAssetPath();
 bool RegisterFreshGamePresentObserver(
-    void* context, mocktail::runtime::FreshLaunchPresentObserver observer,
+    void* context, roblox::runtime::FreshLaunchPresentObserver observer,
     void* observer_context);
 void ClearFreshGamePresentObserver(void* context);
 jobject CreateExperienceRawCallback(
@@ -521,11 +521,11 @@ jobject CreateAsyncMessageBusRequestHandler(
     void (*run)(void*, JNIEnv*, jstring, jstring));
 void ClearAsyncMessageBusRequestHandler(void* context, jobject handler);
 void NotifyLuaAppDidReturn(void* context);
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceCreated(
+roblox::runtime::GameSessionUpdateResult ExperienceSurfaceCreated(
     void* context, uint64_t generation);
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceChanged(
-    void* context, mocktail::runtime::GameSurface surface);
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceDestroyed(
+roblox::runtime::GameSessionUpdateResult ExperienceSurfaceChanged(
+    void* context, roblox::runtime::GameSurface surface);
+roblox::runtime::GameSessionUpdateResult ExperienceSurfaceDestroyed(
     void* context, uint64_t generation);
 std::string GetEnvStringDefaultPath(const char* name,
                                     const std::string& default_value);
@@ -543,9 +543,9 @@ void EngineLogPtr(const char* name, const void* ptr);
 void PrintBacktraceNoSig(const char* prefix);
 void PrintContextBacktrace(ucontext_t* ucontext, const char* prefix);
 std::string JStringToString(JNIEnv* env, jstring value);
-void MocktailSetAssetPath(JNIEnv* env, jstring asset_path);
-void MocktailAppBridgeInit(JNIEnv* env, jstring app_params);
-void MocktailAppBridgeStart(JNIEnv*, jstring);
+void RobloxSetAssetPath(JNIEnv* env, jstring asset_path);
+void RobloxAppBridgeInit(JNIEnv* env, jstring app_params);
+void RobloxAppBridgeStart(JNIEnv*, jstring);
 jstring NewStringFromEnvDefault(JNIEnv* env, const char* env_name,
                                 const char* default_value);
 void ApplyAuthStartupDefaults(bool credential_available,
@@ -565,12 +565,12 @@ jobject BuildStartGameParams(JNIEnv* env, jobject platform_params,
 
 // C entry points defined in legacy_env.cc for the guest linker.
 extern "C" {
-int mocktail_mprotect(void* addr, size_t len, int prot);
-int mocktail_recover_stack_chk_fail();
+int roblox_mprotect(void* addr, size_t len, int prot);
+int roblox_recover_stack_chk_fail();
 }  // extern "C"
 
-extern "C" void* mocktail_gameactivity_on_trim_memory_native;
+extern "C" void* roblox_gameactivity_on_trim_memory_native;
 
 }  // namespace legacy_internal
 
-#endif  // MOCKTAIL_LEGACY_LEGACY_RUNTIME_INTERNAL_H_
+#endif  // ROBLOX_LEGACY_LEGACY_RUNTIME_INTERNAL_H_

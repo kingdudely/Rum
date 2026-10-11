@@ -5,7 +5,7 @@
 
 #include <cstdio>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 namespace {
@@ -222,4 +222,4 @@ bool SdlPointerCaptureBackend::Apply(bool relative_mode, bool cursor_visible) {
 }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

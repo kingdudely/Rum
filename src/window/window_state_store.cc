@@ -1,6 +1,6 @@
 #include "window/window_state_store.h"
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 
 #define JSON_NOEXCEPTION 1
 #include <fcntl.h>
@@ -15,7 +15,7 @@
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 namespace {
 
@@ -238,4 +238,4 @@ Status StoreWindowState(const std::filesystem::path& path,
 }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

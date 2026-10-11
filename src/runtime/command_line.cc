@@ -8,10 +8,10 @@
 #include <string_view>
 
 #include "compat/guest_abi.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/roblox_launch_uri.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -69,7 +69,7 @@ std::string NormalizeCookieValue(std::string value) {
 
 namespace {
 
-// The engine decides for itself what a roblox:// argument means; Mocktail only
+// The engine decides for itself what a roblox:// argument means; Roblox only
 // needs to know whether the argument is addressed to Roblox at all. Anything
 // Roblox-addressed that is not a place or user launch is a web-login ticket,
 // which the engine's WebLoginProtocol redeems during native settings startup.
@@ -252,12 +252,12 @@ bool ApplyCommandLineEnvironment(const CommandLineOptions& options,
     return false;
   }
   if (!options.graphics_backend.empty() &&
-      !SetEnvironment("MOCKTAIL_GRAPHICS_BACKEND", options.graphics_backend,
+      !SetEnvironment("ROBLOX_GRAPHICS_BACKEND", options.graphics_backend,
                       error)) {
     return false;
   }
   if (!options.roblosecurity.empty() &&
-      !SetEnvironment("MOCKTAIL_ROBLOSECURITY", options.roblosecurity,
+      !SetEnvironment("ROBLOX_ROBLOSECURITY", options.roblosecurity,
                       error)) {
     return false;
   }
@@ -267,7 +267,7 @@ bool ApplyCommandLineEnvironment(const CommandLineOptions& options,
 std::string CommandLineUsage(const std::string& program_name) {
   std::ostringstream usage;
   usage
-      << "Usage: " << (program_name.empty() ? "mocktail" : program_name)
+      << "Usage: " << (program_name.empty() ? "roblox" : program_name)
       << " [options] [roblox-uri]\n\n"
       << "Runs a locally provided Roblox client; it does not download Roblox\n"
       << "files. Defaults to libroblox.so and assets/content next to this\n"
@@ -287,11 +287,11 @@ std::string CommandLineUsage(const std::string& program_name) {
       << "                           command line once startup consumes it.\n"
       << "  --help, -h             Show this help\n\n"
       << "Auth:\n"
-      << "  Pass --roblosecurity (or set MOCKTAIL_ROBLOSECURITY) to play as\n"
+      << "  Pass --roblosecurity (or set ROBLOX_ROBLOSECURITY) to play as\n"
       << "  yourself. Without it, Roblox starts as a guest.\n\n"
-      << "Additional runtime options are available as MOCKTAIL_* environment variables.\n";
+      << "Additional runtime options are available as ROBLOX_* environment variables.\n";
   return usage.str();
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

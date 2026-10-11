@@ -1,7 +1,7 @@
-#ifndef MOCKTAIL_RUNTIME_PROCESS_DIAGNOSTICS_H_
-#define MOCKTAIL_RUNTIME_PROCESS_DIAGNOSTICS_H_
+#ifndef ROBLOX_RUNTIME_PROCESS_DIAGNOSTICS_H_
+#define ROBLOX_RUNTIME_PROCESS_DIAGNOSTICS_H_
 
-namespace mocktail::runtime {
+namespace roblox::runtime {
 
 enum class ProcessDiagnosticStage { kStartup, kNativeRuntime, kShutdown };
 
@@ -10,6 +10,6 @@ enum class ProcessDiagnosticStage { kStartup, kNativeRuntime, kShutdown };
 void InstallCpuLimitDiagnostics();
 void LogProcessDiagnostics(ProcessDiagnosticStage stage);
 
-}  // namespace mocktail::runtime
+}  // namespace roblox::runtime
 
-#endif  // MOCKTAIL_RUNTIME_PROCESS_DIAGNOSTICS_H_
+#endif  // ROBLOX_RUNTIME_PROCESS_DIAGNOSTICS_H_

@@ -86,7 +86,7 @@ int TryWrlock(pthread_rwlock_t* rwlock) {
 
 extern "C" {
 
-int mocktail_bionic_pthread_rwlock_init(
+int roblox_bionic_pthread_rwlock_init(
     pthread_rwlock_t* rwlock, const pthread_rwlockattr_t* /*attr*/) {
   if (rwlock == nullptr ||
       reinterpret_cast<uintptr_t>(rwlock) < 4096) {
@@ -96,7 +96,7 @@ int mocktail_bionic_pthread_rwlock_init(
   return 0;
 }
 
-int mocktail_bionic_pthread_rwlock_destroy(pthread_rwlock_t* rwlock) {
+int roblox_bionic_pthread_rwlock_destroy(pthread_rwlock_t* rwlock) {
   if (rwlock == nullptr) {
     return EINVAL;
   }
@@ -107,7 +107,7 @@ int mocktail_bionic_pthread_rwlock_destroy(pthread_rwlock_t* rwlock) {
   return 0;
 }
 
-int mocktail_bionic_pthread_rwlock_rdlock(pthread_rwlock_t* rwlock) {
+int roblox_bionic_pthread_rwlock_rdlock(pthread_rwlock_t* rwlock) {
   if (rwlock == nullptr ||
       reinterpret_cast<uintptr_t>(rwlock) < 4096) {
     return EINVAL;
@@ -134,7 +134,7 @@ int mocktail_bionic_pthread_rwlock_rdlock(pthread_rwlock_t* rwlock) {
   }
 }
 
-int mocktail_bionic_pthread_rwlock_wrlock(pthread_rwlock_t* rwlock) {
+int roblox_bionic_pthread_rwlock_wrlock(pthread_rwlock_t* rwlock) {
   if (rwlock == nullptr ||
       reinterpret_cast<uintptr_t>(rwlock) < 4096) {
     return EINVAL;
@@ -164,7 +164,7 @@ int mocktail_bionic_pthread_rwlock_wrlock(pthread_rwlock_t* rwlock) {
   }
 }
 
-int mocktail_bionic_pthread_rwlock_unlock(pthread_rwlock_t* rwlock) {
+int roblox_bionic_pthread_rwlock_unlock(pthread_rwlock_t* rwlock) {
   if (rwlock == nullptr ||
       reinterpret_cast<uintptr_t>(rwlock) < 4096) {
     return EINVAL;

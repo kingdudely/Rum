@@ -69,7 +69,7 @@ int SemInc(unsigned* count) {
 
 extern "C" {
 
-int mocktail_bionic_sem_init(sem_t* semaphore, int process_shared,
+int roblox_bionic_sem_init(sem_t* semaphore, int process_shared,
                              unsigned int value) {
   if (semaphore == nullptr || process_shared != 0) {
     errno = EINVAL;
@@ -83,7 +83,7 @@ int mocktail_bionic_sem_init(sem_t* semaphore, int process_shared,
   return 0;
 }
 
-int mocktail_bionic_sem_destroy(sem_t* semaphore) {
+int roblox_bionic_sem_destroy(sem_t* semaphore) {
   if (semaphore == nullptr) {
     errno = EINVAL;
     return -1;
@@ -91,7 +91,7 @@ int mocktail_bionic_sem_destroy(sem_t* semaphore) {
   return 0;
 }
 
-int mocktail_bionic_sem_wait(sem_t* semaphore) {
+int roblox_bionic_sem_wait(sem_t* semaphore) {
   if (semaphore == nullptr) {
     errno = EINVAL;
     return -1;
@@ -108,7 +108,7 @@ int mocktail_bionic_sem_wait(sem_t* semaphore) {
   }
 }
 
-int mocktail_bionic_sem_post(sem_t* semaphore) {
+int roblox_bionic_sem_post(sem_t* semaphore) {
   if (semaphore == nullptr) {
     errno = EINVAL;
     return -1;

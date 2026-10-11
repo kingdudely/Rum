@@ -1,14 +1,14 @@
-#ifndef MOCKTAIL_WINDOW_WINDOW_GAME_SURFACE_BRIDGE_H_
-#define MOCKTAIL_WINDOW_WINDOW_GAME_SURFACE_BRIDGE_H_
+#ifndef ROBLOX_WINDOW_WINDOW_GAME_SURFACE_BRIDGE_H_
+#define ROBLOX_WINDOW_WINDOW_GAME_SURFACE_BRIDGE_H_
 
 #include <cstddef>
 #include <cstdint>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 #include "runtime/game_session_coordinator.h"
 #include "window/window_surface_lifecycle.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 class RobloxGameSessionRuntime;
 }  // namespace runtime
@@ -93,6 +93,6 @@ class WindowGameSurfaceBridge final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_WINDOW_GAME_SURFACE_BRIDGE_H_
+#endif  // ROBLOX_WINDOW_WINDOW_GAME_SURFACE_BRIDGE_H_

@@ -1,4 +1,4 @@
-#include "mocktail/graphics/vulkan_text_overlay_compositor.h"
+#include "roblox/graphics/vulkan_text_overlay_compositor.h"
 
 #include <dlfcn.h>
 #include <libplacebo/dispatch.h>
@@ -20,16 +20,16 @@
 #include <utility>
 #include <vector>
 
-#include "mocktail/graphics/text_overlay_frame.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/graphics/text_overlay_frame.h"
+#include "roblox/platform/posix_primitives.h"
 
-namespace mocktail {
+namespace roblox {
 namespace graphics {
 namespace {
 
 constexpr std::uint64_t kMaximumOverlayBytes = 256ULL * 1024ULL * 1024ULL;
 
-using OverlayQueryFn = bool (*)(MocktailTextOverlayFrameInfo* frame);
+using OverlayQueryFn = bool (*)(RobloxTextOverlayFrameInfo* frame);
 using OverlayCopyFn = bool (*)(std::uint64_t revision, void* rgba,
                                std::size_t rgba_capacity);
 using OverlayMayPresentFn = bool (*)();
@@ -190,7 +190,7 @@ struct VulkanTextOverlayCompositor::Impl {
   std::vector<std::unique_ptr<DeviceState>> devices;
   OverlayMayPresentFn overlay_may_present =
       reinterpret_cast<OverlayMayPresentFn>(
-          dlsym(RTLD_DEFAULT, "mocktail_text_overlay_may_present"));
+          dlsym(RTLD_DEFAULT, "roblox_text_overlay_may_present"));
   OverlayQueryFn overlay_query = nullptr;
   OverlayCopyFn overlay_copy = nullptr;
 
@@ -244,11 +244,11 @@ struct VulkanTextOverlayCompositor::Impl {
   bool ResolveOverlayCallbacks() {
     if (overlay_query == nullptr) {
       overlay_query = reinterpret_cast<OverlayQueryFn>(
-          dlsym(RTLD_DEFAULT, "mocktail_text_overlay_query"));
+          dlsym(RTLD_DEFAULT, "roblox_text_overlay_query"));
     }
     if (overlay_copy == nullptr) {
       overlay_copy = reinterpret_cast<OverlayCopyFn>(
-          dlsym(RTLD_DEFAULT, "mocktail_text_overlay_copy"));
+          dlsym(RTLD_DEFAULT, "roblox_text_overlay_copy"));
     }
     return overlay_query != nullptr && overlay_copy != nullptr;
   }
@@ -365,7 +365,7 @@ struct VulkanTextOverlayCompositor::Impl {
   }
 
   bool EnsureSource(DeviceState* device,
-                    const MocktailTextOverlayFrameInfo& frame) {
+                    const RobloxTextOverlayFrameInfo& frame) {
     if (device == nullptr || device->vulkan == nullptr ||
         overlay_copy == nullptr) {
       return false;
@@ -435,7 +435,7 @@ struct VulkanTextOverlayCompositor::Impl {
 
   bool BuildWorkItems(DeviceState* device, QueueState* queue,
                       const VkPresentInfoKHR& present_info,
-                      const MocktailTextOverlayFrameInfo& frame,
+                      const RobloxTextOverlayFrameInfo& frame,
                       std::vector<WorkItem>* work_items) {
     if (device == nullptr || queue == nullptr || work_items == nullptr ||
         queue->family != device->graphics_queue_family ||
@@ -977,9 +977,9 @@ VkResult VulkanTextOverlayCompositor::QueuePresent(
   // global registry lock across a potentially blocking host queue call.
   std::lock_guard<std::mutex> overlay_lock(device->overlay_mutex);
 
-  MocktailTextOverlayFrameInfo frame{};
+  RobloxTextOverlayFrameInfo frame{};
   if (!impl_->overlay_query(&frame) ||
-      frame.abi_version != MocktailTextOverlayFrameInfo::kAbiVersion ||
+      frame.abi_version != RobloxTextOverlayFrameInfo::kAbiVersion ||
       frame.visible == 0 || frame.revision == 0 ||
       !impl_->EnsureSource(device, frame)) {
     return impl_->CallFallback(shared_queue_mutex, queue, present_info,
@@ -1130,4 +1130,4 @@ VkResult VulkanTextOverlayCompositor::QueuePresent(
 }
 
 }  // namespace graphics
-}  // namespace mocktail
+}  // namespace roblox

@@ -1,7 +1,7 @@
-#ifndef MOCKTAIL_COMPAT_BIONIC_SYSCONF_H_
-#define MOCKTAIL_COMPAT_BIONIC_SYSCONF_H_
+#ifndef ROBLOX_COMPAT_BIONIC_SYSCONF_H_
+#define ROBLOX_COMPAT_BIONIC_SYSCONF_H_
 
-namespace mocktail::compat {
+namespace roblox::compat {
 
 // Android Bionic assigns different integer values to sysconf names than
 // glibc. These are the names observed in the active Roblox Build-ID profile
@@ -24,8 +24,8 @@ enum class BionicSysconfName : int {
 // equivalent. Unsupported names fail exactly as Bionic does: -1 and EINVAL.
 long BionicSysconf(int name) noexcept;
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
-extern "C" long mocktail_bionic_sysconf(int name);
+extern "C" long roblox_bionic_sysconf(int name);
 
-#endif  // MOCKTAIL_COMPAT_BIONIC_SYSCONF_H_
+#endif  // ROBLOX_COMPAT_BIONIC_SYSCONF_H_

@@ -16,7 +16,7 @@
 #include <dlfcn.h>
 #endif
 
-namespace mocktail::compat {
+namespace roblox::compat {
 namespace {
 
 struct ThreadStartContext {
@@ -58,7 +58,7 @@ size_t HostStackSizeForGuest(size_t guest_stack_size) noexcept {
   }
 
   // glibc places static TLS inside the requested mapping. Compensate only
-  // unusually large blocks; Mocktail's compatibility TLS is several MiB.
+  // unusually large blocks; Roblox's compatibility TLS is several MiB.
   constexpr size_t kLargeStaticTlsThreshold = 1U * 1024U * 1024U;
   if (tls_size > kLargeStaticTlsThreshold && tls_alignment != 0 &&
       (tls_alignment & (tls_alignment - 1)) == 0 &&
@@ -75,18 +75,18 @@ size_t HostStackSizeForGuest(size_t guest_stack_size) noexcept {
 
 // Guest pthread_attr_t buffers use the Bionic LP64 layout; they are never a
 // host pthread_attr_t, so decode the fixed fields directly.
-int GuestDetachState(const MocktailBionicPthreadAttr& source) noexcept {
-  return (source.flags & kMocktailBionicAttrFlagDetached) != 0
+int GuestDetachState(const RobloxBionicPthreadAttr& source) noexcept {
+  return (source.flags & kRobloxBionicAttrFlagDetached) != 0
              ? PTHREAD_CREATE_DETACHED
              : PTHREAD_CREATE_JOINABLE;
 }
 
-size_t GuestStackSize(const MocktailBionicPthreadAttr& source) noexcept {
+size_t GuestStackSize(const RobloxBionicPthreadAttr& source) noexcept {
   return source.stack_size != 0 ? source.stack_size
                                 : kBionicLp64DefaultThreadStackSize;
 }
 
-int CopySupportedThreadAttributes(const MocktailBionicPthreadAttr& source,
+int CopySupportedThreadAttributes(const RobloxBionicPthreadAttr& source,
                                   pthread_attr_t* destination) noexcept {
   int result =
       pthread_attr_setdetachstate(destination, GuestDetachState(source));
@@ -131,7 +131,7 @@ int CopySupportedThreadAttributes(const MocktailBionicPthreadAttr& source,
   return pthread_attr_setinheritsched(destination, PTHREAD_INHERIT_SCHED);
 }
 
-int CopyRequiredThreadAttributes(const MocktailBionicPthreadAttr& source,
+int CopyRequiredThreadAttributes(const RobloxBionicPthreadAttr& source,
                                  pthread_attr_t* destination) noexcept {
   int result =
       pthread_attr_setdetachstate(destination, GuestDetachState(source));
@@ -146,7 +146,7 @@ int CopyRequiredThreadAttributes(const MocktailBionicPthreadAttr& source,
       destination, HostStackSizeForGuest(GuestStackSize(source)));
 }
 
-int ConfigureHostSafeStackFallback(const MocktailBionicPthreadAttr* source,
+int ConfigureHostSafeStackFallback(const RobloxBionicPthreadAttr* source,
                                    pthread_attr_t* destination) noexcept {
   size_t guest_stack_size = 0;
   if (source != nullptr) {
@@ -189,7 +189,7 @@ void ConfigureBionicPthreadThreadInitializer(
 }
 
 int CreateBionicPthread(pthread_t* thread,
-                        const MocktailBionicPthreadAttr* attr,
+                        const RobloxBionicPthreadAttr* attr,
                         void* (*start_routine)(void*), void* argument) {
   if (thread == nullptr || start_routine == nullptr) {
     return EINVAL;
@@ -269,18 +269,18 @@ int CreateBionicPthread(pthread_t* thread,
   return result;
 }
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
 extern "C" {
 
-int mocktail_pthread_attr_init(MocktailBionicPthreadAttr* attr) {
+int roblox_pthread_attr_init(RobloxBionicPthreadAttr* attr) {
   if (attr == nullptr) {
     return EINVAL;
   }
   attr->flags = 0;
   attr->stack_base = nullptr;
   attr->stack_size =
-      mocktail::compat::kBionicLp64DefaultThreadStackSize;
+      roblox::compat::kBionicLp64DefaultThreadStackSize;
   const long page_size = sysconf(_SC_PAGESIZE);
   attr->guard_size = page_size > 0 ? static_cast<size_t>(page_size) : 0;
   attr->sched_policy = SCHED_OTHER;
@@ -289,12 +289,12 @@ int mocktail_pthread_attr_init(MocktailBionicPthreadAttr* attr) {
   return 0;
 }
 
-int mocktail_pthread_attr_destroy(MocktailBionicPthreadAttr* attr) {
+int roblox_pthread_attr_destroy(RobloxBionicPthreadAttr* attr) {
   (void)attr;
   return 0;
 }
 
-int mocktail_pthread_attr_setstacksize(MocktailBionicPthreadAttr* attr,
+int roblox_pthread_attr_setstacksize(RobloxBionicPthreadAttr* attr,
                                        size_t stack_size) {
   // glibc defines PTHREAD_STACK_MIN as a non-negative signed long, so widening
   // it preserves the comparison exactly.
@@ -303,25 +303,25 @@ int mocktail_pthread_attr_setstacksize(MocktailBionicPthreadAttr* attr,
     return EINVAL;
   }
   attr->stack_size = stack_size;
-  attr->flags &= ~kMocktailBionicAttrFlagUserStack;
+  attr->flags &= ~kRobloxBionicAttrFlagUserStack;
   return 0;
 }
 
-int mocktail_pthread_attr_setdetachstate(MocktailBionicPthreadAttr* attr,
+int roblox_pthread_attr_setdetachstate(RobloxBionicPthreadAttr* attr,
                                          int detach_state) {
   if (attr == nullptr || (detach_state != PTHREAD_CREATE_DETACHED &&
                           detach_state != PTHREAD_CREATE_JOINABLE)) {
     return EINVAL;
   }
   if (detach_state == PTHREAD_CREATE_DETACHED) {
-    attr->flags |= kMocktailBionicAttrFlagDetached;
+    attr->flags |= kRobloxBionicAttrFlagDetached;
   } else {
-    attr->flags &= ~kMocktailBionicAttrFlagDetached;
+    attr->flags &= ~kRobloxBionicAttrFlagDetached;
   }
   return 0;
 }
 
-int mocktail_pthread_attr_setschedparam(MocktailBionicPthreadAttr* attr,
+int roblox_pthread_attr_setschedparam(RobloxBionicPthreadAttr* attr,
                                         const struct sched_param* parameters) {
   if (attr == nullptr || parameters == nullptr) {
     return EINVAL;
@@ -330,8 +330,8 @@ int mocktail_pthread_attr_setschedparam(MocktailBionicPthreadAttr* attr,
   return 0;
 }
 
-int mocktail_pthread_getattr_np(pthread_t thread,
-                                MocktailBionicPthreadAttr* attr) {
+int roblox_pthread_getattr_np(pthread_t thread,
+                                RobloxBionicPthreadAttr* attr) {
   if (attr == nullptr) {
     return EINVAL;
   }
@@ -361,7 +361,7 @@ int mocktail_pthread_getattr_np(pthread_t thread,
     return result;
   }
   attr->flags = detach_state == PTHREAD_CREATE_DETACHED
-                    ? kMocktailBionicAttrFlagDetached
+                    ? kRobloxBionicAttrFlagDetached
                     : 0;
   attr->stack_base = stack_base;
   attr->stack_size = stack_size;
@@ -372,7 +372,7 @@ int mocktail_pthread_getattr_np(pthread_t thread,
   return 0;
 }
 
-int mocktail_pthread_attr_getstack(const MocktailBionicPthreadAttr* attr,
+int roblox_pthread_attr_getstack(const RobloxBionicPthreadAttr* attr,
                                    void** stack_base, size_t* stack_size) {
   if (attr == nullptr) {
     return EINVAL;
@@ -389,24 +389,24 @@ int mocktail_pthread_attr_getstack(const MocktailBionicPthreadAttr* attr,
 
 }  // extern "C"
 
-extern "C" int mocktail_bionic_pthread_create(
-    pthread_t* thread, const MocktailBionicPthreadAttr* attr,
+extern "C" int roblox_bionic_pthread_create(
+    pthread_t* thread, const RobloxBionicPthreadAttr* attr,
     void* (*start_routine)(void*), void* argument) {
-  return mocktail::compat::CreateBionicPthread(thread, attr, start_routine,
+  return roblox::compat::CreateBionicPthread(thread, attr, start_routine,
                                                argument);
 }
 
-extern "C" int mocktail_bionic_pthread_setschedparam(
+extern "C" int roblox_bionic_pthread_setschedparam(
     pthread_t thread, int policy, const struct sched_param* parameters) {
-  if (mocktail::compat::RejectRealtimeScheduling(policy)) {
+  if (roblox::compat::RejectRealtimeScheduling(policy)) {
     return EPERM;
   }
   return pthread_setschedparam(thread, policy, parameters);
 }
 
-extern "C" int mocktail_bionic_sched_setscheduler(
+extern "C" int roblox_bionic_sched_setscheduler(
     pid_t tid, int policy, const struct sched_param* parameters) {
-  if (mocktail::compat::RejectRealtimeScheduling(policy)) {
+  if (roblox::compat::RejectRealtimeScheduling(policy)) {
     errno = EPERM;
     return -1;
   }

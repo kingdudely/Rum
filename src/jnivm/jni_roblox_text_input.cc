@@ -5,8 +5,8 @@
 #include "jni_fields.h"
 #include "jni_strings.h"
 
-#include "mocktail/audio/fmod_thread_floating_point.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/audio/fmod_thread_floating_point.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <algorithm>
 #include <atomic>
@@ -41,7 +41,7 @@ using namespace internal;
 
 struct VM::RobloxTextInputBinding {
   ~RobloxTextInputBinding() {
-    mocktail::platform::SecureClear(&last_request.text);
+    roblox::platform::SecureClear(&last_request.text);
     if (context != nullptr && callbacks.shutdown != nullptr) {
       callbacks.shutdown(context.get());
     }
@@ -89,7 +89,7 @@ bool VM::DispatchRobloxTextInputShow(
   }
   std::lock_guard<std::recursive_mutex> lock(binding->callback_mutex);
   // An identical show may reopen a TextBox closed without a hide callback.
-  mocktail::platform::SecureClear(&binding->last_request.text);
+  roblox::platform::SecureClear(&binding->last_request.text);
   binding->last_request = request;
   binding->active = true;
   binding->callbacks.show(binding->context.get(), request);
@@ -111,7 +111,7 @@ bool VM::DispatchRobloxTextInputHide() {
     return true;
   }
   binding->active = false;
-  mocktail::platform::SecureClear(&binding->last_request.text);
+  roblox::platform::SecureClear(&binding->last_request.text);
   binding->last_request = {};
   binding->callbacks.hide(binding->context.get());
   return true;
@@ -131,7 +131,7 @@ bool VM::DispatchRobloxTextInputReplaceText(const std::string& text) {
   if (!binding->active || binding->last_request.text == text) {
     return true;
   }
-  mocktail::platform::SecureClear(&binding->last_request.text);
+  roblox::platform::SecureClear(&binding->last_request.text);
   binding->last_request.text = text;
   binding->callbacks.replace_text(binding->context.get(), text);
   return true;

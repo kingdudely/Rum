@@ -19,15 +19,15 @@
 
 extern char **environ;
 
-#ifndef MOCKTAIL_INSTALL_LIBDIR
-#define MOCKTAIL_INSTALL_LIBDIR "lib"
+#ifndef ROBLOX_INSTALL_LIBDIR
+#define ROBLOX_INSTALL_LIBDIR "lib"
 #endif
 
-namespace mocktail::compat {
+namespace roblox::compat {
 namespace {
 
 constexpr const char kFreeBsdSocketHelper[] =
-    "mocktail_freebsd_socket_helper";
+    "roblox_freebsd_socket_helper";
 
 #ifndef SOL_UDP
 constexpr int kSolUdp = 17;
@@ -202,12 +202,12 @@ std::string ResolveFreeBsdSocketHelperPath(const std::string &executable_path,
   const std::string adjacent = executable_directory + kFreeBsdSocketHelper;
   if (::access(adjacent.c_str(), X_OK) == 0) return adjacent;
 
-  constexpr const char kInstallLibDir[] = MOCKTAIL_INSTALL_LIBDIR;
+  constexpr const char kInstallLibDir[] = ROBLOX_INSTALL_LIBDIR;
   const std::string installed =
       kInstallLibDir[0] == '/'
-          ? std::string(kInstallLibDir) + "/mocktail/" +
+          ? std::string(kInstallLibDir) + "/roblox/" +
                 kFreeBsdSocketHelper
-          : executable_directory + "../" + kInstallLibDir + "/mocktail/" +
+          : executable_directory + "../" + kInstallLibDir + "/roblox/" +
                 kFreeBsdSocketHelper;
   if (::access(installed.c_str(), X_OK) == 0) return installed;
   return {};
@@ -221,7 +221,7 @@ std::string FreeBsdSocketHelperPath() {
   executable[static_cast<std::size_t>(length)] = '\0';
   return ResolveFreeBsdSocketHelperPath(
       std::string(executable.data(), static_cast<std::size_t>(length)),
-      std::getenv("MOCKTAIL_FREEBSD_SOCKET_HELPER"));
+      std::getenv("ROBLOX_FREEBSD_SOCKET_HELPER"));
 }
 
 int ApplyFreeBsdPathMtuDiscovery(int socket, int discovery_mode) noexcept {
@@ -364,18 +364,18 @@ ssize_t BionicSendmsg(int socket, const msghdr *message, int flags) noexcept {
   return static_cast<ssize_t>(sent_total);
 }
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
-extern "C" int mocktail_bionic_setsockopt(int socket, int level,
+extern "C" int roblox_bionic_setsockopt(int socket, int level,
                                           int option_name,
                                           const void *option_value,
                                           socklen_t option_length) {
-  return mocktail::compat::BionicSetsockopt(socket, level, option_name,
+  return roblox::compat::BionicSetsockopt(socket, level, option_name,
                                             option_value, option_length);
 }
 
-extern "C" ssize_t mocktail_bionic_sendmsg(int socket,
+extern "C" ssize_t roblox_bionic_sendmsg(int socket,
                                             const struct msghdr *message,
                                             int flags) {
-  return mocktail::compat::BionicSendmsg(socket, message, flags);
+  return roblox::compat::BionicSendmsg(socket, message, flags);
 }

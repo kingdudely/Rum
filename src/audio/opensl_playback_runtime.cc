@@ -3,11 +3,11 @@
 // never creates an OpenSL engine object (verified by probe). These exports
 // exist so the guest's imports resolve, and report failure instead of
 // faking a working audio device.
-#include "mocktail/audio/opensl_playback_runtime.h"
+#include "roblox/audio/opensl_playback_runtime.h"
 
-namespace mocktail::audio {
+namespace roblox::audio {
 
-#if !defined(MOCKTAIL_USE_SYSTEM_OPENSL_HEADERS)
+#if !defined(ROBLOX_USE_SYSTEM_OPENSL_HEADERS)
 namespace abi = opensl_abi;
 
 constexpr abi::InterfaceIdValue kAndroidConfigurationId = {
@@ -34,39 +34,39 @@ constexpr abi::InterfaceIdValue kVolumeId = {
 
 extern "C" {
 
-MOCKTAIL_OPENSL_EXPORT extern const
-    mocktail::audio::opensl_abi::InterfaceId SL_IID_ANDROIDCONFIGURATION =
-        &mocktail::audio::kAndroidConfigurationId;
-MOCKTAIL_OPENSL_EXPORT extern const
-    mocktail::audio::opensl_abi::InterfaceId SL_IID_ANDROIDSIMPLEBUFFERQUEUE =
-        &mocktail::audio::kAndroidSimpleBufferQueueId;
-MOCKTAIL_OPENSL_EXPORT extern const
-    mocktail::audio::opensl_abi::InterfaceId SL_IID_BUFFERQUEUE =
-        &mocktail::audio::kBufferQueueId;
-MOCKTAIL_OPENSL_EXPORT extern const
-    mocktail::audio::opensl_abi::InterfaceId SL_IID_ENGINE =
-        &mocktail::audio::kEngineId;
-MOCKTAIL_OPENSL_EXPORT extern const
-    mocktail::audio::opensl_abi::InterfaceId SL_IID_PLAY =
-        &mocktail::audio::kPlayId;
-MOCKTAIL_OPENSL_EXPORT extern const
-    mocktail::audio::opensl_abi::InterfaceId SL_IID_RECORD =
-        &mocktail::audio::kRecordId;
-MOCKTAIL_OPENSL_EXPORT extern const
-    mocktail::audio::opensl_abi::InterfaceId SL_IID_VOLUME =
-        &mocktail::audio::kVolumeId;
+ROBLOX_OPENSL_EXPORT extern const
+    roblox::audio::opensl_abi::InterfaceId SL_IID_ANDROIDCONFIGURATION =
+        &roblox::audio::kAndroidConfigurationId;
+ROBLOX_OPENSL_EXPORT extern const
+    roblox::audio::opensl_abi::InterfaceId SL_IID_ANDROIDSIMPLEBUFFERQUEUE =
+        &roblox::audio::kAndroidSimpleBufferQueueId;
+ROBLOX_OPENSL_EXPORT extern const
+    roblox::audio::opensl_abi::InterfaceId SL_IID_BUFFERQUEUE =
+        &roblox::audio::kBufferQueueId;
+ROBLOX_OPENSL_EXPORT extern const
+    roblox::audio::opensl_abi::InterfaceId SL_IID_ENGINE =
+        &roblox::audio::kEngineId;
+ROBLOX_OPENSL_EXPORT extern const
+    roblox::audio::opensl_abi::InterfaceId SL_IID_PLAY =
+        &roblox::audio::kPlayId;
+ROBLOX_OPENSL_EXPORT extern const
+    roblox::audio::opensl_abi::InterfaceId SL_IID_RECORD =
+        &roblox::audio::kRecordId;
+ROBLOX_OPENSL_EXPORT extern const
+    roblox::audio::opensl_abi::InterfaceId SL_IID_VOLUME =
+        &roblox::audio::kVolumeId;
 
 #endif
 
-MOCKTAIL_OPENSL_EXPORT mocktail::audio::opensl_abi::Result
-MOCKTAIL_OPENSL_API_ENTRY slCreateEngine(
-    mocktail::audio::opensl_abi::Object* engine,
-    mocktail::audio::opensl_abi::Uint32,
-    const mocktail::audio::opensl_abi::EngineOption*,
-    mocktail::audio::opensl_abi::Uint32,
-    const mocktail::audio::opensl_abi::InterfaceId*,
-    const mocktail::audio::opensl_abi::Boolean*) {
-  namespace abi = mocktail::audio::opensl_abi;
+ROBLOX_OPENSL_EXPORT roblox::audio::opensl_abi::Result
+ROBLOX_OPENSL_API_ENTRY slCreateEngine(
+    roblox::audio::opensl_abi::Object* engine,
+    roblox::audio::opensl_abi::Uint32,
+    const roblox::audio::opensl_abi::EngineOption*,
+    roblox::audio::opensl_abi::Uint32,
+    const roblox::audio::opensl_abi::InterfaceId*,
+    const roblox::audio::opensl_abi::Boolean*) {
+  namespace abi = roblox::audio::opensl_abi;
   if (engine == nullptr) {
     return abi::kResultParameterInvalid;
   }
@@ -74,21 +74,21 @@ MOCKTAIL_OPENSL_API_ENTRY slCreateEngine(
   return abi::kResultFeatureUnsupported;
 }
 
-MOCKTAIL_OPENSL_EXPORT mocktail::audio::opensl_abi::Result
-MOCKTAIL_OPENSL_API_ENTRY slQueryNumSupportedEngineInterfaces(
-    mocktail::audio::opensl_abi::Uint32* count) {
+ROBLOX_OPENSL_EXPORT roblox::audio::opensl_abi::Result
+ROBLOX_OPENSL_API_ENTRY slQueryNumSupportedEngineInterfaces(
+    roblox::audio::opensl_abi::Uint32* count) {
   if (count == nullptr) {
-    return mocktail::audio::opensl_abi::kResultParameterInvalid;
+    return roblox::audio::opensl_abi::kResultParameterInvalid;
   }
   *count = 1;
-  return mocktail::audio::opensl_abi::kResultSuccess;
+  return roblox::audio::opensl_abi::kResultSuccess;
 }
 
-MOCKTAIL_OPENSL_EXPORT mocktail::audio::opensl_abi::Result
-MOCKTAIL_OPENSL_API_ENTRY slQuerySupportedEngineInterfaces(
-    mocktail::audio::opensl_abi::Uint32 index,
-    mocktail::audio::opensl_abi::InterfaceId* iid) {
-  namespace abi = mocktail::audio::opensl_abi;
+ROBLOX_OPENSL_EXPORT roblox::audio::opensl_abi::Result
+ROBLOX_OPENSL_API_ENTRY slQuerySupportedEngineInterfaces(
+    roblox::audio::opensl_abi::Uint32 index,
+    roblox::audio::opensl_abi::InterfaceId* iid) {
+  namespace abi = roblox::audio::opensl_abi;
   if (iid == nullptr) {
     return abi::kResultParameterInvalid;
   }
@@ -99,4 +99,4 @@ MOCKTAIL_OPENSL_API_ENTRY slQuerySupportedEngineInterfaces(
 
 }  // extern "C"
 
-}  // namespace mocktail::audio
+}  // namespace roblox::audio

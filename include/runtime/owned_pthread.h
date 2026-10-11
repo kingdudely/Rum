@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_RUNTIME_OWNED_PTHREAD_H_
-#define MOCKTAIL_RUNTIME_OWNED_PTHREAD_H_
+#ifndef ROBLOX_RUNTIME_OWNED_PTHREAD_H_
+#define ROBLOX_RUNTIME_OWNED_PTHREAD_H_
 
 #include <pthread.h>
 
 #include <cstddef>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 using PthreadEntryPoint = void* (*)(void* context);
@@ -63,6 +63,6 @@ class OwnedPthread final {
 const char* OwnedPthreadWaitStatusName(OwnedPthreadWaitStatus status);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_OWNED_PTHREAD_H_
+#endif  // ROBLOX_RUNTIME_OWNED_PTHREAD_H_

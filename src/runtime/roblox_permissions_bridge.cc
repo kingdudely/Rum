@@ -2,7 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 constexpr std::size_t kMaximumJsonBytes = 64 * 1024;
@@ -133,4 +133,4 @@ Status RobloxPermissionsBridge::Shutdown() {
   return bridge_->Shutdown();
 }
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

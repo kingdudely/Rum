@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_RUNTIME_DEVICE_PROFILE_H_
-#define MOCKTAIL_RUNTIME_DEVICE_PROFILE_H_
+#ifndef ROBLOX_RUNTIME_DEVICE_PROFILE_H_
+#define ROBLOX_RUNTIME_DEVICE_PROFILE_H_
 
 #include <cstddef>
 #include <string>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 enum class DeviceClass {
@@ -49,6 +49,6 @@ std::string BuildCustomDeviceProfileCacheKey(const DeviceProfile& profile);
 std::string_view DeviceClassName(DeviceClass device_class);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_DEVICE_PROFILE_H_
+#endif  // ROBLOX_RUNTIME_DEVICE_PROFILE_H_

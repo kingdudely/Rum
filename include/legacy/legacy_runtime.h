@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_LEGACY_LEGACY_RUNTIME_H_
-#define MOCKTAIL_LEGACY_LEGACY_RUNTIME_H_
+#ifndef ROBLOX_LEGACY_LEGACY_RUNTIME_H_
+#define ROBLOX_LEGACY_LEGACY_RUNTIME_H_
 
 #include <memory>
 #include <optional>
 #include <utility>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 #include "runtime/auth_runtime_composition.h"
 #include "runtime/command_line.h"
 #include "runtime/roblox_experience_launch_bridge.h"
@@ -14,7 +14,7 @@ namespace jnivm {
 class VM;
 }  // namespace jnivm
 
-namespace mocktail::legacy {
+namespace roblox::legacy {
 
 class RuntimeDependencies final {
  public:
@@ -97,6 +97,6 @@ class RuntimeDependencies final {
 int Run(const runtime::CommandLineOptions& options,
         RuntimeDependencies dependencies);
 
-}  // namespace mocktail::legacy
+}  // namespace roblox::legacy
 
-#endif  // MOCKTAIL_LEGACY_LEGACY_RUNTIME_H_
+#endif  // ROBLOX_LEGACY_LEGACY_RUNTIME_H_

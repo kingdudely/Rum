@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace mocktail::compat {
+namespace roblox::compat {
 namespace {
 
 void CopyGuestMaskToHost(std::uint64_t guest_mask, sigset_t* host_mask) {
@@ -67,11 +67,11 @@ int BionicSigactionCall(int signal_number, const BionicSigaction* action,
   return 0;
 }
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
-extern "C" int mocktail_bionic_sigaction(
-    int signal_number, const mocktail::compat::BionicSigaction* action,
-    mocktail::compat::BionicSigaction* old_action) {
-  return mocktail::compat::BionicSigactionCall(signal_number, action,
+extern "C" int roblox_bionic_sigaction(
+    int signal_number, const roblox::compat::BionicSigaction* action,
+    roblox::compat::BionicSigaction* old_action) {
+  return roblox::compat::BionicSigactionCall(signal_number, action,
                                                 old_action);
 }

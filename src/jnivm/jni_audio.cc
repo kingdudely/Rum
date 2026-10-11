@@ -5,8 +5,8 @@
 #include "jni_fields.h"
 #include "jni_strings.h"
 
-#include "mocktail/audio/fmod_thread_floating_point.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/audio/fmod_thread_floating_point.h"
+#include "roblox/platform/posix_primitives.h"
 
 #include <algorithm>
 #include <atomic>
@@ -152,7 +152,7 @@ void VM::RegisterWebRtcAudioManagerNative(const char* name,
 bool VM::DispatchWebRtcAudioManagerConstruct(jobject manager,
                                              jlong native_audio_manager) {
   const auto fail = [](const char* reason) {
-    std::cerr << "  [mocktail][audio] WebRTC audio manager parameters_failed "
+    std::cerr << "  [roblox][audio] WebRTC audio manager parameters_failed "
               << "reason=" << reason << '\n';
     return false;
   };
@@ -161,7 +161,7 @@ bool VM::DispatchWebRtcAudioManagerConstruct(jobject manager,
   }
   SetLongFieldRaw(manager, "nativeAudioManager", native_audio_manager);
   SetBooleanFieldRaw(manager, "initialized", JNI_FALSE);
-  SetBooleanFieldRaw(manager, "mocktailAudioParametersCached", JNI_FALSE);
+  SetBooleanFieldRaw(manager, "robloxAudioParametersCached", JNI_FALSE);
   WebRtcAudioManagerBinding binding;
   void* native = nullptr;
   {
@@ -212,8 +212,8 @@ bool VM::DispatchWebRtcAudioManagerConstruct(jobject manager,
       parameters.pro_audio, parameters.aaudio,
       parameters.output_buffer_size_frames, parameters.input_buffer_size_frames,
       native_audio_manager);
-  SetBooleanFieldRaw(manager, "mocktailAudioParametersCached", JNI_TRUE);
-  std::cout << "  [mocktail][audio] WebRTC audio manager parameters "
+  SetBooleanFieldRaw(manager, "robloxAudioParametersCached", JNI_TRUE);
+  std::cout << "  [roblox][audio] WebRTC audio manager parameters "
             << "sample_rate_hz=" << parameters.sample_rate_hz
             << " output_channels=" << parameters.output_channels
             << " input_channels=" << parameters.input_channels << '\n'
@@ -229,14 +229,14 @@ bool VM::DispatchWebRtcAudioManagerInit(jobject manager) {
   }
   const bool initialized =
       ObjectClassName(manager) == "org/webrtc/voiceengine/WebRtcAudioManager" &&
-      BooleanFieldValue(manager, "mocktailAudioParametersCached") == JNI_TRUE &&
+      BooleanFieldValue(manager, "robloxAudioParametersCached") == JNI_TRUE &&
       binding.context != nullptr && binding.callbacks.init != nullptr &&
       (BooleanFieldValue(manager, "initialized") == JNI_TRUE ||
        binding.callbacks.init(binding.context.get(), manager));
   SetBooleanFieldRaw(manager, "initialized",
                      initialized ? JNI_TRUE : JNI_FALSE);
   if (!initialized) {
-    std::cerr << "  [mocktail][audio] WebRTC audio manager init_failed "
+    std::cerr << "  [roblox][audio] WebRTC audio manager init_failed "
                  "reason=parameters or host manager unavailable\n";
   }
   return initialized;
@@ -260,7 +260,7 @@ void VM::DispatchWebRtcAudioManagerDispose(jobject manager) {
 
 void VM::DispatchWebRtcAudioManagerMicrophoneMute(jobject manager, bool muted) {
   if (ObjectClassName(manager) != "org/webrtc/voiceengine/WebRtcAudioManager" ||
-      BooleanFieldValue(manager, "mocktailAudioParametersCached") != JNI_TRUE) {
+      BooleanFieldValue(manager, "robloxAudioParametersCached") != JNI_TRUE) {
     return;
   }
   WebRtcAudioManagerBinding binding;

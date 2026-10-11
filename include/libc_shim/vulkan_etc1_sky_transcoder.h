@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_LIBC_SHIM_VULKAN_ETC1_SKY_TRANSCODER_H_
-#define MOCKTAIL_LIBC_SHIM_VULKAN_ETC1_SKY_TRANSCODER_H_
+#ifndef ROBLOX_LIBC_SHIM_VULKAN_ETC1_SKY_TRANSCODER_H_
+#define ROBLOX_LIBC_SHIM_VULKAN_ETC1_SKY_TRANSCODER_H_
 
 #include <cstdint>
 #include <vector>
@@ -14,4 +14,4 @@ bool TranscodeEtc1SkyTextureForVulkan(const char *path,
 
 } // namespace libc_shim
 
-#endif // MOCKTAIL_LIBC_SHIM_VULKAN_ETC1_SKY_TRANSCODER_H_
+#endif // ROBLOX_LIBC_SHIM_VULKAN_ETC1_SKY_TRANSCODER_H_

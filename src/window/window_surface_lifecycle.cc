@@ -5,7 +5,7 @@
 
 #include "window/window_state_store.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 namespace {
 
@@ -211,4 +211,4 @@ const char* WindowSurfaceEventTypeName(WindowSurfaceEventType type) {
 }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

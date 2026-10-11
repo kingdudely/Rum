@@ -1,11 +1,11 @@
-#include "mocktail/platform/sdl_window_icon.h"
+#include "roblox/platform/sdl_window_icon.h"
 
 #include <SDL3/SDL.h>
 
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace platform {
 
 Status ApplySdlWindowIcon(SDL_Window* window) {
@@ -16,4 +16,4 @@ Status ApplySdlWindowIcon(SDL_Window* window) {
 }
 
 }  // namespace platform
-}  // namespace mocktail
+}  // namespace roblox

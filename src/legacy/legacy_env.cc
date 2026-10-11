@@ -56,8 +56,8 @@
 #include "legacy/legacy_runtime_internal.h"
 #include "libc_shim/libc_shim.h"
 #include "linker/linker.h"
-#include "mocktail/graphics/bionic_egl_bridge.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/graphics/bionic_egl_bridge.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/device_memory_profile.h"
 #include "runtime/display_size.h"
 #include "runtime/environment.h"
@@ -79,7 +79,7 @@
 #include "window/window.h"
 #include "window/window_game_surface_bridge.h"
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
 #include <mcpelauncher/linker.h>
 #endif
 
@@ -258,7 +258,7 @@ bool StartsWith(const char* value, const char* prefix) {
 // So, we should only accept the symbol if its stub owns it.
 
 
-bool TraceAllEnabled() { return IsEnabled("MOCKTAIL_TRACE"); }
+bool TraceAllEnabled() { return IsEnabled("ROBLOX_TRACE"); }
 
 void SetEnvDefault(const char* name, const char* value) {
   if (name == nullptr || value == nullptr) {
@@ -272,55 +272,55 @@ void SetEnvDefault(const char* name, const char* value) {
 
 
 void ApplyRuntimeDefaults() {
-  SetEnvDefault("MOCKTAIL_OFFLINE_SETTINGS", "1");
+  SetEnvDefault("ROBLOX_OFFLINE_SETTINGS", "1");
   // Startup worker ownership is joined. Returning while it still references
   // JNI, runtime, or stack state is never supported.
-  SetEnvDefault("MOCKTAIL_ENGINE_DETACH", "0");
+  SetEnvDefault("ROBLOX_ENGINE_DETACH", "0");
   // Roblox refuses to create its TaskScheduler until its FastFlag store is
   // loaded, and that store comes from ClientSettings. The offline-settings
   // defaults only disable flag fetching, so both of these must stay on for
   // the engine to get past "flags have been loaded".
-  SetEnvDefault("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP", "1");
+  SetEnvDefault("ROBLOX_ALLOW_NO_COOKIE_LUA_APP", "1");
   // Current Roblox Android builds drive app startup through NativeGLInterface's
   // V2 app bridge path. The legacy NativeAppBridgeInterface entry point stays
   // available by opt-in, but running it in parallel can block V2 init.
-  SetEnvDefault("MOCKTAIL_APP_BRIDGE_APP_START", "0");
-  SetEnvDefault("MOCKTAIL_APP_BRIDGE_APP_START_THREAD", "0");
-  SetEnvDefault("MOCKTAIL_START_LUA_APP_DM", "1");
-  SetEnvDefault("MOCKTAIL_START_LUA_APP_DM_INLINE", "0");
+  SetEnvDefault("ROBLOX_APP_BRIDGE_APP_START", "0");
+  SetEnvDefault("ROBLOX_APP_BRIDGE_APP_START_THREAD", "0");
+  SetEnvDefault("ROBLOX_START_LUA_APP_DM", "1");
+  SetEnvDefault("ROBLOX_START_LUA_APP_DM_INLINE", "0");
   // The shipped APK drives these callbacks in a mostly synchronous ASMA flow.
   // Keep the background worker path opt-in so the default mirrors release
   // ordering and avoids racing heap-sensitive V2 startup state.
-  SetEnvDefault("MOCKTAIL_START_LUA_APP_DM_THREAD", "0");
-  SetEnvDefault("MOCKTAIL_START_LUA_APP_DM_DELAY_MS", "500");
-  SetEnvDefault("MOCKTAIL_PLACE_ID", "0");
-  SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT", "1");
-  SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT_THREAD", "0");
-  SetEnvDefault("MOCKTAIL_APP_BRIDGE_INIT_THREAD_TIMEOUT_MS", "1500");
-  SetEnvDefault("MOCKTAIL_START_GAME_WITH_PARAM", "0");
+  SetEnvDefault("ROBLOX_START_LUA_APP_DM_THREAD", "0");
+  SetEnvDefault("ROBLOX_START_LUA_APP_DM_DELAY_MS", "500");
+  SetEnvDefault("ROBLOX_PLACE_ID", "0");
+  SetEnvDefault("ROBLOX_CALL_REAL_APP_BRIDGE_INIT", "1");
+  SetEnvDefault("ROBLOX_CALL_REAL_APP_BRIDGE_INIT_THREAD", "0");
+  SetEnvDefault("ROBLOX_APP_BRIDGE_INIT_THREAD_TIMEOUT_MS", "1500");
+  SetEnvDefault("ROBLOX_START_GAME_WITH_PARAM", "0");
   // APK ASMA calls nativeAppBridgeV2StartAppWithParams synchronously before
   // driving post-start surface/Lua callbacks. Keep the worker path opt-in so
   // those follow-up callbacks cannot race native StartApp construction.
-  SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_START_THREAD", "0");
-  SetEnvDefault("MOCKTAIL_ASMA_START_TASK_SCHEDULER_FOREGROUND", "1");
-  SetEnvDefault("MOCKTAIL_TASK_SCHEDULER_FOREGROUND_ON_MAIN_THREAD", "1");
-  SetEnvDefault("MOCKTAIL_NATIVE_FRAGMENT_START", "1");
-  SetEnvDefault("MOCKTAIL_PASS_CURRENT_DISPLAY_REFRESH_RATE", "1");
-  SetEnvDefault("MOCKTAIL_PASS_SUPPORTED_REFRESH_RATES", "1");
-  SetEnvDefault("MOCKTAIL_PASS_ACTIVITY_TO_GAME_SURFACE_PARAMS", "0");
-  SetEnvDefault("MOCKTAIL_SYNC_START_APP_WITH_GAME", "1");
+  SetEnvDefault("ROBLOX_CALL_REAL_APP_BRIDGE_START_THREAD", "0");
+  SetEnvDefault("ROBLOX_ASMA_START_TASK_SCHEDULER_FOREGROUND", "1");
+  SetEnvDefault("ROBLOX_TASK_SCHEDULER_FOREGROUND_ON_MAIN_THREAD", "1");
+  SetEnvDefault("ROBLOX_NATIVE_FRAGMENT_START", "1");
+  SetEnvDefault("ROBLOX_PASS_CURRENT_DISPLAY_REFRESH_RATE", "1");
+  SetEnvDefault("ROBLOX_PASS_SUPPORTED_REFRESH_RATES", "1");
+  SetEnvDefault("ROBLOX_PASS_ACTIVITY_TO_GAME_SURFACE_PARAMS", "0");
+  SetEnvDefault("ROBLOX_SYNC_START_APP_WITH_GAME", "1");
   // APK ASMA publishes queued ready events after the Lua app startup path has
   // run. Keep this inline by default; the detached worker can outlive teardown.
-  SetEnvDefault("MOCKTAIL_SEND_APP_READY_THREAD", "0");
-  SetEnvDefault("MOCKTAIL_UPDATE_SCREEN_ORIENTATION", "0");
+  SetEnvDefault("ROBLOX_SEND_APP_READY_THREAD", "0");
+  SetEnvDefault("ROBLOX_UPDATE_SCREEN_ORIENTATION", "0");
   // Keep the ASMA/V2 NativeGL path as the default. GameActivity's native app
   // glue currently stalls V2 init on surface flags; leave it available opt-in.
   // GameActivity lifecycle callbacks can block on android_app_set_activity_state
   // in some Linux shims; keep them opt-in to avoid startup dead-ends.
-  SetEnvDefault("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "0");
-  SetEnvDefault("MOCKTAIL_IGNORE_WINDOW_CLOSE", "0");
-  SetEnvDefault("MOCKTAIL_WIN_TITLE", "Roblox");
-  SetEnvDefault("MOCKTAIL_GRAPHICS_BACKEND", "angle-vulkan");
+  SetEnvDefault("ROBLOX_MAIN_THREAD_MESSAGE_PUMP", "0");
+  SetEnvDefault("ROBLOX_IGNORE_WINDOW_CLOSE", "0");
+  SetEnvDefault("ROBLOX_WIN_TITLE", "Roblox");
+  SetEnvDefault("ROBLOX_GRAPHICS_BACKEND", "angle-vulkan");
 }
 
 int GetEnvInt(const char* name, int default_value) {
@@ -379,7 +379,7 @@ JNIEnv* AttachMainThreadJniEnv() {
     jint attach_result = java_vm->AttachCurrentThread(&raw_env, nullptr);
     if (attach_result == JNI_OK && raw_env != nullptr) {
       env = static_cast<JNIEnv*>(raw_env);
-    } else if (IsEnabled("MOCKTAIL_TRACE")) {
+    } else if (IsEnabled("ROBLOX_TRACE")) {
       std::cerr << "  [main] AttachCurrentThread failed in pump: "
                 << attach_result << '\n'
                 << std::flush;
@@ -450,8 +450,8 @@ void RunPendingMainThreadTaskSchedulerForeground() {
 bool RunTaskSchedulerForegroundOnMainThread(
     NativeSetTaskSchedulerBackgroundModeFn native_set_task_scheduler_background_mode,
     jclass native_gl_class) {
-  if (IsDisabled("MOCKTAIL_TASK_SCHEDULER_FOREGROUND_ON_MAIN_THREAD") ||
-      IsEnabled("MOCKTAIL_ENGINE_INLINE") || !mocktail::window::IsInitialised()) {
+  if (IsDisabled("ROBLOX_TASK_SCHEDULER_FOREGROUND_ON_MAIN_THREAD") ||
+      IsEnabled("ROBLOX_ENGINE_INLINE") || !roblox::window::IsInitialised()) {
     return false;
   }
   if (native_set_task_scheduler_background_mode == nullptr ||
@@ -471,7 +471,7 @@ bool RunTaskSchedulerForegroundOnMainThread(
             << std::flush;
 
   const int timeout_ms = GetEnvInt(
-      "MOCKTAIL_TASK_SCHEDULER_FOREGROUND_MAIN_THREAD_TIMEOUT_MS", 3000);
+      "ROBLOX_TASK_SCHEDULER_FOREGROUND_MAIN_THREAD_TIMEOUT_MS", 3000);
   const uint64_t start_ms = MonotonicMillis();
   while (true) {
     const int state = g_pending_main_thread_task_scheduler_state.load(
@@ -513,13 +513,13 @@ bool RunTaskSchedulerForegroundOnMainThread(
 
 void PumpRobloxMainThreadMessagesOnce() {
   static const bool force_early =
-      IsEnabled("MOCKTAIL_FORCE_EARLY_MAIN_THREAD_MESSAGE_PUMP");
+      IsEnabled("ROBLOX_FORCE_EARLY_MAIN_THREAD_MESSAGE_PUMP");
   static const bool pump_disabled =
-      IsDisabled("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP");
+      IsDisabled("ROBLOX_MAIN_THREAD_MESSAGE_PUMP");
   static const bool trace_pump =
-      IsEnabled("MOCKTAIL_TRACE");
+      IsEnabled("ROBLOX_TRACE");
   static const int pump_limit =
-      GetEnvInt("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP_LIMIT", 0);
+      GetEnvInt("ROBLOX_MAIN_THREAD_MESSAGE_PUMP_LIMIT", 0);
   if (g_main_thread_message_pump_ready.load() == 0 && !force_early) {
     static bool logged_not_ready = false;
     if (!logged_not_ready && trace_pump) {
@@ -606,7 +606,7 @@ static_assert(sizeof(BionicAddrInfo) == 48,
               "unexpected bionic addrinfo size");
 
 bool DnsTraceEnabled() {
-  return IsEnabled("MOCKTAIL_TRACE");
+  return IsEnabled("ROBLOX_TRACE");
 }
 
 addrinfo HostHintsFromBionic(const BionicAddrInfo* hints) {
@@ -654,7 +654,7 @@ BionicAddrInfo* BionicAddrInfoFromHost(const addrinfo* host) {
   return head;
 }
 
-extern "C" int mocktail_getaddrinfo(const char* node, const char* service,
+extern "C" int roblox_getaddrinfo(const char* node, const char* service,
                                     const BionicAddrInfo* hints,
                                     BionicAddrInfo** result) {
   if (!result) {
@@ -682,7 +682,7 @@ extern "C" int mocktail_getaddrinfo(const char* node, const char* service,
   return *result ? 0 : EAI_MEMORY;
 }
 
-extern "C" void mocktail_freeaddrinfo(BionicAddrInfo* info) {
+extern "C" void roblox_freeaddrinfo(BionicAddrInfo* info) {
   while (info) {
     BionicAddrInfo* next = info->ai_next;
     std::free(info->ai_canonname);
@@ -692,7 +692,7 @@ extern "C" void mocktail_freeaddrinfo(BionicAddrInfo* info) {
   }
 }
 
-extern "C" hostent* mocktail_gethostbyname(const char* name) {
+extern "C" hostent* roblox_gethostbyname(const char* name) {
   hostent* result = ::gethostbyname(name);
   if (DnsTraceEnabled()) {
     std::cout << "  [dns] gethostbyname name=" << (name ? name : "(null)")
@@ -701,7 +701,7 @@ extern "C" hostent* mocktail_gethostbyname(const char* name) {
   return result;
 }
 
-extern "C" int mocktail_mprotect(void* addr, size_t len, int prot) {
+extern "C" int roblox_mprotect(void* addr, size_t len, int prot) {
   if (addr == nullptr || len == 0) {
     errno = EINVAL;
     return -1;
@@ -730,43 +730,43 @@ extern "C" int mocktail_mprotect(void* addr, size_t len, int prot) {
 
 void RegisterBionicDnsWrappers() {
   linker::RegisterSymbol("getaddrinfo",
-                         reinterpret_cast<void*>(mocktail_getaddrinfo));
+                         reinterpret_cast<void*>(roblox_getaddrinfo));
   linker::RegisterSymbol("freeaddrinfo",
-                         reinterpret_cast<void*>(mocktail_freeaddrinfo));
+                         reinterpret_cast<void*>(roblox_freeaddrinfo));
   linker::RegisterSymbol("gethostbyname",
-                         reinterpret_cast<void*>(mocktail_gethostbyname));
+                         reinterpret_cast<void*>(roblox_gethostbyname));
 }
 
 void RegisterBionicPathWrappers() {
-  linker::RegisterSymbol("open", reinterpret_cast<void*>(mocktail_open));
-  linker::RegisterSymbol("__open_2", reinterpret_cast<void*>(mocktail___open_2));
-  linker::RegisterSymbol("fopen", reinterpret_cast<void*>(mocktail_fopen));
-  linker::RegisterSymbol("access", reinterpret_cast<void*>(mocktail_access));
-  linker::RegisterSymbol("stat", reinterpret_cast<void*>(mocktail_stat));
-  linker::RegisterSymbol("lstat", reinterpret_cast<void*>(mocktail_lstat));
-  linker::RegisterSymbol("statvfs", reinterpret_cast<void*>(mocktail_statvfs));
-  linker::RegisterSymbol("statfs", reinterpret_cast<void*>(mocktail_statfs));
-  linker::RegisterSymbol("mkdir", reinterpret_cast<void*>(mocktail_mkdir));
-  linker::RegisterSymbol("opendir", reinterpret_cast<void*>(mocktail_opendir));
-  linker::RegisterSymbol("rename", reinterpret_cast<void*>(mocktail_rename));
-  linker::RegisterSymbol("unlink", reinterpret_cast<void*>(mocktail_unlink));
-  linker::RegisterSymbol("rmdir", reinterpret_cast<void*>(mocktail_rmdir));
-  linker::RegisterSymbol("realpath", reinterpret_cast<void*>(mocktail_realpath));
-  linker::RegisterSymbol("readlink", reinterpret_cast<void*>(mocktail_readlink));
+  linker::RegisterSymbol("open", reinterpret_cast<void*>(roblox_open));
+  linker::RegisterSymbol("__open_2", reinterpret_cast<void*>(roblox___open_2));
+  linker::RegisterSymbol("fopen", reinterpret_cast<void*>(roblox_fopen));
+  linker::RegisterSymbol("access", reinterpret_cast<void*>(roblox_access));
+  linker::RegisterSymbol("stat", reinterpret_cast<void*>(roblox_stat));
+  linker::RegisterSymbol("lstat", reinterpret_cast<void*>(roblox_lstat));
+  linker::RegisterSymbol("statvfs", reinterpret_cast<void*>(roblox_statvfs));
+  linker::RegisterSymbol("statfs", reinterpret_cast<void*>(roblox_statfs));
+  linker::RegisterSymbol("mkdir", reinterpret_cast<void*>(roblox_mkdir));
+  linker::RegisterSymbol("opendir", reinterpret_cast<void*>(roblox_opendir));
+  linker::RegisterSymbol("rename", reinterpret_cast<void*>(roblox_rename));
+  linker::RegisterSymbol("unlink", reinterpret_cast<void*>(roblox_unlink));
+  linker::RegisterSymbol("rmdir", reinterpret_cast<void*>(roblox_rmdir));
+  linker::RegisterSymbol("realpath", reinterpret_cast<void*>(roblox_realpath));
+  linker::RegisterSymbol("readlink", reinterpret_cast<void*>(roblox_readlink));
   linker::RegisterSymbol("__readlink_chk",
-                         reinterpret_cast<void*>(mocktail___readlink_chk));
+                         reinterpret_cast<void*>(roblox___readlink_chk));
 }
 
-mocktail::runtime::RuntimePaths CurrentRuntimePaths() {
-  const mocktail::runtime::ProcessEnvironment environment;
-  return mocktail::runtime::RuntimePaths::FromEnvironment(environment);
+roblox::runtime::RuntimePaths CurrentRuntimePaths() {
+  const roblox::runtime::ProcessEnvironment environment;
+  return roblox::runtime::RuntimePaths::FromEnvironment(environment);
 }
 
-std::string MocktailCacheRoot() {
+std::string RobloxCacheRoot() {
   return CurrentRuntimePaths().cache_root().string();
 }
 
-std::string MocktailConfigRoot() {
+std::string RobloxConfigRoot() {
   return CurrentRuntimePaths().config_root().string();
 }
 
@@ -775,18 +775,18 @@ std::string DefaultAssetPath() {
 }
 
 bool RegisterFreshGamePresentObserver(
-    void* context, mocktail::runtime::FreshLaunchPresentObserver observer,
+    void* context, roblox::runtime::FreshLaunchPresentObserver observer,
     void* observer_context) {
   if (context == nullptr) {
     return false;
   }
-  return static_cast<mocktail::window::ScopedPresentObserver*>(context)
+  return static_cast<roblox::window::ScopedPresentObserver*>(context)
       ->Register(observer, observer_context);
 }
 
 void ClearFreshGamePresentObserver(void* context) {
   if (context != nullptr) {
-    static_cast<mocktail::window::ScopedPresentObserver*>(context)->Reset();
+    static_cast<roblox::window::ScopedPresentObserver*>(context)->Reset();
   }
 }
 
@@ -828,7 +828,7 @@ void NotifyLuaAppDidReturn(void* context) {
   if (context == nullptr) {
     return;
   }
-  const std::shared_ptr<mocktail::runtime::RobloxExperienceComposition>
+  const std::shared_ptr<roblox::runtime::RobloxExperienceComposition>
       composition =
           static_cast<ExperienceLifecycleTarget*>(context)->composition.lock();
   if (composition != nullptr) {
@@ -836,21 +836,21 @@ void NotifyLuaAppDidReturn(void* context) {
   }
 }
 
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceCreated(
+roblox::runtime::GameSessionUpdateResult ExperienceSurfaceCreated(
     void* context, uint64_t generation) {
-  return static_cast<mocktail::runtime::RobloxExperienceComposition*>(context)
+  return static_cast<roblox::runtime::RobloxExperienceComposition*>(context)
       ->SurfaceCreated(generation);
 }
 
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceChanged(
-    void* context, mocktail::runtime::GameSurface surface) {
-  return static_cast<mocktail::runtime::RobloxExperienceComposition*>(context)
+roblox::runtime::GameSessionUpdateResult ExperienceSurfaceChanged(
+    void* context, roblox::runtime::GameSurface surface) {
+  return static_cast<roblox::runtime::RobloxExperienceComposition*>(context)
       ->SurfaceChanged(std::move(surface));
 }
 
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceDestroyed(
+roblox::runtime::GameSessionUpdateResult ExperienceSurfaceDestroyed(
     void* context, uint64_t generation) {
-  return static_cast<mocktail::runtime::RobloxExperienceComposition*>(context)
+  return static_cast<roblox::runtime::RobloxExperienceComposition*>(context)
       ->SurfaceDestroyed(generation);
 }
 
@@ -864,13 +864,13 @@ std::string GetEnvStringDefaultPath(const char* name,
 }
 
 bool EnsureDirectory(const std::string& path) {
-  return mocktail::runtime::RuntimePaths::EnsureDirectory(path);
+  return roblox::runtime::RuntimePaths::EnsureDirectory(path);
 }
 
 void EnsureAndroidDirectory(const std::string& android_path) {
   std::string host_path = libc_shim::TranslatePath(android_path);
   if (EnsureDirectory(host_path) && host_path != android_path &&
-      IsEnabled("MOCKTAIL_TRACE")) {
+      IsEnabled("ROBLOX_TRACE")) {
     std::cerr << "  [engine] directory " << android_path << " -> "
               << host_path << '\n';
   }
@@ -959,20 +959,20 @@ void JniOnLoadTimeoutAlarm(int, siginfo_t* info, void* context) {
 void PublishCurrentJniEnv(JNIEnv* env) {
   using SetCurrentJniEnvFn = void (*)(void*);
   auto* set_current_jni_env = reinterpret_cast<SetCurrentJniEnvFn>(
-      ::dlsym(RTLD_DEFAULT, "mocktail_set_current_jni_env"));
+      ::dlsym(RTLD_DEFAULT, "roblox_set_current_jni_env"));
   if (set_current_jni_env) {
     set_current_jni_env(env);
   }
 }
 
 bool EngineTraceEnabled() {
-  return IsEnabled("MOCKTAIL_TRACE");
+  return IsEnabled("ROBLOX_TRACE");
 }
 
 void PreloadPthreadSymbols() {
   using PreloadPthreadSymbolsFn = void (*)();
   auto* preload_pthread_symbols = reinterpret_cast<PreloadPthreadSymbolsFn>(
-      ::dlsym(RTLD_DEFAULT, "mocktail_preload_pthread_symbols"));
+      ::dlsym(RTLD_DEFAULT, "roblox_preload_pthread_symbols"));
   if (preload_pthread_symbols) {
     preload_pthread_symbols();
   }
@@ -1000,7 +1000,7 @@ void PrintContextBacktrace(ucontext_t* ucontext, const char* prefix) {
   (void)prefix;
 }
 
-extern "C" int mocktail_recover_stack_chk_fail() {
+extern "C" int roblox_recover_stack_chk_fail() {
   if (g_init_with_params_recovery_in_progress != 0) {
     g_init_with_params_recovery_in_progress = 0;
     siglongjmp(g_init_with_params_jmp_buf, 1);
@@ -1033,7 +1033,7 @@ extern "C" int mocktail_recover_stack_chk_fail() {
 
 static uintptr_t g_libroblox_base_static = 0;
 
-extern "C" void mocktail_before_soinfo_constructors(const char* realpath,
+extern "C" void roblox_before_soinfo_constructors(const char* realpath,
                                                     uintptr_t base) {
   if (realpath == nullptr || std::strstr(realpath, "libroblox.so") == nullptr ||
       base == 0) {
@@ -1041,21 +1041,21 @@ extern "C" void mocktail_before_soinfo_constructors(const char* realpath,
   }
 
   g_libroblox_base = base;
-  g_mocktail_abort_libroblox_base = base;
+  g_roblox_abort_libroblox_base = base;
   g_libroblox_base_static = base;
 
   // No host allocator bridge and no guest thread initializer: the guest
   // allocates through the bionic shims and the host handles pthread startup.
-  mocktail::compat::ConfigureBionicPthreadThreadInitializer(nullptr);
+  roblox::compat::ConfigureBionicPthreadThreadInitializer(nullptr);
   libc_shim::ConfigureGuestAllocator(nullptr);
 
   // The whole .init_array runs natively; see
-  // mocktail_should_skip_soinfo_constructors.
+  // roblox_should_skip_soinfo_constructors.
   std::cout << "  [compat] leaving libroblox constructors untouched\n"
             << std::flush;
 }
 
-extern "C" bool mocktail_should_skip_soinfo_constructors(const char* realpath) {
+extern "C" bool roblox_should_skip_soinfo_constructors(const char* realpath) {
   if (realpath == nullptr ||
       std::strstr(realpath, "libroblox.so") == nullptr) {
     return false;
@@ -1083,26 +1083,26 @@ std::string JStringToString(JNIEnv* env, jstring value) {
   return result;
 }
 
-void MocktailSetAssetPath(JNIEnv* env, jstring asset_path) {
+void RobloxSetAssetPath(JNIEnv* env, jstring asset_path) {
   std::string path = JStringToString(env, asset_path);
   if (path.empty()) {
     path = DefaultAssetPath();
   }
-  setenv("MOCKTAIL_ASSET_ROOT", path.c_str(), 1);
+  setenv("ROBLOX_ASSET_ROOT", path.c_str(), 1);
   std::cout << "  [engine] asset root set to " << path << '\n' << std::flush;
 }
 
-void MocktailAppBridgeInit(JNIEnv* env, jstring app_params) {
+void RobloxAppBridgeInit(JNIEnv* env, jstring app_params) {
   std::string params = JStringToString(env, app_params);
   if (params.empty()) {
     params = "{}";
   }
-  setenv("MOCKTAIL_APP_BRIDGE_PARAMS", params.c_str(), 1);
-  setenv("MOCKTAIL_APP_BRIDGE_INIT", "1", 1);
+  setenv("ROBLOX_APP_BRIDGE_PARAMS", params.c_str(), 1);
+  setenv("ROBLOX_APP_BRIDGE_INIT", "1", 1);
   std::cout << "  [engine] app bridge params staged\n" << std::flush;
 }
 
-void MocktailAppBridgeStart(JNIEnv*, jstring) {
+void RobloxAppBridgeStart(JNIEnv*, jstring) {
   std::cout << "  [engine] app bridge marked started\n" << std::flush;
 }
 
@@ -1125,7 +1125,7 @@ void ApplyAuthStartupDefaults(bool credential_available,
     std::cout << "  [auth] typed Roblox credential ready for native startup\n";
     return;
   }
-  if (IsEnabled("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP")) {
+  if (IsEnabled("ROBLOX_ALLOW_NO_COOKIE_LUA_APP")) {
     std::cout << "  [auth] no Roblox cookie found; continuing in no-cookie mode\n"
               << std::flush;
     return;
@@ -1135,45 +1135,45 @@ void ApplyAuthStartupDefaults(bool credential_available,
             << std::flush;
 
   if (!user_overrode_start_lua_app_dm) {
-    setenv("MOCKTAIL_START_LUA_APP_DM", "0", 1);
+    setenv("ROBLOX_START_LUA_APP_DM", "0", 1);
   }
   if (!user_overrode_start_lua_step) {
-    setenv("MOCKTAIL_STEP_START_LUA_APP_DM", "0", 1);
+    setenv("ROBLOX_STEP_START_LUA_APP_DM", "0", 1);
   }
   if (!user_overrode_start_app_step) {
-    setenv("MOCKTAIL_STEP_START_APP_WITH_PARAMS", "0", 1);
+    setenv("ROBLOX_STEP_START_APP_WITH_PARAMS", "0", 1);
   }
   if (!user_overrode_call_start_app) {
-    setenv("MOCKTAIL_CALL_REAL_APP_BRIDGE_START", "0", 1);
+    setenv("ROBLOX_CALL_REAL_APP_BRIDGE_START", "0", 1);
   }
 }
 
 std::string ResolveClientSettingsJson() {
-  mocktail::services::ClientSettingsOptions options;
+  roblox::services::ClientSettingsOptions options;
   options.explicit_json =
-      GetEnvString("MOCKTAIL_CLIENT_SETTINGS_JSON", "");
+      GetEnvString("ROBLOX_CLIENT_SETTINGS_JSON", "");
   options.explicit_file =
-      GetEnvString("MOCKTAIL_CLIENT_SETTINGS_JSON_FILE", "");
-  options.use_bundled = IsEnabled("MOCKTAIL_USE_BUNDLED_CLIENT_SETTINGS");
-  options.offline_settings = IsEnabled("MOCKTAIL_OFFLINE_SETTINGS");
+      GetEnvString("ROBLOX_CLIENT_SETTINGS_JSON_FILE", "");
+  options.use_bundled = IsEnabled("ROBLOX_USE_BUNDLED_CLIENT_SETTINGS");
+  options.offline_settings = IsEnabled("ROBLOX_OFFLINE_SETTINGS");
   options.fetch = true;
   options.auto_update = true;
   options.application =
-      GetEnvString("MOCKTAIL_CLIENT_SETTINGS_APP", "GoogleAndroidApp");
-  options.url = GetEnvString("MOCKTAIL_CLIENT_SETTINGS_URL", "");
+      GetEnvString("ROBLOX_CLIENT_SETTINGS_APP", "GoogleAndroidApp");
+  options.url = GetEnvString("ROBLOX_CLIENT_SETTINGS_URL", "");
   options.cache_file = GetEnvString(
-      "MOCKTAIL_CLIENT_SETTINGS_CACHE_FILE",
-      (MocktailCacheRoot() + "/clientsettings/" + options.application +
+      "ROBLOX_CLIENT_SETTINGS_CACHE_FILE",
+      (RobloxCacheRoot() + "/clientsettings/" + options.application +
        ".json")
           .c_str());
 
-  static mocktail::services::CurlHttpClient http_client;
-  static mocktail::services::ClientSettingsService settings_service(
+  static roblox::services::CurlHttpClient http_client;
+  static roblox::services::ClientSettingsService settings_service(
       http_client);
-  const mocktail::services::ClientSettingsResult result =
+  const roblox::services::ClientSettingsResult result =
       settings_service.Resolve(options);
 
-  using mocktail::services::ClientSettingsSource;
+  using roblox::services::ClientSettingsSource;
   switch (result.source) {
     case ClientSettingsSource::kExplicitJson:
       break;
@@ -1251,14 +1251,14 @@ jobject BuildAppBridgeInitParams(JNIEnv* env, jstring client_settings,
                  "Lcom/roblox/engine/jni/model/PlatformParams;",
                  platform_params);
   jobject start_game_device_params =
-      IsEnabled("MOCKTAIL_START_GAME_DEVICE_PARAMS_NON_NULL") ? device_params
+      IsEnabled("ROBLOX_START_GAME_DEVICE_PARAMS_NON_NULL") ? device_params
                                                              : nullptr;
   SetObjectField(env, params, "deviceParams",
                  "Lcom/roblox/engine/jni/model/DeviceParams;",
                  start_game_device_params);
   SetStringField(env, params, "baseURL", "https://www.roblox.com");
   const std::string user_agent = GetEnvString(
-      "MOCKTAIL_USER_AGENT", "Roblox/unknown (Linux; Android 33)");
+      "ROBLOX_USER_AGENT", "Roblox/unknown (Linux; Android 33)");
   SetStringField(env, params, "userAgent", user_agent.c_str());
   SetBooleanField(env, params, "isTablet", JNI_FALSE);
   SetBooleanField(env, params, "isPotato", JNI_FALSE);
@@ -1312,15 +1312,15 @@ jobject BuildAppBridgeInitParams(JNIEnv* env, jstring client_settings,
   SetStringField(env, params, "packageName", "com.roblox.client");
   SetStringField(env, params, "platformName", "Android");
   const std::string init_app_version =
-      GetEnvString("MOCKTAIL_ROBLOX_VERSION", "unknown");
+      GetEnvString("ROBLOX_ROBLOX_VERSION", "unknown");
   SetStringField(env, params, "appVersion", init_app_version.c_str());
   const std::string init_device_name =
-      GetEnvString("MOCKTAIL_DEVICE_NAME", "Pixel 7");
+      GetEnvString("ROBLOX_DEVICE_NAME", "Pixel 7");
   SetStringField(env, params, "deviceName", init_device_name.c_str());
   SetStringField(env, params, "locale", "en_us");
   SetRobloxServiceUrlFields(env, params);
 
-  const mocktail::runtime::DisplaySize init_display = HostDisplaySize();
+  const roblox::runtime::DisplaySize init_display = HostDisplaySize();
   SetIntField(env, params, "screenWidth", init_display.width);
   SetIntField(env, params, "screenHeight", init_display.height);
   SetIntField(env, params, "densityDpi", 160);
@@ -1350,40 +1350,40 @@ jobject BuildStartGameParams(JNIEnv* env, jobject platform_params,
               << std::flush;
     return nullptr;
   }
-  const jlong place_id = GetEnvLong("MOCKTAIL_PLACE_ID", 0);
+  const jlong place_id = GetEnvLong("ROBLOX_PLACE_ID", 0);
   const jlong join_target_user_id =
-      GetEnvLong("MOCKTAIL_GAME_JOIN_USER_ID", 0);
+      GetEnvLong("ROBLOX_GAME_JOIN_USER_ID", 0);
   const jlong conversation_id =
-      GetEnvLong("MOCKTAIL_GAME_CONVERSATION_ID", 0);
+      GetEnvLong("ROBLOX_GAME_CONVERSATION_ID", 0);
   const jlong referred_by_player_id =
-      GetEnvLong("MOCKTAIL_REFERRED_BY_PLAYER_ID", 0);
+      GetEnvLong("ROBLOX_REFERRED_BY_PLAYER_ID", 0);
   const jint join_request_type =
-      GetEnvInt("MOCKTAIL_GAME_JOIN_REQUEST_TYPE", -1);
+      GetEnvInt("ROBLOX_GAME_JOIN_REQUEST_TYPE", -1);
   const std::string access_code_value =
-      GetEnvString("MOCKTAIL_GAME_ACCESS_CODE", "");
+      GetEnvString("ROBLOX_GAME_ACCESS_CODE", "");
   const std::string link_code_value =
-      GetEnvString("MOCKTAIL_GAME_LINK_CODE", "");
+      GetEnvString("ROBLOX_GAME_LINK_CODE", "");
   const std::string reserved_server_access_code_value =
-      GetEnvString("MOCKTAIL_GAME_RESERVED_SERVER_ACCESS_CODE", "");
-  const std::string call_id_value = GetEnvString("MOCKTAIL_GAME_CALL_ID", "");
-  const std::string event_id_value = GetEnvString("MOCKTAIL_GAME_EVENT_ID", "");
+      GetEnvString("ROBLOX_GAME_RESERVED_SERVER_ACCESS_CODE", "");
+  const std::string call_id_value = GetEnvString("ROBLOX_GAME_CALL_ID", "");
+  const std::string event_id_value = GetEnvString("ROBLOX_GAME_EVENT_ID", "");
   const std::string join_attempt_id_value =
-      GetEnvString("MOCKTAIL_GAME_JOIN_ATTEMPT_ID", "");
+      GetEnvString("ROBLOX_GAME_JOIN_ATTEMPT_ID", "");
   const std::string join_attempt_origin_value =
-      GetEnvString("MOCKTAIL_GAME_JOIN_ATTEMPT_ORIGIN", "");
+      GetEnvString("ROBLOX_GAME_JOIN_ATTEMPT_ORIGIN", "");
   const std::string iso_context_value =
-      GetEnvString("MOCKTAIL_GAME_ISO_CONTEXT", "");
+      GetEnvString("ROBLOX_GAME_ISO_CONTEXT", "");
   const std::string& username_value = identity.username;
   const std::string launch_data_value =
       GetEnvString(launch_data_env != nullptr ? launch_data_env
-                                              : "MOCKTAIL_GAME_PARAMS_JSON",
+                                              : "ROBLOX_GAME_PARAMS_JSON",
                    "");
   const std::string game_id_value =
-      GetEnvString("MOCKTAIL_GAME_ID", "");
+      GetEnvString("ROBLOX_GAME_ID", "");
   const std::string referral_page_value =
-      GetEnvString("MOCKTAIL_REFERRAL_PAGE", "");
+      GetEnvString("ROBLOX_REFERRAL_PAGE", "");
   const std::string game_join_context_value =
-      GetEnvString("MOCKTAIL_GAME_JOIN_CONTEXT", "");
+      GetEnvString("ROBLOX_GAME_JOIN_CONTEXT", "");
   if (EngineTraceEnabled()) {
     std::cout << "  [engine] StartGame params: place_id=" << place_id
               << " join_target_user_id=" << join_target_user_id

@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_TEXT_EDITOR_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_TEXT_EDITOR_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_TEXT_EDITOR_H_
+#define ROBLOX_RUNTIME_ROBLOX_TEXT_EDITOR_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -7,11 +7,11 @@
 #include <mutex>
 #include <string>
 
-#include "mocktail/platform/platform_runtime.h"
-#include "mocktail/platform/text_clipboard.h"
-#include "mocktail/status.h"
+#include "roblox/platform/platform_runtime.h"
+#include "roblox/platform/text_clipboard.h"
+#include "roblox/status.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 struct RobloxTextFocusSession {
@@ -192,6 +192,6 @@ class RobloxTextEditor final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_TEXT_EDITOR_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_TEXT_EDITOR_H_

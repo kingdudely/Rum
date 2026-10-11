@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_COMPAT_BIONIC_SIGNAL_RUNTIME_H_
-#define MOCKTAIL_COMPAT_BIONIC_SIGNAL_RUNTIME_H_
+#ifndef ROBLOX_COMPAT_BIONIC_SIGNAL_RUNTIME_H_
+#define ROBLOX_COMPAT_BIONIC_SIGNAL_RUNTIME_H_
 
 #include <signal.h>
 
 #include <cstdint>
 
-namespace mocktail::compat {
+namespace roblox::compat {
 
 // Android LP64 exposes a POSIX sigaction layout that differs
 // from both the Linux kernel and glibc layouts.
@@ -26,10 +26,10 @@ static_assert(sizeof(BionicSigaction) == 32,
 int BionicSigactionCall(int signal_number, const BionicSigaction* action,
                         BionicSigaction* old_action) noexcept;
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
-extern "C" int mocktail_bionic_sigaction(
-    int signal_number, const mocktail::compat::BionicSigaction* action,
-    mocktail::compat::BionicSigaction* old_action);
+extern "C" int roblox_bionic_sigaction(
+    int signal_number, const roblox::compat::BionicSigaction* action,
+    roblox::compat::BionicSigaction* old_action);
 
-#endif  // MOCKTAIL_COMPAT_BIONIC_SIGNAL_RUNTIME_H_
+#endif  // ROBLOX_COMPAT_BIONIC_SIGNAL_RUNTIME_H_

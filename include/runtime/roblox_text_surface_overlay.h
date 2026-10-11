@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_TEXT_SURFACE_OVERLAY_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_TEXT_SURFACE_OVERLAY_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_TEXT_SURFACE_OVERLAY_H_
+#define ROBLOX_RUNTIME_ROBLOX_TEXT_SURFACE_OVERLAY_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -7,11 +7,11 @@
 #include <string>
 #include <vector>
 
-#include "mocktail/graphics/text_overlay_frame.h"
-#include "mocktail/status.h"
+#include "roblox/graphics/text_overlay_frame.h"
+#include "roblox/status.h"
 #include "runtime/roblox_text_display_state.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Thread-safe bridge from Roblox's synchronous TextBox callback to the
@@ -31,7 +31,7 @@ class RobloxTextSurfaceOverlay final {
   Status Shutdown();
   RobloxTextDisplaySink sink();
 
-  bool QueryFrame(MocktailTextOverlayFrameInfo* frame);
+  bool QueryFrame(RobloxTextOverlayFrameInfo* frame);
   bool CopyFrame(std::uint64_t revision, void* rgba, std::size_t rgba_capacity);
 
  private:
@@ -55,6 +55,6 @@ class RobloxTextSurfaceOverlay final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_TEXT_SURFACE_OVERLAY_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_TEXT_SURFACE_OVERLAY_H_

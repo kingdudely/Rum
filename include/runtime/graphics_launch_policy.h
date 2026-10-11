@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_GRAPHICS_LAUNCH_POLICY_H_
-#define MOCKTAIL_RUNTIME_GRAPHICS_LAUNCH_POLICY_H_
+#ifndef ROBLOX_RUNTIME_GRAPHICS_LAUNCH_POLICY_H_
+#define ROBLOX_RUNTIME_GRAPHICS_LAUNCH_POLICY_H_
 
 #include <filesystem>
 #include <string>
@@ -8,7 +8,7 @@
 
 #include "runtime/runtime_config.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Readable ICD manifest for `vendor` that this build can actually load, or an
@@ -25,6 +25,6 @@ bool ApplyGraphicsLaunchPolicy(const RuntimeConfig& config,
                                std::string* error = nullptr);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_GRAPHICS_LAUNCH_POLICY_H_
+#endif  // ROBLOX_RUNTIME_GRAPHICS_LAUNCH_POLICY_H_

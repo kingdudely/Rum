@@ -1,12 +1,12 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_CAPABILITY_RESOLVER_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_CAPABILITY_RESOLVER_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_CAPABILITY_RESOLVER_H_
+#define ROBLOX_RUNTIME_ROBLOX_CAPABILITY_RESOLVER_H_
 
 #include <jni.h>
 
 #include <string>
 #include <vector>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Non-owning callback used to look up exported symbols. The resolver invokes
@@ -242,6 +242,6 @@ const char* RobloxCapabilityResolutionStatusName(
 const char* RobloxGamepadApiName(RobloxGamepadApi api);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_CAPABILITY_RESOLVER_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_CAPABILITY_RESOLVER_H_

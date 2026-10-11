@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_INPUT_ROUTER_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_INPUT_ROUTER_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_INPUT_ROUTER_H_
+#define ROBLOX_RUNTIME_ROBLOX_INPUT_ROUTER_H_
 
 #include <array>
 #include <cmath>
@@ -7,11 +7,11 @@
 #include <mutex>
 #include <vector>
 
-#include "mocktail/platform/platform_runtime.h"
-#include "mocktail/status.h"
+#include "roblox/platform/platform_runtime.h"
+#include "roblox/status.h"
 #include "runtime/roblox_text_editor.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 struct RobloxInputViewport {
@@ -244,6 +244,6 @@ const char* RobloxInputDispatchStateName(RobloxInputDispatchState state);
 const char* RobloxInputEventKindName(RobloxInputEventKind kind);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_INPUT_ROUTER_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_INPUT_ROUTER_H_

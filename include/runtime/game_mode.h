@@ -1,12 +1,12 @@
-#ifndef MOCKTAIL_RUNTIME_GAME_MODE_H_
-#define MOCKTAIL_RUNTIME_GAME_MODE_H_
+#ifndef ROBLOX_RUNTIME_GAME_MODE_H_
+#define ROBLOX_RUNTIME_GAME_MODE_H_
 
 #include <string>
 #include <string_view>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 enum class GameModePolicy {
@@ -84,6 +84,6 @@ class GameModeSession final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_GAME_MODE_H_
+#endif  // ROBLOX_RUNTIME_GAME_MODE_H_

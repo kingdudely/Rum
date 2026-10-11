@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <mutex>
 
-namespace mocktail::compat {
+namespace roblox::compat {
 namespace {
 
 constexpr uint64_t kSequenceInUseBit = 1;
@@ -237,23 +237,23 @@ bool IsBionicPthreadKey(pthread_key_t key) noexcept {
          index < kBionicPthreadKeyCount;
 }
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
-extern "C" int mocktail_bionic_pthread_key_create(
+extern "C" int roblox_bionic_pthread_key_create(
     pthread_key_t* key, void (*destructor)(void*)) {
-  return mocktail::compat::BionicPthreadKeyRuntime::Instance().Create(
+  return roblox::compat::BionicPthreadKeyRuntime::Instance().Create(
       key, destructor);
 }
 
-extern "C" int mocktail_bionic_pthread_key_delete(pthread_key_t key) {
-  return mocktail::compat::BionicPthreadKeyRuntime::Instance().Delete(key);
+extern "C" int roblox_bionic_pthread_key_delete(pthread_key_t key) {
+  return roblox::compat::BionicPthreadKeyRuntime::Instance().Delete(key);
 }
 
-extern "C" void* mocktail_bionic_pthread_getspecific(pthread_key_t key) {
-  return mocktail::compat::GetSpecificForCurrentThread(key);
+extern "C" void* roblox_bionic_pthread_getspecific(pthread_key_t key) {
+  return roblox::compat::GetSpecificForCurrentThread(key);
 }
 
-extern "C" int mocktail_bionic_pthread_setspecific(pthread_key_t key,
+extern "C" int roblox_bionic_pthread_setspecific(pthread_key_t key,
                                                     const void* value) {
-  return mocktail::compat::SetSpecificForCurrentThread(key, value);
+  return roblox::compat::SetSpecificForCurrentThread(key, value);
 }

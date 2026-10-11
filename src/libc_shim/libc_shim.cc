@@ -27,7 +27,7 @@ std::vector<std::string> g_ca_bundle_aliases;
 bool g_installed = false;
 std::atomic<GuestAllocator> g_guest_allocator{nullptr};
 
-constexpr char kCaBundleOverride[] = "MOCKTAIL_CA_BUNDLE";
+constexpr char kCaBundleOverride[] = "ROBLOX_CA_BUNDLE";
 constexpr std::array<const char*, 2> kDefaultCaBundles = {
     "/etc/ssl/cert.pem",
     "/etc/ssl/certs/ca-certificates.crt",
@@ -49,7 +49,7 @@ const char* GetEnvNonEmpty(const char* name) {
 }
 
 std::string RuntimeRoot() {
-  const char* runtime_root = std::getenv("MOCKTAIL_RUNTIME_ROOT");
+  const char* runtime_root = std::getenv("ROBLOX_RUNTIME_ROOT");
   if (runtime_root != nullptr && runtime_root[0] != '\0') {
     return runtime_root;
   }
@@ -191,7 +191,7 @@ HostCaBundleResolution ResolveHostCaBundle() {
 HostCaBundleResolution ConfigureHostCaBundlePathMappings() {
   for (const auto& alias : g_ca_bundle_aliases) g_path_mappings.erase(alias);
   g_ca_bundle_aliases.assign(kAndroidCaBundlePaths.begin(), kAndroidCaBundlePaths.end());
-  if (const char* content = GetEnvNonEmpty("MOCKTAIL_ASSET_PATH")) {
+  if (const char* content = GetEnvNonEmpty("ROBLOX_ASSET_PATH")) {
     auto root = std::filesystem::path(content).lexically_normal();
     if (root.filename().empty()) root = root.parent_path();
     g_ca_bundle_aliases.push_back((root / "ssl/cacert.pem").string());
@@ -242,14 +242,14 @@ void Install() {
               << HostCaBundleStatusName(ca_bundle.status)
               << "; TLS verification remains fail-closed\n";
   }
-  const char* cache_root = GetEnvNonEmpty("MOCKTAIL_ANDROID_CACHE_HOST_ROOT");
+  const char* cache_root = GetEnvNonEmpty("ROBLOX_ANDROID_CACHE_HOST_ROOT");
   if (cache_root != nullptr) {
     RegisterPathMapping("/data/user/0/com.roblox.client/cache", cache_root);
     RegisterPathMapping("/data/data/com.roblox.client/cache", cache_root);
     EnsureDirectory(cache_root);
   }
   const char* shader_cache_path =
-      GetEnvNonEmpty("MOCKTAIL_VULKAN_SHADER_CACHE_HOST_PATH");
+      GetEnvNonEmpty("ROBLOX_VULKAN_SHADER_CACHE_HOST_PATH");
   if (shader_cache_path != nullptr) {
     RegisterPathMapping(
         "/data/user/0/com.roblox.client/shadercachevk.bin",
@@ -260,10 +260,10 @@ void Install() {
   }
   // Accepts either <assets> or <assets/content>; both resolve to the same
   // three mappings rather than silently registering nothing.
-  const char* asset_root = GetEnvNonEmpty("MOCKTAIL_ASSET_PATH");
+  const char* asset_root = GetEnvNonEmpty("ROBLOX_ASSET_PATH");
   if (asset_root != nullptr) {
     const std::filesystem::path content_root =
-        mocktail::runtime::NormalizeRobloxAssetPath(asset_root);
+        roblox::runtime::NormalizeRobloxAssetPath(asset_root);
     const std::filesystem::path assets_root = content_root.parent_path();
     RegisterPathMapping("content", content_root.string());
     RegisterPathMapping("rbx_bin/assets/content", content_root.string());
@@ -320,7 +320,7 @@ const char* HostPath(const char* path, std::string* storage) {
 }
 
 bool PathTraceEnabled() {
-  const char* value = std::getenv("MOCKTAIL_TRACE");
+  const char* value = std::getenv("ROBLOX_TRACE");
   return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
@@ -352,7 +352,7 @@ void TracePathCallPtr(const char* name, const char* path,
 
 }  // namespace
 
-extern "C" int mocktail_open(const char* path, int flags, ...) {
+extern "C" int roblox_open(const char* path, int flags, ...) {
   std::string translated;
   const char* host_path = HostPath(path, &translated);
   int result = -1;
@@ -369,7 +369,7 @@ extern "C" int mocktail_open(const char* path, int flags, ...) {
   return result;
 }
 
-extern "C" int mocktail___open_2(const char* path, int flags) {
+extern "C" int roblox___open_2(const char* path, int flags) {
   std::string translated;
   const char* host_path = HostPath(path, &translated);
   int result = -1;
@@ -382,7 +382,7 @@ extern "C" int mocktail___open_2(const char* path, int flags) {
   return result;
 }
 
-extern "C" FILE* mocktail_fopen(const char* path, const char* mode) {
+extern "C" FILE* roblox_fopen(const char* path, const char* mode) {
   std::string translated;
   const char* host_path = HostPath(path, &translated);
   FILE* result = ::fopen(host_path, mode);
@@ -390,7 +390,7 @@ extern "C" FILE* mocktail_fopen(const char* path, const char* mode) {
   return result;
 }
 
-extern "C" int mocktail_access(const char* path, int mode) {
+extern "C" int roblox_access(const char* path, int mode) {
   std::string translated;
   const char* host_path = HostPath(path, &translated);
   int result = ::access(host_path, mode);
@@ -398,7 +398,7 @@ extern "C" int mocktail_access(const char* path, int mode) {
   return result;
 }
 
-extern "C" int mocktail_stat(const char* path, struct stat* statbuf) {
+extern "C" int roblox_stat(const char* path, struct stat* statbuf) {
   std::string translated;
   const char* host_path = HostPath(path, &translated);
   int result = ::stat(host_path, statbuf);
@@ -406,7 +406,7 @@ extern "C" int mocktail_stat(const char* path, struct stat* statbuf) {
   return result;
 }
 
-extern "C" int mocktail_lstat(const char* path, struct stat* statbuf) {
+extern "C" int roblox_lstat(const char* path, struct stat* statbuf) {
   std::string translated;
   const char* host_path = HostPath(path, &translated);
   int result = ::lstat(host_path, statbuf);
@@ -414,44 +414,44 @@ extern "C" int mocktail_lstat(const char* path, struct stat* statbuf) {
   return result;
 }
 
-extern "C" int mocktail_statvfs(const char* path, struct statvfs* statbuf) {
+extern "C" int roblox_statvfs(const char* path, struct statvfs* statbuf) {
   std::string translated;
   return ::statvfs(HostPath(path, &translated), statbuf);
 }
 
-extern "C" int mocktail_statfs(const char* path, struct statfs* statbuf) {
+extern "C" int roblox_statfs(const char* path, struct statfs* statbuf) {
   std::string translated;
   return ::statfs(HostPath(path, &translated), statbuf);
 }
 
-extern "C" int mocktail_mkdir(const char* path, mode_t mode) {
+extern "C" int roblox_mkdir(const char* path, mode_t mode) {
   std::string translated;
   return ::mkdir(HostPath(path, &translated), mode);
 }
 
-extern "C" DIR* mocktail_opendir(const char* path) {
+extern "C" DIR* roblox_opendir(const char* path) {
   std::string translated;
   return ::opendir(HostPath(path, &translated));
 }
 
-extern "C" int mocktail_rename(const char* old_path, const char* new_path) {
+extern "C" int roblox_rename(const char* old_path, const char* new_path) {
   std::string translated_old;
   std::string translated_new;
   return ::rename(HostPath(old_path, &translated_old),
                   HostPath(new_path, &translated_new));
 }
 
-extern "C" int mocktail_unlink(const char* path) {
+extern "C" int roblox_unlink(const char* path) {
   std::string translated;
   return ::unlink(HostPath(path, &translated));
 }
 
-extern "C" int mocktail_rmdir(const char* path) {
+extern "C" int roblox_rmdir(const char* path) {
   std::string translated;
   return ::rmdir(HostPath(path, &translated));
 }
 
-extern "C" char* mocktail_realpath(const char* path, char* resolved_path) {
+extern "C" char* roblox_realpath(const char* path, char* resolved_path) {
   std::string translated;
   const char* host_path = HostPath(path, &translated);
   if (resolved_path != nullptr) {
@@ -476,13 +476,13 @@ extern "C" char* mocktail_realpath(const char* path, char* resolved_path) {
   return result;
 }
 
-extern "C" ssize_t mocktail_readlink(const char* path, char* buf,
+extern "C" ssize_t roblox_readlink(const char* path, char* buf,
                                       size_t bufsiz) {
   std::string translated;
   return ::readlink(HostPath(path, &translated), buf, bufsiz);
 }
 
-extern "C" ssize_t mocktail___readlink_chk(const char* path, char* buf,
+extern "C" ssize_t roblox___readlink_chk(const char* path, char* buf,
                                             size_t len, size_t buf_len) {
   // Bionic treats impossible ssize_t results and proven overruns as fatal;
   // returning EINVAL would continue after a detected buffer overflow.
@@ -498,5 +498,5 @@ extern "C" ssize_t mocktail___readlink_chk(const char* path, char* buf,
                  len, buf_len);
     std::abort();
   }
-  return mocktail_readlink(path, buf, len);
+  return roblox_readlink(path, buf, len);
 }

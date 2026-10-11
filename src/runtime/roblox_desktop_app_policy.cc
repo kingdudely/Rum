@@ -14,11 +14,11 @@
 #include <string_view>
 #include <utility>
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/atomic_json_file.h"
 #include "runtime/runtime_paths.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -31,7 +31,7 @@ using platform::ScopedFileDescriptor;
 using platform::WriteAll;
 
 constexpr AtomicJsonWriteNames kAtomicWriteNames{
-    "desktop app-policy", ".mocktail-desktop-policy.tmp."};
+    "desktop app-policy", ".roblox-desktop-policy.tmp."};
 
 enum class ReadStatus { kMissing, kReady, kInvalid };
 
@@ -278,4 +278,4 @@ bool MergeDesktopAppPolicyClientSettingsOverride(std::string_view policy_json,
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

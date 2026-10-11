@@ -56,8 +56,8 @@
 #include "legacy/legacy_runtime_internal.h"
 #include "libc_shim/libc_shim.h"
 #include "linker/linker.h"
-#include "mocktail/graphics/bionic_egl_bridge.h"
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/graphics/bionic_egl_bridge.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/device_memory_profile.h"
 #include "runtime/display_size.h"
 #include "runtime/environment.h"
@@ -79,7 +79,7 @@
 #include "window/window.h"
 #include "window/window_game_surface_bridge.h"
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
 #include <mcpelauncher/linker.h>
 #endif
 
@@ -224,16 +224,16 @@ void* EngineStartupThread(void* arg) {
   jstring empty_string = env->NewStringUTF("");
   jstring client_settings = NewClientSettingsString(env);
   jstring client_settings_overrides =
-      NewStringFromEnvDefault(env, "MOCKTAIL_CLIENT_SETTINGS_OVERRIDES_JSON",
+      NewStringFromEnvDefault(env, "ROBLOX_CLIENT_SETTINGS_OVERRIDES_JSON",
                               "{}");
   jstring client_settings_signature =
-      NewStringFromEnvDefault(env, "MOCKTAIL_CLIENT_SETTINGS_SIGNATURE", "");
+      NewStringFromEnvDefault(env, "ROBLOX_CLIENT_SETTINGS_SIGNATURE", "");
   jstring client_settings_group =
-      NewStringFromEnvDefault(env, "MOCKTAIL_CLIENT_SETTINGS_GROUP",
+      NewStringFromEnvDefault(env, "ROBLOX_CLIENT_SETTINGS_GROUP",
                               "GoogleAndroidApp");
   jstring fast_flags =
-      NewStringFromEnvDefault(env, "MOCKTAIL_FAST_FLAGS_JSON", "{}");
-  const char* launch_mode = std::getenv("MOCKTAIL_LAUNCH_MODE");
+      NewStringFromEnvDefault(env, "ROBLOX_FAST_FLAGS_JSON", "{}");
+  const char* launch_mode = std::getenv("ROBLOX_LAUNCH_MODE");
   const char* default_launch_mode = "normal";
   std::string default_app_params =
       std::string("{\"launchMode\":\"") + (launch_mode != nullptr &&
@@ -242,10 +242,10 @@ void* EngineStartupThread(void* arg) {
                                               : default_launch_mode) +
       "\",\"placeId\":0}";
   jstring app_params = NewStringFromEnvDefault(
-      env, "MOCKTAIL_APP_PARAMS_JSON", default_app_params.c_str());
+      env, "ROBLOX_APP_PARAMS_JSON", default_app_params.c_str());
   EngineLogPtr("JNIEnv.functions", env ? env->functions : nullptr);
   jstring asset_path =
-      env->NewStringUTF(GetEnvStringDefaultPath("MOCKTAIL_ASSET_PATH",
+      env->NewStringUTF(GetEnvStringDefaultPath("ROBLOX_ASSET_PATH",
                                                 DefaultAssetPath())
                             .c_str());
   std::string asset_path_value = JStringToString(env, asset_path);
@@ -253,7 +253,7 @@ void* EngineStartupThread(void* arg) {
     asset_path_value = DefaultAssetPath();
     asset_path = env->NewStringUTF(asset_path_value.c_str());
   }
-  if (IsEnabled("MOCKTAIL_TRACE")) {
+  if (IsEnabled("ROBLOX_TRACE")) {
     std::cout << "  [engine] asset path prepared: " << asset_path_value
               << '\n'
               << std::flush;
@@ -273,7 +273,7 @@ void* EngineStartupThread(void* arg) {
       context->account_identity;
   jobject start_game_params =
       BuildStartGameParams(env, platform_params, device_params, surface,
-                           game_activity, "MOCKTAIL_GAME_PARAMS_JSON",
+                           game_activity, "ROBLOX_GAME_PARAMS_JSON",
                            account_identity);
   InstallNativeGlJavaImplementation(env, native_gl_java_class);
   EngineLog("NewStringUTF returned");
@@ -339,10 +339,10 @@ void* EngineStartupThread(void* arg) {
         g_set_asset_path_recovery_in_progress = 0;
       } else {
         std::cerr << "  [engine] nativeSetAssetPath recovered\n" << std::flush;
-        MocktailSetAssetPath(env, asset_path);
+        RobloxSetAssetPath(env, asset_path);
       }
     } else {
-      MocktailSetAssetPath(env, asset_path);
+      RobloxSetAssetPath(env, asset_path);
     }
     std::cout << "  [engine] nativeSetAssetPath returned\n" << std::flush;
   }
@@ -425,7 +425,7 @@ void* EngineStartupThread(void* arg) {
     std::cout << "  [engine] nativeInitClientSettings\n" << std::flush;
     if (sigsetjmp(g_init_client_settings_jmp_buf, 1) == 0) {
       g_init_client_settings_recovery_in_progress = 1;
-      const char* variant = std::getenv("MOCKTAIL_INIT_CLIENT_SETTINGS_VARIANT");
+      const char* variant = std::getenv("ROBLOX_INIT_CLIENT_SETTINGS_VARIANT");
       if (variant == nullptr || variant[0] == '\0') {
         variant = "classic";
       }
@@ -506,15 +506,15 @@ void* EngineStartupThread(void* arg) {
       } else {
 std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
                   << std::flush;
-        MocktailAppBridgeInit(env, app_params);
+        RobloxAppBridgeInit(env, app_params);
       }
     } else {
-      MocktailAppBridgeInit(env, app_params);
+      RobloxAppBridgeInit(env, app_params);
     }
     std::cout << "  [engine] nativeAppBridgeV2InitWithParams returned\n"
               << std::flush;
     g_main_thread_message_pump_ready.store(1);
-    if (IsEnabled("MOCKTAIL_TRACE")) {
+    if (IsEnabled("ROBLOX_TRACE")) {
       std::cerr << "  [engine] nativeCallMessagesFromMainThread pump ready\n"
                 << std::flush;
     }
@@ -571,7 +571,7 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 	    env = EnsureStartupEnv(context, env);
 	    std::cout << "  [engine] nativeAppBridgeV2StartAppWithParams\n"
 	              << std::flush;
-    MocktailAppBridgeStart(env, app_params);
+    RobloxAppBridgeStart(env, app_params);
     std::cout << "  [engine] nativeAppBridgeV2StartAppWithParams returned\n"
               << std::flush;
   }
@@ -579,11 +579,11 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 
   if (context->game_session_runtime != nullptr) {
     env = EnsureStartupEnv(context, env);
-    mocktail::runtime::GameSessionPrincipal principal;
+    roblox::runtime::GameSessionPrincipal principal;
     principal.kind = context->account_identity.user_id > 0
-                         ? mocktail::runtime::GameSessionPrincipalKind::
+                         ? roblox::runtime::GameSessionPrincipalKind::
                                kAuthenticated
-                         : mocktail::runtime::GameSessionPrincipalKind::
+                         : roblox::runtime::GameSessionPrincipalKind::
                                kLocalGuest;
     principal.generation = 1;
     principal.principal_id = context->account_identity.user_id > 0
@@ -592,29 +592,29 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
                                  : std::string();
     principal.base_url = "https://www.roblox.com/";
     std::string launch_parameters =
-        GetEnvString("MOCKTAIL_GAME_PARAMS_JSON", "{}");
+        GetEnvString("ROBLOX_GAME_PARAMS_JSON", "{}");
     if (launch_parameters.empty()) {
       launch_parameters = "{}";
     }
-    mocktail::runtime::GameJoinRequest request{
-        1, GetEnvLong("MOCKTAIL_PLACE_ID", 0), std::move(launch_parameters)};
-    const mocktail::window::WindowSurfaceSnapshot window_surface =
-        mocktail::window::GetWindowSurfaceSnapshot();
+    roblox::runtime::GameJoinRequest request{
+        1, GetEnvLong("ROBLOX_PLACE_ID", 0), std::move(launch_parameters)};
+    const roblox::window::WindowSurfaceSnapshot window_surface =
+        roblox::window::GetWindowSurfaceSnapshot();
     if (!window_surface.available) {
       std::cerr << "  [game-session] initial typed window surface is "
                    "unavailable\n";
       return nullptr;
     }
-    mocktail::runtime::GameSurface game_surface{
+    roblox::runtime::GameSurface game_surface{
         window_surface.generation, window_surface.native_window,
         window_surface.width, window_surface.height, window_surface.dpi_scale};
-    mocktail::runtime::RobloxGameSessionBinding binding{
+    roblox::runtime::RobloxGameSessionBinding binding{
         {native_gl_class, surface, platform_params, game_surface_activity,
          start_game_params},
         principal,
         request,
         game_surface};
-    const mocktail::Status status =
+    const roblox::Status status =
         context->game_session_runtime->InitializeAndStart(
             binding, std::move(principal), std::move(request), game_surface);
     if (!status.ok()) {
@@ -624,7 +624,7 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
       return nullptr;
     }
     std::cout << "  [game-session] typed lifecycle startup completed: "
-              << mocktail::runtime::GameSessionStateName(
+              << roblox::runtime::GameSessionStateName(
                      context->game_session_runtime->Snapshot().state)
               << '\n'
               << std::flush;
@@ -632,7 +632,7 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 
   NotifyAppReadyAndGameLoaded(context, env, native_gl_class);
 
-  int keepalive_ms = GetEnvInt("MOCKTAIL_KEEPALIVE_MS", 0);
+  int keepalive_ms = GetEnvInt("ROBLOX_KEEPALIVE_MS", 0);
   if (keepalive_ms > 0) {
     std::cout << "  [engine] keepalive: " << keepalive_ms << " ms\n"
               << std::flush;
@@ -640,7 +640,7 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
     std::cout << "  [engine] keepalive returned\n" << std::flush;
   }
 
-  if (IsEnabled("MOCKTAIL_KEEPALIVE")) {
+  if (IsEnabled("ROBLOX_KEEPALIVE")) {
     std::cout << "  [engine] keepalive: forever\n" << std::flush;
     while (true) {
       sleep(1);
@@ -662,7 +662,7 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 
 // The names libroblox.so does not import dynamically, so they cannot come from
 // RegisterUndefinedElfImports and this table is the only thing that registers
-// them. That is the compatibility surface Mocktail exists to provide: guest
+// them. That is the compatibility surface Roblox exists to provide: guest
 // layouts such as pthread and FILE that have to come from the Bionic shims
 // rather than from glibc, plus the Android exports the synthetic libraries
 // publish. Run resolves each name against the stubs, the host GL library and
@@ -679,12 +679,12 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 StartupDecisions ResolveStartupDecisions(
     bool has_window, const RobloxEngineSymbols& symbols) {
   StartupDecisions decisions;
-  // Every step used to be tunable through MOCKTAIL_STEP_* and friends, with
+  // Every step used to be tunable through ROBLOX_STEP_* and friends, with
   // ApplyRuntimeDefaults filling the rest. The values below are what those
   // gates evaluated to with nothing set; the flags are gone, so the
   // defaults are the behavior. Beware CachedGetenv: reads before
-  // ApplyRuntimeDefaults freeze, so MOCKTAIL_START_LUA_APP_DM and
-  // MOCKTAIL_CALL_REAL_APP_BRIDGE_START evaluate false here even though
+  // ApplyRuntimeDefaults freeze, so ROBLOX_START_LUA_APP_DM and
+  // ROBLOX_CALL_REAL_APP_BRIDGE_START evaluate false here even though
   // defaults exist for them later.
   decisions.run_set_asset_path = true;
   decisions.call_real_set_asset_path = true;
@@ -695,7 +695,7 @@ StartupDecisions ResolveStartupDecisions(
   decisions.run_init_with_params = true;
   decisions.call_real_init_with_params = true;
   decisions.run_update_screen_orientation = false;
-  // MOCKTAIL_STEP_GAME_ACTIVITY_INIT defaults to "0", which disables this
+  // ROBLOX_STEP_GAME_ACTIVITY_INIT defaults to "0", which disables this
   // even in windowed runs. That default is load-bearing, not an override.
   decisions.run_game_activity_init = false;
   decisions.run_set_init_params = false;
@@ -721,30 +721,30 @@ StartupDecisions ResolveStartupDecisions(
 // bridge.
 void RunMainLoop(
     bool* game_surface_events_completed,
-    mocktail::runtime::RobloxGameSessionRuntime* game_session_runtime,
-    mocktail::runtime::RobloxExperienceComposition* experience_composition) {
-  std::unique_ptr<mocktail::window::WindowGameSurfaceBridge> surface_bridge;
+    roblox::runtime::RobloxGameSessionRuntime* game_session_runtime,
+    roblox::runtime::RobloxExperienceComposition* experience_composition) {
+  std::unique_ptr<roblox::window::WindowGameSurfaceBridge> surface_bridge;
   if (game_session_runtime != nullptr) {
     surface_bridge =
-        std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
-            mocktail::window::MakeWindowGameSurfaceEventSource(),
-            mocktail::window::MakeWindowGameSurfaceConsumer(
+        std::make_unique<roblox::window::WindowGameSurfaceBridge>(
+            roblox::window::MakeWindowGameSurfaceEventSource(),
+            roblox::window::MakeWindowGameSurfaceConsumer(
                 game_session_runtime));
   } else if (experience_composition != nullptr &&
              experience_composition->subscribed()) {
-    mocktail::window::WindowGameSurfaceConsumer experience_consumer{
+    roblox::window::WindowGameSurfaceConsumer experience_consumer{
         experience_composition, &ExperienceSurfaceCreated,
         &ExperienceSurfaceChanged, &ExperienceSurfaceDestroyed};
     surface_bridge =
-        std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
-            mocktail::window::MakeWindowGameSurfaceEventSource(),
+        std::make_unique<roblox::window::WindowGameSurfaceBridge>(
+            roblox::window::MakeWindowGameSurfaceEventSource(),
             experience_consumer);
   }
   const auto drain_game_surface_events = [&]() {
     if (surface_bridge == nullptr) {
       return true;
     }
-    const mocktail::window::WindowGameSurfaceDrainResult result =
+    const roblox::window::WindowGameSurfaceDrainResult result =
         surface_bridge->Drain();
     if (!result.ok()) {
       std::cerr << "[FATAL] Typed GAME surface bridge rejected an event: "
@@ -752,7 +752,7 @@ void RunMainLoop(
       return false;
     }
     if (result.drained_events != 0) {
-      const mocktail::window::WindowGameSurfaceBridgeSnapshot snapshot =
+      const roblox::window::WindowGameSurfaceBridgeSnapshot snapshot =
           surface_bridge->Snapshot();
       std::cout << "  [game-session] typed window surface events committed="
                 << result.drained_events
@@ -762,8 +762,8 @@ void RunMainLoop(
     return true;
   };
   int main_loop_ticks = 0;
-  const bool fps_trace = IsEnabled("MOCKTAIL_TRACE");
-  const bool trace_main_loop = IsEnabled("MOCKTAIL_TRACE");
+  const bool fps_trace = IsEnabled("ROBLOX_TRACE");
+  const bool trace_main_loop = IsEnabled("ROBLOX_TRACE");
   uint64_t fps_window_start_ns = fps_trace ? MonotonicNanos() : 0;
   uint64_t fps_samples = 0;
   uint64_t fps_tick_ns = 0;
@@ -774,7 +774,7 @@ void RunMainLoop(
   uint64_t fps_pace_sleep_ns = 0;
   while (true) {
     const uint64_t fps_tick_start_ns = fps_trace ? MonotonicNanos() : 0;
-    const bool keep_window_open = mocktail::window::PumpEvents();
+    const bool keep_window_open = roblox::window::PumpEvents();
     *game_surface_events_completed = drain_game_surface_events();
     const uint64_t fps_after_sdl_ns = fps_trace ? MonotonicNanos() : 0;
     if (!game_surface_events_completed || !keep_window_open) {
@@ -806,7 +806,7 @@ void RunMainLoop(
                 << std::flush;
     }
     if (experience_composition != nullptr) {
-      const mocktail::Status platform_event_status =
+      const roblox::Status platform_event_status =
           experience_composition->DrainPlatformEvents();
       if (!platform_event_status.ok()) {
         std::cerr << "[FATAL] Roblox platform event delivery failed: "
@@ -821,7 +821,7 @@ void RunMainLoop(
     const uint64_t fps_after_engine_ns = fps_trace ? MonotonicNanos() : 0;
     if (experience_composition != nullptr &&
         experience_composition->subscribed()) {
-      const mocktail::Status launch_status =
+      const roblox::Status launch_status =
           experience_composition->DrainLaunchRequests();
       if (!launch_status.ok()) {
         std::cerr << "[FATAL] Dynamic experience launch failed: "
@@ -831,7 +831,7 @@ void RunMainLoop(
       }
     }
     const uint64_t fps_after_launch_ns = fps_trace ? MonotonicNanos() : 0;
-    const uint64_t fps_pace_ns = mocktail::window::PaceInputPump();
+    const uint64_t fps_pace_ns = roblox::window::PaceInputPump();
     if (fps_trace) {
       const uint64_t fps_tick_end_ns = MonotonicNanos();
       ++fps_samples;
@@ -880,8 +880,8 @@ void RunMainLoop(
 // engine reads through the environment, and resolves the theme. Returns
 // whether a usable window exists.
 bool InitializeHostWindow(
-    const mocktail::runtime::RuntimeConfig& runtime_config,
-    const mocktail::legacy::RuntimeDependencies& dependencies,
+    const roblox::runtime::RuntimeConfig& runtime_config,
+    const roblox::legacy::RuntimeDependencies& dependencies,
     bool user_overrode_main_thread_message_pump,
     bool user_overrode_call_start_app) {
   // Create SDL/EGL before loading Android stubs so SDL binds the host graphics
@@ -894,9 +894,9 @@ bool InitializeHostWindow(
     std::cout << "  [window] Creating " << win_w << "x" << win_h
               << " window...\n"
               << std::flush;
-    window_initialised = mocktail::window::Init(win_w, win_h, win_title);
+    window_initialised = roblox::window::Init(win_w, win_h, win_title);
     if (!window_initialised) {
-      if (IsEnabled("MOCKTAIL_OFFLINE_SETTINGS")) {
+      if (IsEnabled("ROBLOX_OFFLINE_SETTINGS")) {
         std::cerr << "  [window] FATAL: Roblox requires a working SDL video "
                   << "device. Check DISPLAY/WAYLAND_DISPLAY "
                   << "and SDL3.\n"
@@ -914,7 +914,7 @@ bool InitializeHostWindow(
   }
   if (window_initialised) {
     auto* sdl_window =
-        static_cast<SDL_Window*>(mocktail::window::GetBackendWindow());
+        static_cast<SDL_Window*>(roblox::window::GetBackendWindow());
     const SDL_DisplayID display =
         sdl_window != nullptr ? SDL_GetDisplayForWindow(sdl_window) : 0;
     const SDL_DisplayMode* mode =
@@ -926,20 +926,20 @@ bool InitializeHostWindow(
       const std::string display_size =
           std::to_string(std::lround(mode->w * density)) + "x" +
           std::to_string(std::lround(mode->h * density));
-      setenv(mocktail::runtime::kDisplaySizeEnvironment, display_size.c_str(),
+      setenv(roblox::runtime::kDisplaySizeEnvironment, display_size.c_str(),
              1);
       std::cout << "  [window] host display " << display_size << " pixels\n"
                 << std::flush;
     }
   }
   if (window_initialised) {
-    const mocktail::window::WindowViewportSnapshot viewport =
-        mocktail::window::GetWindowViewportSnapshot();
+    const roblox::window::WindowViewportSnapshot viewport =
+        roblox::window::GetWindowViewportSnapshot();
     if (viewport.valid()) {
       const std::string window_size = std::to_string(viewport.pixel_width) +
                                       "x" +
                                       std::to_string(viewport.pixel_height);
-      setenv(mocktail::runtime::kWindowSizeEnvironment, window_size.c_str(),
+      setenv(roblox::runtime::kWindowSizeEnvironment, window_size.c_str(),
              1);
     }
   }
@@ -947,15 +947,15 @@ bool InitializeHostWindow(
       window_initialised ? SDL_GetSystemTheme() : SDL_SYSTEM_THEME_UNKNOWN;
   const bool system_dark_theme = system_theme == SDL_SYSTEM_THEME_DARK;
   const char* app_storage_file =
-      std::getenv("MOCKTAIL_APP_STORAGE_FILE_INTERNAL");
+      std::getenv("ROBLOX_APP_STORAGE_FILE_INTERNAL");
   bool dark_theme = runtime_config.theme_mode() != "light";
   bool roblox_theme_found = false;
   if (runtime_config.theme_mode() == "system") {
     dark_theme = system_dark_theme;
   } else if (runtime_config.theme_mode() == "roblox" &&
              app_storage_file != nullptr) {
-    const mocktail::runtime::RobloxThemeCacheResult saved_theme =
-        mocktail::runtime::ReadRobloxThemeCache(
+    const roblox::runtime::RobloxThemeCacheResult saved_theme =
+        roblox::runtime::ReadRobloxThemeCache(
             app_storage_file, dependencies.account_identity().user_id);
     if (!saved_theme) {
       std::cerr << "[FATAL] Cannot read Roblox theme cache: "
@@ -967,7 +967,7 @@ bool InitializeHostWindow(
       roblox_theme_found = true;
     }
   }
-  setenv("MOCKTAIL_RESOLVED_THEME_INTERNAL", dark_theme ? "Dark" : "Light", 1);
+  setenv("ROBLOX_RESOLVED_THEME_INTERNAL", dark_theme ? "Dark" : "Light", 1);
   if (runtime_config.theme_mode() == "roblox") {
     std::cout << "  [theme] "
               << (roblox_theme_found ? "Roblox saved theme="
@@ -976,7 +976,7 @@ bool InitializeHostWindow(
               << std::flush;
   } else if (app_storage_file != nullptr) {
     std::string theme_error;
-    if (!mocktail::runtime::ApplyRobloxThemeCacheOverride(
+    if (!roblox::runtime::ApplyRobloxThemeCacheOverride(
             app_storage_file, dependencies.account_identity().user_id,
             dark_theme, &theme_error)) {
       std::cerr << "[FATAL] Roblox theme cache override failed: " << theme_error
@@ -992,7 +992,7 @@ bool InitializeHostWindow(
     std::cout << "  [window] GUI-bound startup steps disabled (no SDL window)\n"
               << std::flush;
   } else {
-    setenv("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "1", 1);
+    setenv("ROBLOX_MAIN_THREAD_MESSAGE_PUMP", "1", 1);
     std::cout << "  [window] windowed startup: auto-enabled main-thread "
               << "message pump\n"
               << std::flush;
@@ -1013,16 +1013,16 @@ struct RunCompletionState {
 
 // Shuts audio down ahead of the SDL teardown. Audio that refuses to release
 // the device fails the run rather than tearing SDL down underneath it.
-void FinishWindowShutdown(mocktail::legacy::RuntimeDependencies& dependencies,
+void FinishWindowShutdown(roblox::legacy::RuntimeDependencies& dependencies,
                           RunCompletionState* completion) {
-  const mocktail::Status audio_shutdown_status =
+  const roblox::Status audio_shutdown_status =
       dependencies.ShutdownBeforePlatform();
   if (!audio_shutdown_status.ok()) {
     std::cerr << "  [main] audio shutdown blocked SDL teardown: "
               << audio_shutdown_status.message() << '\n';
     completion->lifecycle_shutdown_completed = false;
   } else {
-    mocktail::window::Shutdown();
+    roblox::window::Shutdown();
   }
 }
 
@@ -1058,9 +1058,9 @@ bool ValidateRunCompletion(const RunCompletionState& completion) {
 EngineStartupContext BuildEngineStartupContext(
     jnivm::VM* vm,
     JavaVM* java_vm,
-    const mocktail::runtime::CommandLineOptions& options,
-    const mocktail::legacy::RuntimeDependencies& dependencies,
-    mocktail::runtime::RobloxGameSessionRuntime* game_session_runtime,
+    const roblox::runtime::CommandLineOptions& options,
+    const roblox::legacy::RuntimeDependencies& dependencies,
+    roblox::runtime::RobloxGameSessionRuntime* game_session_runtime,
     const StartupDecisions& decisions,
     const RobloxEngineSymbols& symbols) {
   return EngineStartupContext{
@@ -1141,21 +1141,21 @@ EngineStartupContext BuildEngineStartupContext(
 
 // Runs the engine startup sequence, returning only once it has completed. The
 // default path puts it on a pthread so the main thread keeps pumping;
-// MOCKTAIL_ENGINE_INLINE calls it directly. MOCKTAIL_ENGINE_DETACH is refused
+// ROBLOX_ENGINE_INLINE calls it directly. ROBLOX_ENGINE_DETACH is refused
 // because a worker whose runtime ownership cannot be proven cannot be unwound.
 int RunEngineStartup(EngineStartupContext* startup_context) {
-  if (IsEnabled("MOCKTAIL_ENGINE_DETACH")) {
+  if (IsEnabled("ROBLOX_ENGINE_DETACH")) {
     std::cerr << "[FATAL] Detached startup workers are unsupported because "
                  "their runtime ownership cannot be proven\n";
     return EXIT_FAILURE;
   }
-  if (IsEnabled("MOCKTAIL_ENGINE_INLINE")) {
+  if (IsEnabled("ROBLOX_ENGINE_INLINE")) {
     std::cout << "  [engine] starting inline startup path\n" << std::flush;
     EngineStartupThread(startup_context);
   } else {
     std::cout << "  [engine] starting pthread startup path\n" << std::flush;
     std::cout << "  [engine] creating startup thread\n" << std::flush;
-    mocktail::runtime::OwnedPthread startup_thread;
+    roblox::runtime::OwnedPthread startup_thread;
     const int create_result = startup_thread.Start(
         &EngineStartupThread, startup_context, GetEngineStackSize());
     std::cout << "  [engine] startup thread create result=" << create_result
@@ -1175,13 +1175,13 @@ int RunEngineStartup(EngineStartupContext* startup_context) {
                 << std::flush;
     }
 
-    const mocktail::runtime::OwnedPthreadWaitResult wait_result =
+    const roblox::runtime::OwnedPthreadWaitResult wait_result =
         startup_thread.WaitFor(startup_timeout_ms > 0 ? startup_timeout_ms
                                                       : -1,
                                10, &PumpStartupOwnerThread);
     if (!wait_result.joined()) {
       if (wait_result.status ==
-          mocktail::runtime::OwnedPthreadWaitStatus::kTimedOut) {
+          roblox::runtime::OwnedPthreadWaitStatus::kTimedOut) {
         std::cerr << "  [engine] startup thread timed out after "
                   << startup_timeout_ms
                   << "ms, cancelling and requiring a physical join\n"
@@ -1197,7 +1197,7 @@ int RunEngineStartup(EngineStartupContext* startup_context) {
       }
 
       const int cancel_join_grace_ms = 5000;
-      const mocktail::runtime::OwnedPthreadCancelResult cancel_result =
+      const roblox::runtime::OwnedPthreadCancelResult cancel_result =
           startup_thread.CancelAndJoinFor(
               cancel_join_grace_ms, 10, &PumpStartupOwnerThread);
       if (cancel_result.cancel_error != 0) {
@@ -1207,7 +1207,7 @@ int RunEngineStartup(EngineStartupContext* startup_context) {
       }
       std::cerr << "[FATAL] Startup worker did not complete normally; "
                 << cancel_join_grace_ms << "ms cancel/join grace result: "
-                << mocktail::runtime::OwnedPthreadWaitStatusName(
+                << roblox::runtime::OwnedPthreadWaitStatusName(
                        cancel_result.wait.status)
                 << " error=" << cancel_result.wait.platform_error
                 << ". Native rollback is unproven even after a physical "
@@ -1223,8 +1223,8 @@ int RunEngineStartup(EngineStartupContext* startup_context) {
 // step and the shutdown step that tears them down agree on one name, and
 // so neither half can be dropped without the other.
 struct GamePlatformProtocols {
-  std::unique_ptr<mocktail::runtime::RobloxPermissionsBridge> permissions;
-  std::unique_ptr<mocktail::runtime::RobloxCallProtocolBridge> calls;
+  std::unique_ptr<roblox::runtime::RobloxPermissionsBridge> permissions;
+  std::unique_ptr<roblox::runtime::RobloxCallProtocolBridge> calls;
 };
 
 // Brings up the PermissionsProtocol and CallProtocol the direct GAME path
@@ -1235,7 +1235,7 @@ bool InstallGamePlatformProtocols(JavaVM* raw_vm, jnivm::VM* jni_vm,
                                   void* roblox_handle,
                                   bool microphone_enabled,
                                   GamePlatformProtocols* protocols) {
-  mocktail::runtime::JniEnvironmentProvider environment{
+  roblox::runtime::JniEnvironmentProvider environment{
       raw_vm, jni_vm, &RestoreGameSessionJniEnvironment};
   JNIEnv* env = nullptr;
   auto status = environment.Acquire(&env);
@@ -1243,9 +1243,9 @@ bool InstallGamePlatformProtocols(JavaVM* raw_vm, jnivm::VM* jni_vm,
     std::cerr << "[FATAL] GAME protocol JNI environment unavailable\n";
     return false;
   }
-  const auto symbols = mocktail::runtime::ResolveRobloxPlatformProtocolSymbols(
+  const auto symbols = roblox::runtime::ResolveRobloxPlatformProtocolSymbols(
       roblox_handle,
-      reinterpret_cast<mocktail::runtime::DeleteMessageBusConnectionFn>(
+      reinterpret_cast<roblox::runtime::DeleteMessageBusConnectionFn>(
           linker::ResolveSymbol(roblox_handle,
                                 "Java_com_roblox_universalapp_messagebus_"
                                 "Connection_deleteSharedPtr")));
@@ -1269,7 +1269,7 @@ bool InstallGamePlatformProtocols(JavaVM* raw_vm, jnivm::VM* jni_vm,
     std::cerr << "[FATAL] GAME platform MessageBus is unavailable\n";
     return false;
   }
-  const mocktail::runtime::RobloxMessageBusObjects objects{
+  const roblox::runtime::RobloxMessageBusObjects objects{
       bus,
       jni_vm,
       &CreateExperienceRawCallback,
@@ -1277,11 +1277,11 @@ bool InstallGamePlatformProtocols(JavaVM* raw_vm, jnivm::VM* jni_vm,
       &CreateAsyncMessageBusRequestHandler,
       &ClearAsyncMessageBusRequestHandler};
   protocols->permissions =
-      std::make_unique<mocktail::runtime::RobloxPermissionsBridge>(
+      std::make_unique<roblox::runtime::RobloxPermissionsBridge>(
           environment, symbols.permissions, objects,
           microphone_enabled);
   protocols->calls =
-      std::make_unique<mocktail::runtime::RobloxCallProtocolBridge>(
+      std::make_unique<roblox::runtime::RobloxCallProtocolBridge>(
           environment, symbols.permissions, objects);
   status = protocols->permissions->Initialize();
   if (status.ok())
@@ -1305,64 +1305,64 @@ bool InstallExperiencePlatformProtocols(
     JavaVM* raw_vm,
     jnivm::VM* jni_vm,
     void* roblox_handle,
-    const mocktail::runtime::RobloxGameSessionSymbols& experience_game_symbols,
-    mocktail::window::ScopedPresentObserver* game_present_observer,
-    const mocktail::runtime::InputCapabilityConfig& input_capabilities,
+    const roblox::runtime::RobloxGameSessionSymbols& experience_game_symbols,
+    roblox::window::ScopedPresentObserver* game_present_observer,
+    const roblox::runtime::InputCapabilityConfig& input_capabilities,
     bool microphone_enabled,
-    std::shared_ptr<mocktail::runtime::RobloxExperienceComposition>*
+    std::shared_ptr<roblox::runtime::RobloxExperienceComposition>*
         experience_composition) {
-  mocktail::runtime::RobloxExperienceMessageBusSymbols message_bus_symbols;
+  roblox::runtime::RobloxExperienceMessageBusSymbols message_bus_symbols;
   message_bus_symbols.get_launch_id =
-      reinterpret_cast<mocktail::runtime::GetExperienceLaunchIdFn>(
+      reinterpret_cast<roblox::runtime::GetExperienceLaunchIdFn>(
           linker::ResolveSymbol(roblox_handle,
                                 "Java_com_roblox_universalapp_experience_"
                                 "JNIExperienceProtocol_getLaunchId"));
   message_bus_symbols.subscribe_raw =
-      reinterpret_cast<mocktail::runtime::SubscribeExperienceLaunchRawFn>(
+      reinterpret_cast<roblox::runtime::SubscribeExperienceLaunchRawFn>(
           linker::ResolveSymbol(
               roblox_handle,
               "Java_com_roblox_universalapp_messagebus_MessageBus_"
               "doSubscribeRaw"));
   message_bus_symbols.delete_connection =
-      reinterpret_cast<mocktail::runtime::DeleteMessageBusConnectionFn>(
+      reinterpret_cast<roblox::runtime::DeleteMessageBusConnectionFn>(
           linker::ResolveSymbol(
               roblox_handle,
               "Java_com_roblox_universalapp_messagebus_Connection_"
               "deleteSharedPtr"));
-  const mocktail::runtime::RobloxPlatformProtocolSymbols platform_protocol_symbols =
-      mocktail::runtime::ResolveRobloxPlatformProtocolSymbols(
+  const roblox::runtime::RobloxPlatformProtocolSymbols platform_protocol_symbols =
+      roblox::runtime::ResolveRobloxPlatformProtocolSymbols(
           roblox_handle, message_bus_symbols.delete_connection);
-  mocktail::runtime::RobloxExperienceJniFactory jni_factory{
+  roblox::runtime::RobloxExperienceJniFactory jni_factory{
       jni_vm,
       &CreateExperienceRawCallback,
       &ClearExperienceRawCallback,
-      &mocktail::runtime::SetJnivmPlatformWebCallbacks,
-      &mocktail::runtime::ClearJnivmPlatformWebCallbacks,
+      &roblox::runtime::SetJnivmPlatformWebCallbacks,
+      &roblox::runtime::ClearJnivmPlatformWebCallbacks,
       &CreateAsyncMessageBusRequestHandler,
       &ClearAsyncMessageBusRequestHandler};
-  mocktail::runtime::RobloxFreshLaunchPresentBoundary present_boundary{
+  roblox::runtime::RobloxFreshLaunchPresentBoundary present_boundary{
       game_present_observer, &RegisterFreshGamePresentObserver,
       &ClearFreshGamePresentObserver};
-  mocktail::runtime::RobloxGameSurfaceJniConfig surface_config;
+  roblox::runtime::RobloxGameSurfaceJniConfig surface_config;
   surface_config.asset_folder_path = DefaultAssetPath();
   surface_config.dpi_scale =
-      mocktail::window::GetWindowViewportSnapshot().dpi_scale;
+      roblox::window::GetWindowViewportSnapshot().dpi_scale;
   surface_config.is_touch_device = input_capabilities.touch_enabled;
   surface_config.is_mouse_device = input_capabilities.mouse_enabled;
   surface_config.is_keyboard_device = input_capabilities.keyboard_enabled;
-  mocktail::runtime::JniEnvironmentProvider environment{
+  roblox::runtime::JniEnvironmentProvider environment{
       raw_vm, jni_vm, &RestoreGameSessionJniEnvironment};
   *experience_composition =
-      std::make_shared<mocktail::runtime::RobloxExperienceComposition>(
+      std::make_shared<roblox::runtime::RobloxExperienceComposition>(
           environment, message_bus_symbols,
           platform_protocol_symbols.system_theme,
           platform_protocol_symbols.permissions,
           experience_game_symbols, jni_factory, present_boundary,
           std::move(surface_config),
-          mocktail::runtime::RobloxExperienceSurfaceProvider{},
-          mocktail::runtime::RobloxExperiencePresenceObserver{},
+          roblox::runtime::RobloxExperienceSurfaceProvider{},
+          roblox::runtime::RobloxExperiencePresenceObserver{},
           microphone_enabled);
-  const mocktail::Status platform_protocol_status =
+  const roblox::Status platform_protocol_status =
       (*experience_composition)->InitializePlatformProtocols();
   if (!platform_protocol_status.ok()) {
     std::cerr << "[FATAL] Roblox platform protocols did not initialize: "
@@ -1380,8 +1380,8 @@ bool InstallExperiencePlatformProtocols(
 // text input first, then the window input runtime that may already have
 // torn the first one down, then the platform protocol bridges.
 void FinishWindowBridges(
-    mocktail::runtime::RobloxTextInputJniBridge* text_input_bridge,
-    mocktail::runtime::RobloxWindowInputRuntime* window_input_runtime,
+    roblox::runtime::RobloxTextInputJniBridge* text_input_bridge,
+    roblox::runtime::RobloxWindowInputRuntime* window_input_runtime,
     GamePlatformProtocols* game_protocols,
     RunCompletionState* completion) {
   if (text_input_bridge != nullptr) {
@@ -1407,7 +1407,7 @@ void FinishWindowBridges(
 // nothing left to drive.
 bool FinishExperienceComposition(
     jnivm::VM* jni_vm,
-    std::shared_ptr<mocktail::runtime::RobloxExperienceComposition>
+    std::shared_ptr<roblox::runtime::RobloxExperienceComposition>
         experience_composition,
     std::shared_ptr<ExperienceLifecycleTarget>* experience_lifecycle_target,
     RunCompletionState* completion) {
@@ -1415,12 +1415,12 @@ bool FinishExperienceComposition(
   if (experience_composition != nullptr) {
     jni_vm->ClearRobloxExperienceLifecycleCallbacks();
     experience_lifecycle_target->reset();
-    const mocktail::runtime::GameSessionSnapshot snapshot =
+    const roblox::runtime::GameSessionSnapshot snapshot =
         experience_composition->Snapshot();
     experience_destroyed_app =
         snapshot.game_running || snapshot.game_paused ||
         snapshot.game_present_pending;
-    const mocktail::Status experience_shutdown =
+    const roblox::Status experience_shutdown =
         experience_composition->Shutdown();
     if (experience_destroyed_app) {
       completion->lifecycle_shutdown_completed = experience_shutdown.ok();
@@ -1439,44 +1439,44 @@ bool FinishExperienceComposition(
 // driven directly.
 void FinishRobloxAppLifecycle(
     void* roblox_handle,
-    mocktail::runtime::RobloxGameSessionRuntime* game_session_runtime,
-    mocktail::window::ScopedPresentObserver* game_present_observer,
+    roblox::runtime::RobloxGameSessionRuntime* game_session_runtime,
+    roblox::window::ScopedPresentObserver* game_present_observer,
     bool experience_destroyed_app,
     RunCompletionState* completion) {
   if (game_session_runtime != nullptr) {
-    const mocktail::runtime::GameSessionUpdateResult shutdown_result =
+    const roblox::runtime::GameSessionUpdateResult shutdown_result =
         game_session_runtime->Shutdown();
     completion->lifecycle_shutdown_completed =
         shutdown_result.ok() &&
-        shutdown_result.state == mocktail::runtime::GameSessionState::kStopped;
+        shutdown_result.state == roblox::runtime::GameSessionState::kStopped;
     std::cout << "  [main] Roblox lifecycle shutdown: "
-              << mocktail::runtime::GameSessionStateName(shutdown_result.state)
+              << roblox::runtime::GameSessionStateName(shutdown_result.state)
               << " (" << shutdown_result.message << ")\n"
               << std::flush;
     game_present_observer->Reset();
   } else if (!experience_destroyed_app) {
-    const mocktail::runtime::RobloxSymbolLookup lifecycle_lookup(
+    const roblox::runtime::RobloxSymbolLookup lifecycle_lookup(
         &ResolveRobloxCapabilitySymbol, &roblox_handle);
-    const mocktail::runtime::RobloxAppLifecycleResolution
+    const roblox::runtime::RobloxAppLifecycleResolution
         lifecycle_resolution =
-            mocktail::runtime::ResolveRobloxAppLifecycleSymbols(
+            roblox::runtime::ResolveRobloxAppLifecycleSymbols(
                 lifecycle_lookup);
     if (lifecycle_resolution.ok()) {
       JNIEnv* shutdown_env = AttachMainThreadJniEnv();
-      mocktail::runtime::RobloxAppLifecycle lifecycle(
+      roblox::runtime::RobloxAppLifecycle lifecycle(
           *lifecycle_resolution.symbols());
-      const mocktail::runtime::RobloxAppShutdownResult shutdown_result =
+      const roblox::runtime::RobloxAppShutdownResult shutdown_result =
           lifecycle.Shutdown(shutdown_env,
                              g_native_gl_class_for_main_thread);
       completion->lifecycle_shutdown_completed = shutdown_result.ok();
       std::cout << "  [main] Roblox lifecycle shutdown: "
-                << mocktail::runtime::RobloxAppShutdownStatusName(
+                << roblox::runtime::RobloxAppShutdownStatusName(
                        shutdown_result.status)
                 << " (" << shutdown_result.message << ")\n"
                 << std::flush;
     } else {
       std::cerr << "  [main] Roblox lifecycle resolution failed: "
-                << mocktail::runtime::RobloxAppLifecycleResolutionStatusName(
+                << roblox::runtime::RobloxAppLifecycleResolutionStatusName(
                        lifecycle_resolution.status())
                 << '\n'
                 << std::flush;
@@ -1588,97 +1588,97 @@ void RegisterBionicNetworkAndPthreadSymbols() {
   RegisterBionicDnsWrappers();
   RegisterBionicPathWrappers();
   linker::RegisterSymbol("prctl",
-                         reinterpret_cast<void*>(mocktail_bionic_prctl));
+                         reinterpret_cast<void*>(roblox_bionic_prctl));
   linker::RegisterSymbol(
-      "setsockopt", reinterpret_cast<void*>(mocktail_bionic_setsockopt));
+      "setsockopt", reinterpret_cast<void*>(roblox_bionic_setsockopt));
   linker::RegisterSymbol("sendmsg",
-                         reinterpret_cast<void*>(mocktail_bionic_sendmsg));
-  linker::RegisterSymbol("mprotect", reinterpret_cast<void*>(mocktail_mprotect));
+                         reinterpret_cast<void*>(roblox_bionic_sendmsg));
+  linker::RegisterSymbol("mprotect", reinterpret_cast<void*>(roblox_mprotect));
   linker::RegisterSymbol("pthread_condattr_init",
-                         reinterpret_cast<void*>(mocktail_pthread_condattr_init));
+                         reinterpret_cast<void*>(roblox_pthread_condattr_init));
   linker::RegisterSymbol("pthread_condattr_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_condattr_destroy));
+                         reinterpret_cast<void*>(roblox_pthread_condattr_destroy));
   linker::RegisterSymbol("pthread_condattr_setclock",
-                         reinterpret_cast<void*>(mocktail_pthread_condattr_setclock));
+                         reinterpret_cast<void*>(roblox_pthread_condattr_setclock));
   linker::RegisterSymbol("pthread_cond_init",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_init));
+                         reinterpret_cast<void*>(roblox_pthread_cond_init));
   linker::RegisterSymbol("pthread_cond_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_destroy));
+                         reinterpret_cast<void*>(roblox_pthread_cond_destroy));
   linker::RegisterSymbol("pthread_cond_signal",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_signal));
+                         reinterpret_cast<void*>(roblox_pthread_cond_signal));
   linker::RegisterSymbol("pthread_cond_broadcast",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_broadcast));
+                         reinterpret_cast<void*>(roblox_pthread_cond_broadcast));
   linker::RegisterSymbol("pthread_cond_wait",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_wait));
+                         reinterpret_cast<void*>(roblox_pthread_cond_wait));
   linker::RegisterSymbol("pthread_cond_timedwait",
-                         reinterpret_cast<void*>(mocktail_pthread_cond_timedwait));
+                         reinterpret_cast<void*>(roblox_pthread_cond_timedwait));
   linker::RegisterSymbol("pthread_mutexattr_init",
-                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_init));
+                         reinterpret_cast<void*>(roblox_pthread_mutexattr_init));
   linker::RegisterSymbol("pthread_mutexattr_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_destroy));
+                         reinterpret_cast<void*>(roblox_pthread_mutexattr_destroy));
   linker::RegisterSymbol("pthread_mutexattr_settype",
-                         reinterpret_cast<void*>(mocktail_pthread_mutexattr_settype));
+                         reinterpret_cast<void*>(roblox_pthread_mutexattr_settype));
   linker::RegisterSymbol("pthread_mutex_init",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_init));
+                         reinterpret_cast<void*>(roblox_pthread_mutex_init));
   linker::RegisterSymbol("pthread_mutex_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_destroy));
+                         reinterpret_cast<void*>(roblox_pthread_mutex_destroy));
   linker::RegisterSymbol("pthread_mutex_lock",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_lock));
+                         reinterpret_cast<void*>(roblox_pthread_mutex_lock));
   linker::RegisterSymbol("pthread_mutex_trylock",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_trylock));
+                         reinterpret_cast<void*>(roblox_pthread_mutex_trylock));
   linker::RegisterSymbol("pthread_mutex_unlock",
-                         reinterpret_cast<void*>(mocktail_pthread_mutex_unlock));
+                         reinterpret_cast<void*>(roblox_pthread_mutex_unlock));
   linker::RegisterSymbol("pthread_once",
-                         reinterpret_cast<void*>(mocktail_pthread_once));
+                         reinterpret_cast<void*>(roblox_pthread_once));
   linker::RegisterSymbol("pthread_spin_init",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_init));
+                         reinterpret_cast<void*>(roblox_pthread_spin_init));
   linker::RegisterSymbol("pthread_spin_destroy",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_destroy));
+                         reinterpret_cast<void*>(roblox_pthread_spin_destroy));
   linker::RegisterSymbol("pthread_spin_lock",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_lock));
+                         reinterpret_cast<void*>(roblox_pthread_spin_lock));
   linker::RegisterSymbol("pthread_spin_trylock",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_trylock));
+                         reinterpret_cast<void*>(roblox_pthread_spin_trylock));
   linker::RegisterSymbol("pthread_spin_unlock",
-                         reinterpret_cast<void*>(mocktail_pthread_spin_unlock));
+                         reinterpret_cast<void*>(roblox_pthread_spin_unlock));
   linker::RegisterSymbol(
       "pthread_attr_init",
-      reinterpret_cast<void*>(mocktail_pthread_attr_init));
+      reinterpret_cast<void*>(roblox_pthread_attr_init));
   linker::RegisterSymbol(
       "pthread_attr_destroy",
-      reinterpret_cast<void*>(mocktail_pthread_attr_destroy));
+      reinterpret_cast<void*>(roblox_pthread_attr_destroy));
   linker::RegisterSymbol(
       "pthread_attr_setstacksize",
-      reinterpret_cast<void*>(mocktail_pthread_attr_setstacksize));
+      reinterpret_cast<void*>(roblox_pthread_attr_setstacksize));
   linker::RegisterSymbol(
       "pthread_attr_setdetachstate",
-      reinterpret_cast<void*>(mocktail_pthread_attr_setdetachstate));
+      reinterpret_cast<void*>(roblox_pthread_attr_setdetachstate));
   linker::RegisterSymbol(
       "pthread_attr_setschedparam",
-      reinterpret_cast<void*>(mocktail_pthread_attr_setschedparam));
+      reinterpret_cast<void*>(roblox_pthread_attr_setschedparam));
   linker::RegisterSymbol(
       "pthread_getattr_np",
-      reinterpret_cast<void*>(mocktail_pthread_getattr_np));
+      reinterpret_cast<void*>(roblox_pthread_getattr_np));
   linker::RegisterSymbol(
       "pthread_attr_getstack",
-      reinterpret_cast<void*>(mocktail_pthread_attr_getstack));
+      reinterpret_cast<void*>(roblox_pthread_attr_getstack));
   linker::RegisterSymbol("pthread_barrier_init",
-                         reinterpret_cast<void*>(mocktail_pthread_barrier_init));
+                         reinterpret_cast<void*>(roblox_pthread_barrier_init));
   linker::RegisterSymbol(
       "pthread_barrier_destroy",
-      reinterpret_cast<void*>(mocktail_pthread_barrier_destroy));
+      reinterpret_cast<void*>(roblox_pthread_barrier_destroy));
   linker::RegisterSymbol("pthread_barrier_wait",
-                         reinterpret_cast<void*>(mocktail_pthread_barrier_wait));
+                         reinterpret_cast<void*>(roblox_pthread_barrier_wait));
   linker::RegisterSymbol(
       "pthread_create",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_create));
+      reinterpret_cast<void*>(roblox_bionic_pthread_create));
   linker::RegisterSymbol(
       "pthread_setschedparam",
-      reinterpret_cast<void*>(mocktail_bionic_pthread_setschedparam));
+      reinterpret_cast<void*>(roblox_bionic_pthread_setschedparam));
   linker::RegisterSymbol(
       "sched_setscheduler",
-      reinterpret_cast<void*>(mocktail_bionic_sched_setscheduler));
-  linker::RegisterSymbol("abort", reinterpret_cast<void*>(mocktail_abort));
-  linker::RegisterSymbol("__stack_chk_fail", reinterpret_cast<void*>(mocktail_recover_stack_chk_fail));
+      reinterpret_cast<void*>(roblox_bionic_sched_setscheduler));
+  linker::RegisterSymbol("abort", reinterpret_cast<void*>(roblox_abort));
+  linker::RegisterSymbol("__stack_chk_fail", reinterpret_cast<void*>(roblox_recover_stack_chk_fail));
 }
 
 // True when at least one symbol Stage 6 needs is still null. Checked as a
@@ -1689,27 +1689,27 @@ void RegisterBionicNetworkAndPthreadSymbols() {
 // it. Returns false only after reporting which stage refused to start.
 bool InitializeTypedInput(
     JavaVM* raw_vm, const std::shared_ptr<jnivm::VM>& jni_vm,
-    const mocktail::runtime::RobloxInputSymbols& input_symbols,
-    std::shared_ptr<mocktail::runtime::RobloxWindowInputRuntime>&
+    const roblox::runtime::RobloxInputSymbols& input_symbols,
+    std::shared_ptr<roblox::runtime::RobloxWindowInputRuntime>&
         window_input_runtime,
-    std::unique_ptr<mocktail::runtime::RobloxTextInputJniBridge>&
+    std::unique_ptr<roblox::runtime::RobloxTextInputJniBridge>&
         text_input_bridge) {
-  if (!mocktail::window::IsInitialised()) {
+  if (!roblox::window::IsInitialised()) {
     return true;
   }
-  mocktail::runtime::JniEnvironmentProvider input_environment{
+  roblox::runtime::JniEnvironmentProvider input_environment{
       raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
   window_input_runtime =
-      std::make_shared<mocktail::runtime::RobloxWindowInputRuntime>(
+      std::make_shared<roblox::runtime::RobloxWindowInputRuntime>(
           input_environment, input_symbols);
-  const mocktail::Status input_status = window_input_runtime->Initialize();
+  const roblox::Status input_status = window_input_runtime->Initialize();
   if (!input_status.ok()) {
     std::cerr << "[FATAL] Typed production input did not initialize: "
               << input_status.message() << '\n';
     return EXIT_FAILURE;
   }
-  const mocktail::Status text_input_status =
-      mocktail::runtime::RobloxTextInputJniBridge::Create(
+  const roblox::Status text_input_status =
+      roblox::runtime::RobloxTextInputJniBridge::Create(
           jni_vm.get(), window_input_runtime, &text_input_bridge);
   if (!text_input_status.ok()) {
     std::cerr << "[FATAL] Typed Roblox text input did not initialize: "
@@ -1754,20 +1754,20 @@ bool InitializeTypedInput(
 // below restores the unqualified names the body has always used.
 using namespace legacy_internal;
 
-int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
+int roblox::legacy::Run(const runtime::CommandLineOptions& options,
                           RuntimeDependencies dependencies) {
   // Captured before anything can scrub the bearer value out of options.
   const bool started_with_launch_uri = !options.engine_launch_uri.empty();
   const bool user_overrode_start_lua_app_dm =
-      HasEnvValue("MOCKTAIL_START_LUA_APP_DM");
+      HasEnvValue("ROBLOX_START_LUA_APP_DM");
   const bool user_overrode_start_lua_step =
-      HasEnvValue("MOCKTAIL_STEP_START_LUA_APP_DM");
+      HasEnvValue("ROBLOX_STEP_START_LUA_APP_DM");
   const bool user_overrode_start_app_step =
-      HasEnvValue("MOCKTAIL_STEP_START_APP_WITH_PARAMS");
+      HasEnvValue("ROBLOX_STEP_START_APP_WITH_PARAMS");
   const bool user_overrode_call_start_app =
-      HasEnvValue("MOCKTAIL_CALL_REAL_APP_BRIDGE_START");
+      HasEnvValue("ROBLOX_CALL_REAL_APP_BRIDGE_START");
   const bool user_overrode_main_thread_message_pump =
-      HasEnvValue("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP");
+      HasEnvValue("ROBLOX_MAIN_THREAD_MESSAGE_PUMP");
 
   std::cout << "======================================================\n"
             << "  Roblox Linux Client\n"
@@ -1775,27 +1775,27 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
             << std::flush;
 
   ApplyRuntimeDefaults();
-  const mocktail::runtime::ProcessEnvironment process_environment;
-  const mocktail::runtime::RuntimeConfig runtime_config =
-      mocktail::runtime::RuntimeConfig::FromEnvironment(process_environment);
-  const mocktail::runtime::InputCapabilityConfig& input_capabilities =
+  const roblox::runtime::ProcessEnvironment process_environment;
+  const roblox::runtime::RuntimeConfig runtime_config =
+      roblox::runtime::RuntimeConfig::FromEnvironment(process_environment);
+  const roblox::runtime::InputCapabilityConfig& input_capabilities =
       runtime_config.input_capabilities();
   if (!runtime_config.frame_rate().valid()) {
-    std::cerr << "[FATAL] Invalid MOCKTAIL_FRAME_RATE_LIMIT; expected "
+    std::cerr << "[FATAL] Invalid ROBLOX_FRAME_RATE_LIMIT; expected "
                  "-1, display, unlimited, or a positive integer\n";
     return EXIT_FAILURE;
   }
   if (!runtime_config.theme_mode_valid()) {
     std::cerr
-        << "[FATAL] Invalid MOCKTAIL_THEME; expected roblox, system, light, "
+        << "[FATAL] Invalid ROBLOX_THEME; expected roblox, system, light, "
            "or dark\n";
     return EXIT_FAILURE;
   }
-  setenv("MOCKTAIL_TOUCH_ENABLED_INTERNAL",
+  setenv("ROBLOX_TOUCH_ENABLED_INTERNAL",
          input_capabilities.touch_enabled ? "1" : "0", 1);
-  setenv("MOCKTAIL_MOUSE_ENABLED_INTERNAL",
+  setenv("ROBLOX_MOUSE_ENABLED_INTERNAL",
          input_capabilities.mouse_enabled ? "1" : "0", 1);
-  setenv("MOCKTAIL_KEYBOARD_ENABLED_INTERNAL",
+  setenv("ROBLOX_KEYBOARD_ENABLED_INTERNAL",
          input_capabilities.keyboard_enabled ? "1" : "0", 1);
   if (runtime_config.has_unsafe_detached_thread_overrides()) {
     std::cerr << "[FATAL] Unsupported detached legacy thread overrides:\n";
@@ -1819,16 +1819,16 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   // Build-ID profiles are gone: every libroblox.so is treated the same way.
   // The version identity is a fixed constant the engine and the Roblox web
   // services accept, and stays overridable for local testing.
-  const char* version_override = std::getenv("MOCKTAIL_ROBLOX_VERSION");
+  const char* version_override = std::getenv("ROBLOX_ROBLOX_VERSION");
   const std::string version_name =
       (version_override != nullptr && version_override[0] != '\0')
           ? version_override
           : "2.739.691";
-  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION", version_name.c_str());
-  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION_CODE", "3120");
+  SetEnvDefault("ROBLOX_ROBLOX_VERSION", version_name.c_str());
+  SetEnvDefault("ROBLOX_ROBLOX_VERSION_CODE", "3120");
   const std::string default_user_agent =
       "Roblox/" + version_name + " (Linux; Android 33)";
-  SetEnvDefault("MOCKTAIL_USER_AGENT", default_user_agent.c_str());
+  SetEnvDefault("ROBLOX_USER_AGENT", default_user_agent.c_str());
   std::cout << "  [compat] Roblox " << version_name << '\n'
             << "  [compat] Build-ID profiles: removed\n"
             << std::flush;
@@ -1856,7 +1856,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   std::cout << "  [compat] signal-recovery handler disabled\n";
   PrintStage(1, "Initialising Bionic linker + Pseudo-JVM");
 
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
   ::linker::init();
   std::cout << "  mcpelauncher Bionic linker initialised.\n";
 #endif
@@ -1892,10 +1892,10 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   linker::RegisterSymbol("dl_iterate_phdr", bionic_dl_iterate_phdr);
 
   // SDL owns the host window and surface. Android libroblox must instead see
-  // Mocktail's libEGL adapter, which reuses that surface. Do not resolve this
+  // Roblox's libEGL adapter, which reuses that surface. Do not resolve this
   // by SONAME: Chromium ANGLE also calls itself libEGL.so and would otherwise
   // win once the SDL backend has loaded it.
-  mocktail::graphics::BionicEglBridge bionic_egl_bridge;
+  roblox::graphics::BionicEglBridge bionic_egl_bridge;
   if (has_window) {
     if (!bionic_egl_bridge.Load()) {
       std::cerr << "  [graphics] exact Bionic EGL adapter unavailable: "
@@ -1989,15 +1989,15 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   JavaVM* raw_vm = jni_vm->GetJavaVM();
   PublishCurrentJniEnv(jni_vm->GetJNIEnv());
   const int jni_timeout_ms = 3000;
-  bool soft_timeout_enabled = IsEnabled("MOCKTAIL_JNI_ONLOAD_SOFT_TIMEOUT");
+  bool soft_timeout_enabled = IsEnabled("ROBLOX_JNI_ONLOAD_SOFT_TIMEOUT");
   bool soft_timeout_forced =
-      IsEnabled("MOCKTAIL_JNI_ONLOAD_SOFT_TIMEOUT_FORCE");
+      IsEnabled("ROBLOX_JNI_ONLOAD_SOFT_TIMEOUT_FORCE");
   g_stage6_jni_env =
       reinterpret_cast<uintptr_t>(jni_vm->GetJNIEnv());
   if (soft_timeout_enabled && !soft_timeout_forced) {
     std::cerr
         << "  [jvm] JNI_OnLoad soft timeout disabled in safe mode (set "
-        << "MOCKTAIL_JNI_ONLOAD_SOFT_TIMEOUT_FORCE=1 to enable).\n"
+        << "ROBLOX_JNI_ONLOAD_SOFT_TIMEOUT_FORCE=1 to enable).\n"
         << std::flush;
   }
   g_jni_onload_soft_timeout = soft_timeout_enabled && soft_timeout_forced;
@@ -2008,7 +2008,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
               << jni_timeout_ms << "ms\n"
               << std::flush;
     JniOnLoadAsyncContext async_context{jni_onload, JNI_ERR, jni_vm.get()};
-    mocktail::runtime::OwnedPthread onload_thread;
+    roblox::runtime::OwnedPthread onload_thread;
     const int create_result =
         onload_thread.Start(&RunJniOnLoadWorker, &async_context, 0);
     if (create_result != 0) {
@@ -2017,7 +2017,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                 << std::flush;
       jni_version = jni_onload(raw_vm, nullptr);
     } else {
-      const mocktail::runtime::OwnedPthreadWaitResult wait_result =
+      const roblox::runtime::OwnedPthreadWaitResult wait_result =
           onload_thread.WaitFor(jni_timeout_ms, 10);
       if (wait_result.joined()) {
         jni_version = async_context.result;
@@ -2026,11 +2026,11 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                      "without allowing runtime unwind\n"
                   << std::flush;
         const int cancel_join_grace_ms = 5000;
-        const mocktail::runtime::OwnedPthreadCancelResult cancel_result =
+        const roblox::runtime::OwnedPthreadCancelResult cancel_result =
             onload_thread.CancelAndJoinFor(cancel_join_grace_ms, 10);
         std::cerr << "[FATAL] JNI_OnLoad did not complete before its timeout; "
                   << "cancel=" << cancel_result.cancel_error << " join="
-                  << mocktail::runtime::OwnedPthreadWaitStatusName(
+                  << roblox::runtime::OwnedPthreadWaitStatusName(
                          cancel_result.wait.status)
                   << " error=" << cancel_result.wait.platform_error
                   << "; terminating without RAII unwind\n"
@@ -2071,7 +2071,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   // scheduler objects resolve to Java object stubs with the wrong layout.
   {
     uintptr_t base_addr = g_libroblox_base;
-#ifdef MOCKTAIL_USE_BIONIC_LINKER
+#ifdef ROBLOX_USE_BIONIC_LINKER
     const uintptr_t loader_base =
         static_cast<uintptr_t>(::linker::get_library_base(roblox_handle));
     if (loader_base != 0) {
@@ -2089,7 +2089,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       return EXIT_FAILURE;
     }
     g_libroblox_base = base_addr;
-    g_mocktail_abort_libroblox_base = base_addr;
+    g_roblox_abort_libroblox_base = base_addr;
     std::cout << "  [compat] skipped all fixed-offset post-JNI patches\n"
               << std::flush;
   }
@@ -2106,30 +2106,30 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                 << std::flush;
     }
   }
-  std::unique_ptr<mocktail::runtime::RobloxGameSessionRuntime>
+  std::unique_ptr<roblox::runtime::RobloxGameSessionRuntime>
       game_session_runtime;
-  std::unique_ptr<mocktail::runtime::RobloxGameSessionSymbols>
+  std::unique_ptr<roblox::runtime::RobloxGameSessionSymbols>
       experience_game_symbols;
-  std::shared_ptr<mocktail::runtime::RobloxExperienceComposition>
+  std::shared_ptr<roblox::runtime::RobloxExperienceComposition>
       experience_composition;
   GamePlatformProtocols game_protocols;
   std::shared_ptr<ExperienceLifecycleTarget> experience_lifecycle_target;
-  std::shared_ptr<mocktail::runtime::RobloxWindowInputRuntime>
+  std::shared_ptr<roblox::runtime::RobloxWindowInputRuntime>
       window_input_runtime;
-  std::unique_ptr<mocktail::runtime::RobloxTextInputJniBridge>
+  std::unique_ptr<roblox::runtime::RobloxTextInputJniBridge>
       text_input_bridge;
-  mocktail::window::ScopedPresentObserver game_present_observer;
+  roblox::window::ScopedPresentObserver game_present_observer;
   PrintStage(6, "Invoking Roblox startup entry points");
 
-  const mocktail::runtime::RobloxSymbolLookup capability_lookup(
+  const roblox::runtime::RobloxSymbolLookup capability_lookup(
       &ResolveRobloxCapabilitySymbol, &roblox_handle);
-  const mocktail::runtime::RobloxCapabilityResolution capability_resolution =
-      mocktail::runtime::ResolveRobloxCapabilities(
+  const roblox::runtime::RobloxCapabilityResolution capability_resolution =
+      roblox::runtime::ResolveRobloxCapabilities(
           capability_lookup,
-          mocktail::runtime::RobloxCapabilityRequirements{has_window});
+          roblox::runtime::RobloxCapabilityRequirements{has_window});
   if (!capability_resolution.ok()) {
     std::cerr << "\n[FATAL] Roblox startup capability resolution failed: "
-              << mocktail::runtime::RobloxCapabilityResolutionStatusName(
+              << roblox::runtime::RobloxCapabilityResolutionStatusName(
                      capability_resolution.status())
               << '\n';
     for (const std::string& symbol_name :
@@ -2139,16 +2139,16 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     return EXIT_FAILURE;
   }
 
-  const mocktail::runtime::RobloxCapabilities& roblox_capabilities =
+  const roblox::runtime::RobloxCapabilities& roblox_capabilities =
       *capability_resolution.capabilities();
-  const mocktail::runtime::RobloxStartupSymbols& startup_symbols =
+  const roblox::runtime::RobloxStartupSymbols& startup_symbols =
       roblox_capabilities.startup;
   if (has_window) {
-    const mocktail::runtime::RobloxGameSessionResolution game_resolution =
-        mocktail::runtime::ResolveRobloxGameSessionSymbols(capability_lookup);
+    const roblox::runtime::RobloxGameSessionResolution game_resolution =
+        roblox::runtime::ResolveRobloxGameSessionSymbols(capability_lookup);
     if (!game_resolution.ok()) {
       std::cerr << "\n[FATAL] GAME lifecycle symbol resolution failed: "
-                << mocktail::runtime::RobloxGameSessionResolutionStatusName(
+                << roblox::runtime::RobloxGameSessionResolutionStatusName(
                        game_resolution.status())
                 << '\n';
       for (const std::string& symbol_name :
@@ -2157,26 +2157,26 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       }
       return EXIT_FAILURE;
     }
-    if (IsEnabled("MOCKTAIL_START_GAME_WITH_PARAM")) {
-      mocktail::runtime::JniEnvironmentProvider environment{
+    if (IsEnabled("ROBLOX_START_GAME_WITH_PARAM")) {
+      roblox::runtime::JniEnvironmentProvider environment{
           raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
-      mocktail::runtime::RobloxGameSurfaceJniConfig surface_config;
+      roblox::runtime::RobloxGameSurfaceJniConfig surface_config;
       surface_config.asset_folder_path = DefaultAssetPath();
       surface_config.dpi_scale =
-          mocktail::window::GetWindowViewportSnapshot().dpi_scale;
+          roblox::window::GetWindowViewportSnapshot().dpi_scale;
       surface_config.is_touch_device = input_capabilities.touch_enabled;
       surface_config.is_mouse_device = input_capabilities.mouse_enabled;
       surface_config.is_keyboard_device =
           input_capabilities.keyboard_enabled;
       game_session_runtime =
-          std::make_unique<mocktail::runtime::RobloxGameSessionRuntime>(
+          std::make_unique<roblox::runtime::RobloxGameSessionRuntime>(
               environment, *game_resolution.symbols(),
               std::move(surface_config));
       std::cout << "  [game-session] eager typed GAME symbols ready\n"
                 << std::flush;
     } else {
       experience_game_symbols =
-          std::make_unique<mocktail::runtime::RobloxGameSessionSymbols>(
+          std::make_unique<roblox::runtime::RobloxGameSessionSymbols>(
               *game_resolution.symbols());
       std::cout << "  [experience] dynamic GAME symbols ready\n"
                 << std::flush;
@@ -2228,7 +2228,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                                   symbols);
   if (game_session_runtime != nullptr) {
     if (!game_present_observer.Register(
-            &mocktail::runtime::RobloxGameSessionRuntime::
+            &roblox::runtime::RobloxGameSessionRuntime::
                 SuccessfulPresentCallback,
             game_session_runtime.get())) {
       std::cerr << "[FATAL] Could not register the GAME host present "
@@ -2250,11 +2250,11 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   }
   if (experience_composition != nullptr &&
       dependencies.account_identity().user_id > 0) {
-    const mocktail::window::WindowSurfaceSnapshot window_surface =
-        mocktail::window::GetWindowSurfaceSnapshot();
-    mocktail::runtime::RobloxLuaAppExperienceReadiness readiness;
+    const roblox::window::WindowSurfaceSnapshot window_surface =
+        roblox::window::GetWindowSurfaceSnapshot();
+    roblox::runtime::RobloxLuaAppExperienceReadiness readiness;
     readiness.principal.kind =
-        mocktail::runtime::GameSessionPrincipalKind::kAuthenticated;
+        roblox::runtime::GameSessionPrincipalKind::kAuthenticated;
     readiness.principal.generation = 1;
     readiness.principal.principal_id =
         std::to_string(dependencies.account_identity().user_id);
@@ -2263,7 +2263,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                          window_surface.native_window, window_surface.width,
                          window_surface.height, window_surface.dpi_scale};
     readiness.username = dependencies.account_identity().username;
-    const mocktail::Status experience_status =
+    const roblox::Status experience_status =
         experience_composition->OnLuaAppReady(std::move(readiness));
     if (!experience_status.ok()) {
       std::cerr << "[FATAL] Dynamic ExperienceProtocol did not initialize: "
@@ -2271,7 +2271,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       return EXIT_FAILURE;
     }
     if (dependencies.initial_launch_request().has_value()) {
-      const mocktail::Status initial_launch_status =
+      const roblox::Status initial_launch_status =
           experience_composition->Dispatch(
               *dependencies.initial_launch_request());
       if (!initial_launch_status.ok()) {
@@ -2313,7 +2313,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
 
   RunCompletionState completion;
   completion.input_shutdown_completed = window_input_runtime == nullptr;
-  if (mocktail::window::IsInitialised()) {
+  if (roblox::window::IsInitialised()) {
     if (!started_with_launch_uri) {
       std::cout
           << "  [main] note: no --launch-uri was given, so the engine has no\n"
@@ -2326,7 +2326,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     RunMainLoop(&completion.game_surface_events_completed, game_session_runtime.get(),
                 experience_composition.get());
     std::cout << "  [main] window closed, shutting down\n" << std::flush;
-    completion.real_frame_presented = mocktail::window::HasPresentedFrame();
+    completion.real_frame_presented = roblox::window::HasPresentedFrame();
     FinishWindowBridges(text_input_bridge.get(), window_input_runtime.get(),
                         &game_protocols, &completion);
     const bool experience_destroyed_app = FinishExperienceComposition(

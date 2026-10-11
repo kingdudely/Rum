@@ -1,8 +1,8 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_PERMISSIONS_BRIDGE_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_PERMISSIONS_BRIDGE_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_PERMISSIONS_BRIDGE_H_
+#define ROBLOX_RUNTIME_ROBLOX_PERMISSIONS_BRIDGE_H_
 #include "runtime/roblox_message_bus_request_bridge.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 using RobloxPermissionsMessageBusSymbols = RobloxMessageBusSymbols;
 using RobloxPermissionsMessageBusObjects = RobloxMessageBusObjects;
@@ -21,5 +21,5 @@ class RobloxPermissionsBridge final {
   std::unique_ptr<RobloxMessageBusRequestBridge> bridge_;
 };
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 #endif

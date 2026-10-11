@@ -1,8 +1,8 @@
-#include "mocktail/audio/audio_sink.h"
+#include "roblox/audio/audio_sink.h"
 
 #include <limits>
 
-namespace mocktail::audio {
+namespace roblox::audio {
 
 std::size_t BytesPerSample(PcmSampleFormat format) {
   switch (format) {
@@ -43,4 +43,4 @@ Status ValidatePcmSpec(const PcmSpec& spec) {
   return Status::Ok();
 }
 
-}  // namespace mocktail::audio
+}  // namespace roblox::audio

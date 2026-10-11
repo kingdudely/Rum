@@ -6,7 +6,7 @@
 #include <sys/prctl.h>
 #include <unistd.h>
 
-namespace mocktail::compat {
+namespace roblox::compat {
 namespace {
 
 #ifndef PR_SET_VMA
@@ -94,12 +94,12 @@ int BionicPrctl(int option, unsigned long argument2,
   return result;
 }
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
-extern "C" int mocktail_bionic_prctl(int option, unsigned long argument2,
+extern "C" int roblox_bionic_prctl(int option, unsigned long argument2,
                                       unsigned long argument3,
                                       unsigned long argument4,
                                       unsigned long argument5) {
-  return mocktail::compat::BionicPrctl(option, argument2, argument3,
+  return roblox::compat::BionicPrctl(option, argument2, argument3,
                                        argument4, argument5);
 }

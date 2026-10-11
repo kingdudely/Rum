@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -146,4 +146,4 @@ const char *RobloxAppShutdownStatusName(RobloxAppShutdownStatus status) {
 }
 
 } // namespace runtime
-} // namespace mocktail
+} // namespace roblox

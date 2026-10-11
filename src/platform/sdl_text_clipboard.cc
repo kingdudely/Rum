@@ -1,4 +1,4 @@
-#include "mocktail/platform/text_clipboard.h"
+#include "roblox/platform/text_clipboard.h"
 
 #include <SDL3/SDL_clipboard.h>
 #include <SDL3/SDL_error.h>
@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace platform {
 namespace {
 
@@ -53,4 +53,4 @@ std::unique_ptr<TextClipboard> CreateSdlTextClipboard() {
 }
 
 }  // namespace platform
-}  // namespace mocktail
+}  // namespace roblox

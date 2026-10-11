@@ -161,7 +161,7 @@ const char* HostStrErrorResult(Result result, char* buffer) noexcept {
 
 }  // namespace
 
-namespace mocktail::compat {
+namespace roblox::compat {
 
 static_assert(sizeof(void*) == 8,
               "the current Bionic runtime supports Android x86-64 only");
@@ -353,60 +353,60 @@ unsigned long long BionicStrToUnsignedLongLongLocale(
       [text, end, base]() { return std::strtoull(text, end, base); });
 }
 
-}  // namespace mocktail::compat
+}  // namespace roblox::compat
 
-extern "C" mocktail::compat::BionicControlMessageHeader*
-mocktail_bionic_cmsg_nxthdr(
-    mocktail::compat::BionicMessageHeader* message,
-    mocktail::compat::BionicControlMessageHeader* current) {
-  return mocktail::compat::BionicCmsgNextHeader(message, current);
+extern "C" roblox::compat::BionicControlMessageHeader*
+roblox_bionic_cmsg_nxthdr(
+    roblox::compat::BionicMessageHeader* message,
+    roblox::compat::BionicControlMessageHeader* current) {
+  return roblox::compat::BionicCmsgNextHeader(message, current);
 }
 
-extern "C" int mocktail_bionic_cxa_thread_atexit_impl(
-    mocktail::compat::BionicThreadDestructor destructor, void* argument,
+extern "C" int roblox_bionic_cxa_thread_atexit_impl(
+    roblox::compat::BionicThreadDestructor destructor, void* argument,
     void* dso_handle) {
-  return mocktail::compat::BionicCxaThreadAtExit(destructor, argument,
+  return roblox::compat::BionicCxaThreadAtExit(destructor, argument,
                                                  dso_handle);
 }
 
-extern "C" void mocktail_bionic_arc4random_buf(void* buffer, size_t size) {
-  mocktail::compat::BionicArc4RandomBuffer(buffer, size);
+extern "C" void roblox_bionic_arc4random_buf(void* buffer, size_t size) {
+  roblox::compat::BionicArc4RandomBuffer(buffer, size);
 }
 
-extern "C" mocktail::compat::BionicMallinfoSnapshot mocktail_bionic_mallinfo() {
-  return mocktail::compat::BionicMallinfo();
+extern "C" roblox::compat::BionicMallinfoSnapshot roblox_bionic_mallinfo() {
+  return roblox::compat::BionicMallinfo();
 }
 
-extern "C" int mocktail_bionic_sysinfo(struct sysinfo* info) {
-  return mocktail::compat::BionicSysInfo(info);
+extern "C" int roblox_bionic_sysinfo(struct sysinfo* info) {
+  return roblox::compat::BionicSysInfo(info);
 }
 
-extern "C" int mocktail_bionic_uname(struct utsname* name) {
-  return mocktail::compat::BionicUname(name);
+extern "C" int roblox_bionic_uname(struct utsname* name) {
+  return roblox::compat::BionicUname(name);
 }
 
-extern "C" uid_t mocktail_bionic_getuid() {
-  return mocktail::compat::BionicGetUid();
+extern "C" uid_t roblox_bionic_getuid() {
+  return roblox::compat::BionicGetUid();
 }
 
-extern "C" uid_t mocktail_bionic_geteuid() {
-  return mocktail::compat::BionicGetEffectiveUid();
+extern "C" uid_t roblox_bionic_geteuid() {
+  return roblox::compat::BionicGetEffectiveUid();
 }
 
-extern "C" int mocktail_bionic_strerror_r(int error_number, char* buffer,
+extern "C" int roblox_bionic_strerror_r(int error_number, char* buffer,
                                           size_t buffer_size) {
-  return mocktail::compat::BionicStrError(error_number, buffer, buffer_size);
+  return roblox::compat::BionicStrError(error_number, buffer, buffer_size);
 }
 
-extern "C" long long mocktail_bionic_strtoll_l(
+extern "C" long long roblox_bionic_strtoll_l(
     const char* text, char** end, int base,
-    mocktail::compat::BionicLocale locale) {
-  return mocktail::compat::BionicStrToLongLongLocale(text, end, base, locale);
+    roblox::compat::BionicLocale locale) {
+  return roblox::compat::BionicStrToLongLongLocale(text, end, base, locale);
 }
 
-extern "C" unsigned long long mocktail_bionic_strtoull_l(
+extern "C" unsigned long long roblox_bionic_strtoull_l(
     const char* text, char** end, int base,
-    mocktail::compat::BionicLocale locale) {
-  return mocktail::compat::BionicStrToUnsignedLongLongLocale(text, end, base,
+    roblox::compat::BionicLocale locale) {
+  return roblox::compat::BionicStrToUnsignedLongLongLocale(text, end, base,
                                                              locale);
 }

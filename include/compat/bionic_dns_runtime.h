@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_COMPAT_BIONIC_DNS_RUNTIME_H_
-#define MOCKTAIL_COMPAT_BIONIC_DNS_RUNTIME_H_
+#ifndef ROBLOX_COMPAT_BIONIC_DNS_RUNTIME_H_
+#define ROBLOX_COMPAT_BIONIC_DNS_RUNTIME_H_
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace mocktail {
+namespace roblox {
 namespace compat {
 
 // Android x86-64 orders ai_canonname before ai_addr, unlike glibc. Keep the
@@ -38,17 +38,17 @@ void BionicFreeAddressInfo(BionicAddressInfo* info) noexcept;
 hostent* BionicGetHostByName(const char* name) noexcept;
 
 }  // namespace compat
-}  // namespace mocktail
+}  // namespace roblox
 
 extern "C" {
 
-int mocktail_bionic_getaddrinfo(
+int roblox_bionic_getaddrinfo(
     const char* node, const char* service,
-    const mocktail::compat::BionicAddressInfo* hints,
-    mocktail::compat::BionicAddressInfo** result);
-void mocktail_bionic_freeaddrinfo(mocktail::compat::BionicAddressInfo* info);
-hostent* mocktail_bionic_gethostbyname(const char* name);
+    const roblox::compat::BionicAddressInfo* hints,
+    roblox::compat::BionicAddressInfo** result);
+void roblox_bionic_freeaddrinfo(roblox::compat::BionicAddressInfo* info);
+hostent* roblox_bionic_gethostbyname(const char* name);
 
 }  // extern "C"
 
-#endif  // MOCKTAIL_COMPAT_BIONIC_DNS_RUNTIME_H_
+#endif  // ROBLOX_COMPAT_BIONIC_DNS_RUNTIME_H_

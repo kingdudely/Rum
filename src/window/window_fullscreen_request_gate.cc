@@ -1,6 +1,6 @@
 #include "window/window_fullscreen_request_gate.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 bool WindowFullscreenRequestGate::RequestFromAndroidFlags(int flags, int mask) {
@@ -43,4 +43,4 @@ void WindowFullscreenRequestGate::Reset() {
 }
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox

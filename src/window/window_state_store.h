@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_WINDOW_WINDOW_STATE_STORE_H_
-#define MOCKTAIL_WINDOW_WINDOW_STATE_STORE_H_
+#ifndef ROBLOX_WINDOW_WINDOW_STATE_STORE_H_
+#define ROBLOX_WINDOW_WINDOW_STATE_STORE_H_
 
 #include <filesystem>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 // Smallest window the renderer is expected to cope with. A restored geometry
@@ -55,6 +55,6 @@ Status StoreWindowState(const std::filesystem::path& path,
                         const PersistedWindowState& state);
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_WINDOW_STATE_STORE_H_
+#endif  // ROBLOX_WINDOW_WINDOW_STATE_STORE_H_

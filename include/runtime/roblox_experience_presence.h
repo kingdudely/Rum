@@ -1,9 +1,9 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_EXPERIENCE_PRESENCE_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_EXPERIENCE_PRESENCE_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_EXPERIENCE_PRESENCE_H_
+#define ROBLOX_RUNTIME_ROBLOX_EXPERIENCE_PRESENCE_H_
 
 #include "runtime/roblox_experience_launch_bridge.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 enum class RobloxExperiencePresencePhase {
@@ -26,6 +26,6 @@ struct RobloxExperiencePresenceObserver {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_EXPERIENCE_PRESENCE_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_EXPERIENCE_PRESENCE_H_

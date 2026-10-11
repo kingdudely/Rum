@@ -1,9 +1,9 @@
-#ifndef MOCKTAIL_RUNTIME_PROCESS_LAUNCH_POLICY_H_
-#define MOCKTAIL_RUNTIME_PROCESS_LAUNCH_POLICY_H_
+#ifndef ROBLOX_RUNTIME_PROCESS_LAUNCH_POLICY_H_
+#define ROBLOX_RUNTIME_PROCESS_LAUNCH_POLICY_H_
 
 #include <string>
 
-namespace mocktail::runtime {
+namespace roblox::runtime {
 
 // Call only for interactive launches, before creating any threads. Removes an
 // inherited soft CPU limit when the hard limit is unlimited and demotes the
@@ -11,6 +11,6 @@ namespace mocktail::runtime {
 // log, including failures; never changes hard limits or signal dispositions.
 std::string ApplyInteractiveProcessLaunchPolicy();
 
-}  // namespace mocktail::runtime
+}  // namespace roblox::runtime
 
-#endif  // MOCKTAIL_RUNTIME_PROCESS_LAUNCH_POLICY_H_
+#endif  // ROBLOX_RUNTIME_PROCESS_LAUNCH_POLICY_H_

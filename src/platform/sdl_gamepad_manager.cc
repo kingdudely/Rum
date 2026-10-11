@@ -1,4 +1,4 @@
-#include "mocktail/platform/sdl_gamepad_manager.h"
+#include "roblox/platform/sdl_gamepad_manager.h"
 
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_timer.h>
@@ -7,7 +7,7 @@
 #include <limits>
 #include <utility>
 
-namespace mocktail {
+namespace roblox {
 namespace platform {
 namespace {
 
@@ -193,4 +193,4 @@ bool SdlGamepadManager::HandleEvent(const PlatformEvent& event) {
 }
 
 }  // namespace platform
-}  // namespace mocktail
+}  // namespace roblox

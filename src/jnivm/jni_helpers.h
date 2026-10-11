@@ -1,9 +1,9 @@
-#ifndef MOCKTAIL_JNIVM_JNI_HELPERS_H_
-#define MOCKTAIL_JNIVM_JNI_HELPERS_H_
+#ifndef ROBLOX_JNIVM_JNI_HELPERS_H_
+#define ROBLOX_JNIVM_JNI_HELPERS_H_
 
 #include "jnivm/jnivm.h"
 
-#include "mocktail/audio/fmod_thread_floating_point.h"
+#include "roblox/audio/fmod_thread_floating_point.h"
 
 #include <string>
 #include <unordered_map>
@@ -22,19 +22,19 @@ extern std::unordered_map<jobject, jlong> g_direct_buffer_capacities;
 
 // The engine's own native GameActivity callbacks, filled in once it starts.
 extern "C" {
-extern void* mocktail_gameactivity_on_start_native;
-extern void* mocktail_gameactivity_on_resume_native;
-extern void* mocktail_gameactivity_on_surface_created_native;
-extern void* mocktail_gameactivity_on_surface_changed_native;
-extern void* mocktail_gameactivity_on_surface_redraw_needed_native;
-extern void* mocktail_gameactivity_on_trim_memory_native;
+extern void* roblox_gameactivity_on_start_native;
+extern void* roblox_gameactivity_on_resume_native;
+extern void* roblox_gameactivity_on_surface_created_native;
+extern void* roblox_gameactivity_on_surface_changed_native;
+extern void* roblox_gameactivity_on_surface_redraw_needed_native;
+extern void* roblox_gameactivity_on_trim_memory_native;
 }
 
 // Per-thread JVM state, installed by the JNI function tables.
 extern thread_local JNIEnv* g_thread_local_env;
 extern thread_local JNIEnv g_thread_env_storage;
 extern thread_local VM* g_thread_vm_instance;
-extern thread_local mocktail::audio::FmodThreadFloatingPointMode
+extern thread_local roblox::audio::FmodThreadFloatingPointMode
     g_thread_audio_fp_mode;
 
 // Constants
@@ -199,4 +199,4 @@ jdouble JNICALL CallDoubleMethod(JNIEnv* /*env*/, jobject /*obj*/,
 
 }  // namespace jnivm::internal
 
-#endif  // MOCKTAIL_JNIVM_JNI_HELPERS_H_
+#endif  // ROBLOX_JNIVM_JNI_HELPERS_H_

@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_SESSION_LOG_H_
-#define MOCKTAIL_RUNTIME_SESSION_LOG_H_
+#ifndef ROBLOX_RUNTIME_SESSION_LOG_H_
+#define ROBLOX_RUNTIME_SESSION_LOG_H_
 
 #include <chrono>
 #include <filesystem>
@@ -9,7 +9,7 @@
 #include "runtime/environment.h"
 #include "runtime/runtime_paths.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 struct SessionBuildInformation {
@@ -66,6 +66,6 @@ class SessionLog final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_SESSION_LOG_H_
+#endif  // ROBLOX_RUNTIME_SESSION_LOG_H_

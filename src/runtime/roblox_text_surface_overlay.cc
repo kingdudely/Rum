@@ -18,10 +18,10 @@
 #include <utility>
 #include <vector>
 
-#include "mocktail/platform/posix_primitives.h"
+#include "roblox/platform/posix_primitives.h"
 #include "runtime/roblox_text_font_resolver.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -96,7 +96,7 @@ SensitiveString VisibleTextWindow(
 std::vector<std::string> ResolveFontFiles(
     const RobloxTextFontSelection& selection) {
   std::vector<std::string> files;
-  const char* configured = std::getenv("MOCKTAIL_TEXT_FONT");
+  const char* configured = std::getenv("ROBLOX_TEXT_FONT");
   if (configured != nullptr && configured[0] != '\0') {
     files.emplace_back(configured);
   } else if (!selection.primary_file.empty()) {
@@ -346,7 +346,7 @@ void RobloxTextSurfaceOverlay::ApplyUpdate(
   g_overlay_may_present.store(drawable, std::memory_order_release);
 }
 
-bool RobloxTextSurfaceOverlay::QueryFrame(MocktailTextOverlayFrameInfo* frame) {
+bool RobloxTextSurfaceOverlay::QueryFrame(RobloxTextOverlayFrameInfo* frame) {
   if (frame == nullptr) {
     return false;
   }
@@ -650,24 +650,24 @@ void RobloxTextSurfaceOverlay::RecordFailureLocked(Status status) {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-extern "C" bool mocktail_text_overlay_may_present() {
-  return mocktail::runtime::g_overlay_may_present.load(
+extern "C" bool roblox_text_overlay_may_present() {
+  return roblox::runtime::g_overlay_may_present.load(
       std::memory_order_acquire);
 }
 
-extern "C" bool mocktail_text_overlay_query(
-    MocktailTextOverlayFrameInfo* frame) {
-  std::lock_guard<std::mutex> lock(mocktail::runtime::g_active_overlay_mutex);
-  return mocktail::runtime::g_active_overlay != nullptr &&
-         mocktail::runtime::g_active_overlay->QueryFrame(frame);
+extern "C" bool roblox_text_overlay_query(
+    RobloxTextOverlayFrameInfo* frame) {
+  std::lock_guard<std::mutex> lock(roblox::runtime::g_active_overlay_mutex);
+  return roblox::runtime::g_active_overlay != nullptr &&
+         roblox::runtime::g_active_overlay->QueryFrame(frame);
 }
 
-extern "C" bool mocktail_text_overlay_copy(std::uint64_t revision, void* rgba,
+extern "C" bool roblox_text_overlay_copy(std::uint64_t revision, void* rgba,
                                            std::size_t rgba_capacity) {
-  std::lock_guard<std::mutex> lock(mocktail::runtime::g_active_overlay_mutex);
-  return mocktail::runtime::g_active_overlay != nullptr &&
-         mocktail::runtime::g_active_overlay->CopyFrame(revision, rgba,
+  std::lock_guard<std::mutex> lock(roblox::runtime::g_active_overlay_mutex);
+  return roblox::runtime::g_active_overlay != nullptr &&
+         roblox::runtime::g_active_overlay->CopyFrame(revision, rgba,
                                                         rgba_capacity);
 }

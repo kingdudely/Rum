@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_WINDOW_WINDOW_FULLSCREEN_STATE_SYNC_H_
-#define MOCKTAIL_WINDOW_WINDOW_FULLSCREEN_STATE_SYNC_H_
+#ifndef ROBLOX_WINDOW_WINDOW_FULLSCREEN_STATE_SYNC_H_
+#define ROBLOX_WINDOW_WINDOW_FULLSCREEN_STATE_SYNC_H_
 
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
 
-namespace mocktail {
+namespace roblox {
 namespace window {
 
 using FullscreenStateSyncCallback = bool (*)(void* context, bool fullscreen);
@@ -71,6 +71,6 @@ class WindowFullscreenStateSync final {
 };
 
 }  // namespace window
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_WINDOW_WINDOW_FULLSCREEN_STATE_SYNC_H_
+#endif  // ROBLOX_WINDOW_WINDOW_FULLSCREEN_STATE_SYNC_H_

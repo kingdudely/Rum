@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <thread>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 OwnedPthread::~OwnedPthread() {
@@ -122,4 +122,4 @@ const char* OwnedPthreadWaitStatusName(OwnedPthreadWaitStatus status) {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

@@ -4,7 +4,7 @@
 
 #include "jnivm/jnivm.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 bool SetJnivmPlatformWebCallbacks(
@@ -39,4 +39,4 @@ void ClearJnivmPlatformWebCallbacks(void* context) {
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_EXPERIENCE_COMPOSITION_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_EXPERIENCE_COMPOSITION_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_EXPERIENCE_COMPOSITION_H_
+#define ROBLOX_RUNTIME_ROBLOX_EXPERIENCE_COMPOSITION_H_
 
 #include <jni.h>
 
@@ -11,7 +11,7 @@
 #include <string>
 #include <string_view>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 #include "runtime/owned_pthread.h"
 #include "runtime/roblox_call_protocol_bridge.h"
 #include "runtime/roblox_experience_launch_bridge.h"
@@ -23,7 +23,7 @@ namespace jnivm {
 class VM;
 }  // namespace jnivm
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // SystemTheme.systemThemeUpdated rides the shared MessageBus and needs only
@@ -216,6 +216,6 @@ class RobloxExperienceComposition final {
 };
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_EXPERIENCE_COMPOSITION_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_EXPERIENCE_COMPOSITION_H_

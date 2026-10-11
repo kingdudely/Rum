@@ -7,7 +7,7 @@
 #include <string>
 #include <unistd.h>
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 namespace {
 
@@ -34,7 +34,7 @@ RuntimePaths RuntimePaths::FromEnvironment(const Environment& environment) {
   paths.home_ = environment.GetOr("HOME", "/root");
 
   // Every writable root defaults under ./data next to the executable, so
-  // deleting that directory uninstalls everything Mocktail ever wrote.
+  // deleting that directory uninstalls everything Roblox ever wrote.
   // Each root stays overridable for isolation and testing.
   const std::filesystem::path executable_directory = ExecutableDirectory();
   const std::filesystem::path data_default =
@@ -42,19 +42,19 @@ RuntimePaths RuntimePaths::FromEnvironment(const Environment& environment) {
           ? std::filesystem::path("data")
           : executable_directory / "data";
   paths.data_root_ =
-      environment.HasNonEmpty("MOCKTAIL_DATA_ROOT")
-          ? std::filesystem::path(environment.GetOr("MOCKTAIL_DATA_ROOT", ""))
+      environment.HasNonEmpty("ROBLOX_DATA_ROOT")
+          ? std::filesystem::path(environment.GetOr("ROBLOX_DATA_ROOT", ""))
           : data_default;
   paths.cache_root_ =
-      environment.HasNonEmpty("MOCKTAIL_CACHE_ROOT")
-          ? std::filesystem::path(environment.GetOr("MOCKTAIL_CACHE_ROOT", ""))
+      environment.HasNonEmpty("ROBLOX_CACHE_ROOT")
+          ? std::filesystem::path(environment.GetOr("ROBLOX_CACHE_ROOT", ""))
           : data_default / "cache";
   paths.state_root_ =
-      environment.HasNonEmpty("MOCKTAIL_STATE_ROOT")
-          ? std::filesystem::path(environment.GetOr("MOCKTAIL_STATE_ROOT", ""))
+      environment.HasNonEmpty("ROBLOX_STATE_ROOT")
+          ? std::filesystem::path(environment.GetOr("ROBLOX_STATE_ROOT", ""))
           : data_default / "state";
-  if (environment.HasNonEmpty("MOCKTAIL_CONFIG_ROOT")) {
-    paths.config_root_ = environment.GetOr("MOCKTAIL_CONFIG_ROOT", "");
+  if (environment.HasNonEmpty("ROBLOX_CONFIG_ROOT")) {
+    paths.config_root_ = environment.GetOr("ROBLOX_CONFIG_ROOT", "");
   } else {
     paths.config_root_ = data_default / "config";
   }
@@ -105,13 +105,13 @@ bool ExportRuntimePathEnvironment(const RuntimePaths& paths,
     }
   }
 
-  return SetEnvironmentDefault("MOCKTAIL_RUNTIME_ROOT",
+  return SetEnvironmentDefault("ROBLOX_RUNTIME_ROOT",
                                paths.android_runtime_root(), error) &&
-         SetEnvironmentDefault("MOCKTAIL_ANDROID_CACHE_HOST_ROOT",
+         SetEnvironmentDefault("ROBLOX_ANDROID_CACHE_HOST_ROOT",
                                paths.android_cache_root(), error) &&
-         SetEnvironmentDefault("MOCKTAIL_VULKAN_SHADER_CACHE_HOST_PATH",
+         SetEnvironmentDefault("ROBLOX_VULKAN_SHADER_CACHE_HOST_PATH",
                                paths.vulkan_shader_cache_file(), error) &&
-         SetEnvironmentDefault("MOCKTAIL_TEXTURE_OVERRIDE_DIR",
+         SetEnvironmentDefault("ROBLOX_TEXTURE_OVERRIDE_DIR",
                                paths.config_root() / "textures", error);
 }
 
@@ -169,4 +169,4 @@ bool LooksLikeRobloxContentDirectory(
 }
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox

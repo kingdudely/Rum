@@ -1,9 +1,9 @@
-#include "mocktail/graphics/present_mode_policy.h"
+#include "roblox/graphics/present_mode_policy.h"
 
 #include <algorithm>
 #include <cstdlib>
 
-namespace mocktail {
+namespace roblox {
 namespace graphics {
 namespace {
 
@@ -38,8 +38,8 @@ PresentModePolicy ResolvePresentModePolicy(std::string_view vsync_value,
 PresentModePolicy CachedPresentModePolicy() {
   static const PresentModePolicy policy = [] {
     return ResolvePresentModePolicy(
-        EnvironmentOr("MOCKTAIL_VSYNC", "auto"),
-        EnvironmentOr("MOCKTAIL_FRAME_RATE_LIMIT", "-1"));
+        EnvironmentOr("ROBLOX_VSYNC", "auto"),
+        EnvironmentOr("ROBLOX_FRAME_RATE_LIMIT", "-1"));
   }();
   return policy;
 }
@@ -128,4 +128,4 @@ std::uint32_t PreferSwapchainMinImageCount(PresentModePolicy policy,
 }
 
 } // namespace graphics
-} // namespace mocktail
+} // namespace roblox

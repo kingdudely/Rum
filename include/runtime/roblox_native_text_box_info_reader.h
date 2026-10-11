@@ -1,11 +1,11 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_NATIVE_TEXT_BOX_INFO_READER_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_NATIVE_TEXT_BOX_INFO_READER_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_NATIVE_TEXT_BOX_INFO_READER_H_
+#define ROBLOX_RUNTIME_ROBLOX_NATIVE_TEXT_BOX_INFO_READER_H_
 
 #include <jni.h>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 
 // Host-owned NativeTextBoxInfo copy that outlives the JNI local reference.
@@ -43,6 +43,6 @@ Status QueryRobloxNativeTextBoxInfo(
     RobloxNativeTextBoxInfoQueryResult* result);
 
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 
-#endif  // MOCKTAIL_RUNTIME_ROBLOX_NATIVE_TEXT_BOX_INFO_READER_H_
+#endif  // ROBLOX_RUNTIME_ROBLOX_NATIVE_TEXT_BOX_INFO_READER_H_

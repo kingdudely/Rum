@@ -1,5 +1,5 @@
-#ifndef MOCKTAIL_RUNTIME_ROBLOX_MESSAGE_BUS_REQUEST_BRIDGE_H_
-#define MOCKTAIL_RUNTIME_ROBLOX_MESSAGE_BUS_REQUEST_BRIDGE_H_
+#ifndef ROBLOX_RUNTIME_ROBLOX_MESSAGE_BUS_REQUEST_BRIDGE_H_
+#define ROBLOX_RUNTIME_ROBLOX_MESSAGE_BUS_REQUEST_BRIDGE_H_
 
 #include <jni.h>
 
@@ -9,10 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "mocktail/status.h"
+#include "roblox/status.h"
 #include "runtime/roblox_game_session_native_adapter.h"
 
-namespace mocktail {
+namespace roblox {
 namespace runtime {
 struct RobloxMessageBusSymbols {
   jobject (*subscribe_request)(JNIEnv*, jobject, jstring, jstring, jobject,
@@ -83,5 +83,5 @@ class RobloxMessageBusRequestBridge final {
   std::shared_ptr<State> state_;
 };
 }  // namespace runtime
-}  // namespace mocktail
+}  // namespace roblox
 #endif
