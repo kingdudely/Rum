@@ -39,10 +39,6 @@ bool PollProductionWindowSurfaceEvent(void*, WindowSurfaceEvent* event) {
   return PollWindowSurfaceEvent(event);
 }
 
-Status RecordProductionResizeCommit(void*, const WindowSurfaceEvent& event) {
-  return RecordResizeReadinessSurfaceCommit(event);
-}
-
 }  // namespace
 
 WindowGameSurfaceConsumer MakeWindowGameSurfaceConsumer(
@@ -57,14 +53,9 @@ WindowGameSurfaceEventSource MakeWindowGameSurfaceEventSource() {
   return {nullptr, &PollProductionWindowSurfaceEvent};
 }
 
-WindowGameSurfaceCommitObserver MakeWindowResizeReadinessCommitObserver() {
-  return {nullptr, &RecordProductionResizeCommit};
-}
-
 WindowGameSurfaceBridge::WindowGameSurfaceBridge(
-    WindowGameSurfaceEventSource source, WindowGameSurfaceConsumer consumer,
-    WindowGameSurfaceCommitObserver observer)
-    : source_(source), consumer_(consumer), observer_(observer) {
+    WindowGameSurfaceEventSource source, WindowGameSurfaceConsumer consumer)
+    : source_(source), consumer_(consumer) {
   if (!source_.complete()) {
     terminal_status_ =
         InvalidArgument("window game-surface event source is incomplete");
@@ -97,13 +88,6 @@ WindowGameSurfaceDrainResult WindowGameSurfaceBridge::Drain() {
                                      : update.cause.message();
       return Fail(FailedPrecondition(detail), drained_events);
     }
-    if (observer_.complete()) {
-      Status observe_status = observer_.committed(observer_.context, event);
-      if (!observe_status.ok()) {
-        return Fail(std::move(observe_status), drained_events);
-      }
-    }
-
     snapshot_.last_event_type = event.type;
     snapshot_.last_generation = event.surface.generation;
     if (update.changed()) {

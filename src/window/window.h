@@ -50,13 +50,6 @@ void ClearFullscreenStateSyncCallback();
 bool PollWindowSurfaceEvent(WindowSurfaceEvent* event);
 WindowSurfaceSnapshot GetWindowSurfaceSnapshot();
 
-// Records an event only after the GAME/JNI bridge commits it.
-Status RecordResizeReadinessSurfaceCommit(const WindowSurfaceEvent& event);
-
-// Completes the optional resize gate after Roblox reaches Stopped.
-Status StopResizeReadiness();
-Status ResizeReadinessCompletionStatus();
-
 struct WindowViewportSnapshot {
   int logical_width = 0;
   int logical_height = 0;

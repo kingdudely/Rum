@@ -544,10 +544,6 @@ Status RobloxExperienceComposition::RefreshLateSurface() {
       if (!status.ok()) {
         return status;
       }
-      status = window::RecordResizeReadinessSurfaceCommit(event);
-      if (!status.ok()) {
-        return status;
-      }
       const GameSurface committed =
           event.type == window::WindowSurfaceEventType::kDestroyed
               ? GameSurface{event.surface.generation, 0, 0, 0}

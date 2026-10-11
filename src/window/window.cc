@@ -34,7 +34,6 @@
 #include "window/window_fullscreen_state_sync.h"
 #include "window/window_creation_policy.h"
 #include "window/window_pointer_capture_owner.h"
-#include "window/window_resize_readiness_gate.h"
 #include "window/window_state_store.h"
 #include "window/window_text_input_owner.h"
 
@@ -128,8 +127,6 @@ struct WindowState {
   uint64_t state_persistence_change_ticks_ns = 0;
   PersistedWindowState persisted_window;
   platform::DisplayRefreshCapabilities display_refresh;
-  int resize_target_logical_width = 0;
-  int resize_target_logical_height = 0;
 };
 
 static WindowState g_state;
@@ -146,7 +143,6 @@ static MainThreadCommandGate g_pre_text_input_pump_gate;
 static WindowFullscreenRequestGate g_fullscreen_request_gate;
 static RobloxFullscreenMenuRequestGate g_fullscreen_menu_request_gate;
 static WindowFullscreenStateSync g_fullscreen_state_sync;
-static std::unique_ptr<WindowResizeReadinessGate> g_resize_readiness_gate;
 static std::unique_ptr<SdlTextInputBackend> g_text_input_backend;
 static std::unique_ptr<WindowTextInputOwner> g_text_input_owner;
 static std::unique_ptr<SdlPointerCaptureBackend> g_pointer_capture_backend;
@@ -240,8 +236,7 @@ bool IsDisabledEnv(const char* name) {
 }
 
 bool WindowStatePersistenceSuppressed() {
-  return IsEnabledEnv("MOCKTAIL_RESIZE_READINESS") ||
-         IsEnabledEnv("MOCKTAIL_FULLSCREEN_READINESS") ||
+  return IsEnabledEnv("MOCKTAIL_FULLSCREEN_READINESS") ||
          IsEnabledEnv("MOCKTAIL_INPUT_READINESS") ||
          IsEnabledEnv("MOCKTAIL_AUTO_EXIT_AFTER_PRESENT_MS");
 }
@@ -375,25 +370,7 @@ bool StringEquals(const char* value, const char* expected) {
          std::strcmp(value, expected) == 0;
 }
 
-bool ParsePositiveInt(const char* name, int fallback, int* value) {
-  if (value == nullptr) {
-    return false;
-  }
-  const char* text = GetEnvNonEmpty(name);
-  if (text == nullptr) {
-    *value = fallback;
-    return fallback > 0;
-  }
-  char* end = nullptr;
-  errno = 0;
-  const long parsed = std::strtol(text, &end, 10);
-  if (errno != 0 || end == text || *end != '\0' || parsed <= 0 ||
-      parsed > 16384) {
-    return false;
-  }
-  *value = static_cast<int>(parsed);
-  return true;
-}
+
 
 bool IsAutoGraphicsBackend(const char* backend) {
   return backend == nullptr || StringEquals(backend, "auto");
@@ -780,76 +757,6 @@ bool ActivateWindowEventLifecycles() {
     fprintf(stderr, "  [window] platform event observer is already active\n");
     g_window_surface_lifecycle.Deactivate();
     return false;
-  }
-  WindowResizeReadinessConfig resize_config;
-  resize_config.enabled =
-      StringEquals(GetEnvNonEmpty("MOCKTAIL_RESIZE_READINESS"), "1");
-  if (resize_config.enabled) {
-    g_resize_readiness_gate = std::make_unique<WindowResizeReadinessGate>();
-    int logical_width = 0;
-    int logical_height = 0;
-    if (!SDL_GetWindowSize(g_state.sdl_window, &logical_width,
-                           &logical_height) ||
-        logical_width <= 0 || logical_height <= 0) {
-      fprintf(stderr,
-              "  [resize] cannot determine initial SDL logical extent\n");
-      g_platform_event_observer.Deactivate();
-      g_window_surface_lifecycle.Deactivate();
-      g_resize_readiness_gate.reset();
-      return false;
-    }
-    const int fallback_width =
-        logical_width >= 960 ? logical_width - 160 : logical_width + 160;
-    const int fallback_height =
-        logical_height >= 630 ? logical_height - 90 : logical_height + 90;
-    int target_logical_width = 0;
-    int target_logical_height = 0;
-    if (!ParsePositiveInt("MOCKTAIL_RESIZE_WIDTH", fallback_width,
-                          &target_logical_width) ||
-        !ParsePositiveInt("MOCKTAIL_RESIZE_HEIGHT", fallback_height,
-                          &target_logical_height)) {
-      fprintf(
-          stderr,
-          "  [resize] invalid logical target; dimensions must be 1..16384\n");
-      g_platform_event_observer.Deactivate();
-      g_window_surface_lifecycle.Deactivate();
-      g_resize_readiness_gate.reset();
-      return false;
-    }
-    const uint64_t target_pixel_width =
-        (static_cast<uint64_t>(target_logical_width) * pixel_width +
-         static_cast<uint64_t>(logical_width) / 2) /
-        static_cast<uint64_t>(logical_width);
-    const uint64_t target_pixel_height =
-        (static_cast<uint64_t>(target_logical_height) * pixel_height +
-         static_cast<uint64_t>(logical_height) / 2) /
-        static_cast<uint64_t>(logical_height);
-    if (target_pixel_width > UINT32_MAX || target_pixel_height > UINT32_MAX) {
-      fprintf(stderr, "  [resize] scaled target exceeds surface limits\n");
-      g_platform_event_observer.Deactivate();
-      g_window_surface_lifecycle.Deactivate();
-      g_resize_readiness_gate.reset();
-      return false;
-    }
-    resize_config.target_width = static_cast<uint32_t>(target_pixel_width);
-    resize_config.target_height = static_cast<uint32_t>(target_pixel_height);
-    const Status resize_status = g_resize_readiness_gate->Activate(
-        resize_config, g_window_surface_lifecycle.Snapshot());
-    if (!resize_status.ok()) {
-      fprintf(stderr, "  [resize] readiness activation failed: %s\n",
-              resize_status.message().c_str());
-      g_platform_event_observer.Deactivate();
-      g_window_surface_lifecycle.Deactivate();
-      g_resize_readiness_gate.reset();
-      return false;
-    }
-    fprintf(
-        stderr,
-        "  [resize] armed real compositor resize logical=%dx%d pixels=%ux%u\n",
-        target_logical_width, target_logical_height, resize_config.target_width,
-        resize_config.target_height);
-    g_state.resize_target_logical_width = target_logical_width;
-    g_state.resize_target_logical_height = target_logical_height;
   }
   g_state.width = pixel_width;
   g_state.height = pixel_height;
@@ -1393,44 +1300,8 @@ bool PollWindowSurfaceEvent(WindowSurfaceEvent* event) {
 WindowSurfaceSnapshot GetWindowSurfaceSnapshot() {
   return g_window_surface_lifecycle.Snapshot();
 }
-Status RecordResizeReadinessSurfaceCommit(const WindowSurfaceEvent& event) {
-  if (g_resize_readiness_gate == nullptr) {
-    return Status::Ok();
-  }
-  const WindowResizeReadinessState before =
-      g_resize_readiness_gate->Snapshot().state;
-  const Status status =
-      g_resize_readiness_gate->RecordCommittedSurfaceEvent(event);
-  const WindowResizeReadinessSnapshot after =
-      g_resize_readiness_gate->Snapshot();
-  if (status.ok() && before == WindowResizeReadinessState::kResizeRequested &&
-      after.state == WindowResizeReadinessState::kSurfaceCommitted) {
-    fprintf(
-        stderr,
-        "  [resize] typed JNI surface commit generation=%llu pixels=%ux%u\n",
-        static_cast<unsigned long long>(event.surface.generation),
-        event.surface.width, event.surface.height);
-  }
-  return status;
-}
 
-Status StopResizeReadiness() {
-  if (g_resize_readiness_gate == nullptr) {
-    return Status::Ok();
-  }
-  const Status status = g_resize_readiness_gate->RecordStopped();
-  if (status.ok() && g_resize_readiness_gate->Snapshot().state ==
-                         WindowResizeReadinessState::kStopped) {
-    fprintf(stderr, "  [resize] readiness completed: Stopped\n");
-  }
-  return status;
-}
 
-Status ResizeReadinessCompletionStatus() {
-  return g_resize_readiness_gate == nullptr
-             ? Status::Ok()
-             : g_resize_readiness_gate->CompletionStatus();
-}
 WindowViewportSnapshot GetWindowViewportSnapshot() {
   WindowViewportSnapshot snapshot;
   if (g_state.sdl_window == nullptr) {
@@ -1591,24 +1462,6 @@ bool SwapBuffers() {
   const int swap_count =
       g_real_swap_count.fetch_add(1, std::memory_order_relaxed) + 1;
   const uint64_t now_ticks_ns = SDL_GetTicksNS();
-  WindowResizeReadinessState resize_state_before =
-      WindowResizeReadinessState::kDisabled;
-  if (g_resize_readiness_gate != nullptr) {
-    resize_state_before = g_resize_readiness_gate->Snapshot().state;
-    const Status resize_status = g_resize_readiness_gate->RecordPresent(
-        static_cast<uint64_t>(swap_count));
-    if (!resize_status.ok()) {
-      fprintf(stderr, "  [resize] present evidence rejected: %s\n",
-              resize_status.message().c_str());
-    } else if (resize_state_before ==
-                   WindowResizeReadinessState::kSurfaceCommitted &&
-               g_resize_readiness_gate->Snapshot().state ==
-                   WindowResizeReadinessState::kPostRebindPresented) {
-      fprintf(stderr,
-              "  [resize] post-rebind host present backend=opengl frame=%d\n",
-              swap_count);
-    }
-  }
   RecordFirstPresentTime(swap_count);
   present_scope.NotifyObserver(static_cast<uint64_t>(swap_count));
   ShowIfHidden();
@@ -1644,24 +1497,6 @@ void NoteVulkanPresent() {
   g_vulkan_present_progress_gate.NotifyFramePresented(
       now_ticks_ns, static_cast<uint64_t>(present_count),
       SDL_GetCurrentThreadID());
-  WindowResizeReadinessState resize_state_before =
-      WindowResizeReadinessState::kDisabled;
-  if (g_resize_readiness_gate != nullptr) {
-    resize_state_before = g_resize_readiness_gate->Snapshot().state;
-    const Status resize_status = g_resize_readiness_gate->RecordPresent(
-        static_cast<uint64_t>(present_count));
-    if (!resize_status.ok()) {
-      fprintf(stderr, "  [resize] present evidence rejected: %s\n",
-              resize_status.message().c_str());
-    } else if (resize_state_before ==
-                   WindowResizeReadinessState::kSurfaceCommitted &&
-               g_resize_readiness_gate->Snapshot().state ==
-                   WindowResizeReadinessState::kPostRebindPresented) {
-      fprintf(stderr,
-              "  [resize] post-rebind host present backend=vulkan frame=%d\n",
-              present_count);
-    }
-  }
   RecordFirstPresentTime(present_count);
   present_scope.NotifyObserver(static_cast<uint64_t>(present_count));
   ShowIfHidden();
@@ -1755,32 +1590,6 @@ bool ShouldIgnoreCloseRequest() {
          std::strcmp(keepalive_ms, "0") != 0;
 }
 
-void MaybeRequestResizeReadiness() {
-  if (g_resize_readiness_gate == nullptr || g_state.sdl_window == nullptr) {
-    return;
-  }
-  WindowResizeRequest request;
-  if (!g_resize_readiness_gate->TakeResizeRequest(&request)) {
-    return;
-  }
-  if (g_state.resize_target_logical_width <= 0 ||
-      g_state.resize_target_logical_height <= 0 ||
-      !SDL_SetWindowSize(g_state.sdl_window,
-                         g_state.resize_target_logical_width,
-                         g_state.resize_target_logical_height)) {
-    fprintf(stderr, "  [resize] SDL_SetWindowSize failed: %s\n",
-            SDL_GetError());
-    return;
-  }
-  const WindowResizeReadinessSnapshot snapshot =
-      g_resize_readiness_gate->Snapshot();
-  fprintf(stderr,
-          "  [resize] SDL compositor resize requested after present=%llu "
-          "logical=%dx%d expected_pixels=%ux%u\n",
-          static_cast<unsigned long long>(snapshot.first_present_serial),
-          g_state.resize_target_logical_width,
-          g_state.resize_target_logical_height, request.width, request.height);
-}
 
 bool FullscreenShortcutEnabled() {
   const char* value = GetEnvNonEmpty("MOCKTAIL_F11_FULLSCREEN");
@@ -1996,7 +1805,6 @@ bool PumpEvents() {
   MaybeSynchronizeRestoredFullscreenState();
   MaybeApplyRobloxFullscreenMenuRequest();
   MaybeApplyAndroidFullscreenRequest();
-  MaybeRequestResizeReadiness();
   MaybeRequestFullscreenReadiness();
   if (!g_pre_text_input_pump_gate.Invoke()) {
     fprintf(stderr, "  [input] main-thread text command drain failed\n");
@@ -2298,8 +2106,6 @@ void Shutdown() {
   g_state.software_window = false;
   g_state.direct_vulkan = false;
   g_state.display_refresh = {};
-  g_state.resize_target_logical_width = 0;
-  g_state.resize_target_logical_height = 0;
   g_state.fullscreen_readiness_requested = false;
   g_state.fullscreen_readiness_return_requested = false;
   g_state.restored_fullscreen_sync_pending = false;
@@ -2312,7 +2118,6 @@ void Shutdown() {
   g_fullscreen_menu_request_gate.Reset();
   g_real_swap_count.store(0, std::memory_order_relaxed);
   g_first_present_ticks_ns.store(0, std::memory_order_relaxed);
-  g_resize_readiness_gate.reset();
 }
 
 bool RequestFullscreenFromAndroidWindowFlags(int flags, int mask) {

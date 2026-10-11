@@ -44,20 +44,9 @@ struct WindowGameSurfaceConsumer {
   }
 };
 
-using CommittedWindowGameSurfaceEventFn = Status (*)(
-    void* context, const WindowSurfaceEvent& event);
-
-struct WindowGameSurfaceCommitObserver {
-  void* context = nullptr;
-  CommittedWindowGameSurfaceEventFn committed = nullptr;
-
-  bool complete() const { return committed != nullptr; }
-};
-
 WindowGameSurfaceConsumer MakeWindowGameSurfaceConsumer(
     runtime::RobloxGameSessionRuntime* runtime);
 WindowGameSurfaceEventSource MakeWindowGameSurfaceEventSource();
-WindowGameSurfaceCommitObserver MakeWindowResizeReadinessCommitObserver();
 
 struct WindowGameSurfaceBridgeSnapshot {
   uint64_t accepted_events = 0;
@@ -82,8 +71,7 @@ struct WindowGameSurfaceDrainResult {
 class WindowGameSurfaceBridge final {
  public:
   WindowGameSurfaceBridge(WindowGameSurfaceEventSource source,
-                          WindowGameSurfaceConsumer consumer,
-                          WindowGameSurfaceCommitObserver observer = {});
+                          WindowGameSurfaceConsumer consumer);
 
   WindowGameSurfaceBridge(const WindowGameSurfaceBridge&) = delete;
   WindowGameSurfaceBridge& operator=(const WindowGameSurfaceBridge&) = delete;
@@ -100,7 +88,6 @@ class WindowGameSurfaceBridge final {
 
   const WindowGameSurfaceEventSource source_;
   const WindowGameSurfaceConsumer consumer_;
-  const WindowGameSurfaceCommitObserver observer_;
   WindowGameSurfaceBridgeSnapshot snapshot_;
   Status terminal_status_ = Status::Ok();
 };

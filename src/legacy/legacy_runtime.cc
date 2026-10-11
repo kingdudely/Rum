@@ -740,8 +740,7 @@ void RunMainLoop(
         std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
             mocktail::window::MakeWindowGameSurfaceEventSource(),
             mocktail::window::MakeWindowGameSurfaceConsumer(
-                game_session_runtime),
-            mocktail::window::MakeWindowResizeReadinessCommitObserver());
+                game_session_runtime));
   } else if (experience_composition != nullptr &&
              experience_composition->subscribed()) {
     mocktail::window::WindowGameSurfaceConsumer experience_consumer{
@@ -750,8 +749,7 @@ void RunMainLoop(
     surface_bridge =
         std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
             mocktail::window::MakeWindowGameSurfaceEventSource(),
-            experience_consumer,
-            mocktail::window::MakeWindowResizeReadinessCommitObserver());
+            experience_consumer);
   }
   const auto drain_game_surface_events = [&]() {
     if (surface_bridge == nullptr) {
@@ -1022,29 +1020,12 @@ struct RunCompletionState {
   bool lifecycle_shutdown_completed = false;
   bool game_surface_events_completed = true;
   bool input_shutdown_completed = true;
-  bool resize_readiness_completed = true;
 };
 
-// Stops resize readiness and shuts audio down ahead of the SDL teardown, recording
-// whether both completed. Audio that refuses to release the device fails the run
-// rather than tearing SDL down underneath it.
+// Shuts audio down ahead of the SDL teardown. Audio that refuses to release
+// the device fails the run rather than tearing SDL down underneath it.
 void FinishWindowShutdown(mocktail::legacy::RuntimeDependencies& dependencies,
                           RunCompletionState* completion) {
-  const mocktail::Status resize_stop_status =
-      completion->lifecycle_shutdown_completed
-          ? mocktail::window::StopResizeReadiness()
-          : mocktail::window::ResizeReadinessCompletionStatus();
-  const mocktail::Status resize_completion_status =
-      mocktail::window::ResizeReadinessCompletionStatus();
-  completion->resize_readiness_completed =
-      resize_stop_status.ok() && resize_completion_status.ok();
-  if (!completion->resize_readiness_completed) {
-    const mocktail::Status& failure =
-        resize_stop_status.ok() ? resize_completion_status
-                                : resize_stop_status;
-    std::cerr << "[FATAL] Real resize readiness failed: "
-              << failure.message() << '\n';
-  }
   const mocktail::Status audio_shutdown_status =
       dependencies.ShutdownBeforePlatform();
   if (!audio_shutdown_status.ok()) {
@@ -1077,11 +1058,6 @@ bool ValidateRunCompletion(const RunCompletionState& completion) {
   }
   if (!completion.input_shutdown_completed) {
     std::cerr << "[FATAL] Windowed runtime exited without completing typed input shutdown.\n";
-    return false;
-  }
-  if (!completion.resize_readiness_completed) {
-    std::cerr << "[FATAL] Windowed runtime exited without completing the real "
-                 "resize/rebind readiness sequence.\n";
     return false;
   }
   return true;
