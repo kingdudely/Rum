@@ -320,7 +320,7 @@ const char* HostPath(const char* path, std::string* storage) {
 }
 
 bool PathTraceEnabled() {
-  const char* value = std::getenv("MOCKTAIL_PATH_TRACE");
+  const char* value = std::getenv("MOCKTAIL_TRACE");
   return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 

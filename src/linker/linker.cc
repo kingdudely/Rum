@@ -81,7 +81,7 @@ bool HasPrefix(std::string_view value, std::string_view prefix) {
 
 #ifdef MOCKTAIL_USE_BIONIC_LINKER
 bool LinkerTraceEnabled() {
-  static const bool enabled = std::getenv("MOCKTAIL_TRACE_LINKER") != nullptr;
+  static const bool enabled = std::getenv("MOCKTAIL_TRACE") != nullptr;
   return enabled;
 }
 

@@ -49,15 +49,13 @@ AAssetManager g_asset_manager;
 
 bool TraceEnabled() {
   static const bool enabled =
-      StubAnyEnvSet({"MOCKTAIL_ANDROID_STUB_TRACE", "MOCKTAIL_WINDOW_TRACE",
-                     "MOCKTAIL_FULL_TRACE"});
+      StubAnyEnvSet({"MOCKTAIL_TRACE"});
   return enabled;
 }
 
 bool AssetTraceEnabled() {
   static const bool enabled =
-      StubAnyEnvSet({"MOCKTAIL_ASSET_TRACE", "MOCKTAIL_TRACE_ALL",
-                     "MOCKTAIL_FULL_TRACE"});
+      StubAnyEnvSet({"MOCKTAIL_TRACE"});
   return enabled;
 }
 

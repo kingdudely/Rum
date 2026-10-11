@@ -47,7 +47,7 @@ struct JniVmShutdownHook {
 static JniVmShutdownHook g_shutdown_hook;
 
 bool TraceEnabled() {
-  static const bool enabled = std::getenv("MOCKTAIL_JNI_TRACE") != nullptr;
+  static const bool enabled = std::getenv("MOCKTAIL_TRACE") != nullptr;
   return enabled;
 }
 

@@ -484,36 +484,7 @@ SymbolResolveResult ResolveSymbolForBionic(const char* name, bool has_window,
   return result;
 }
 
-bool TraceAllEnabled() {
-  return IsEnabled("MOCKTAIL_TRACE_ALL") || IsEnabled("MOCKTAIL_FULL_TRACE");
-}
-
-bool VerboseOutputEnabled() {
-  return IsEnabled("MOCKTAIL_VERBOSE") || TraceAllEnabled();
-}
-
-void EnableFullTraceIfRequested() {
-  if (!TraceAllEnabled()) {
-    return;
-  }
-  const char* kTraceEnvNames[] = {
-      "MOCKTAIL_ENGINE_TRACE",
-      "MOCKTAIL_JNI_TRACE",
-      "MOCKTAIL_JNI_VM_TRACE",
-      "MOCKTAIL_JNI_STRING_TRACE",
-      "MOCKTAIL_DNS_TRACE",
-      "MOCKTAIL_GL_TRACE",
-      "MOCKTAIL_EGL_TRACE",
-      "MOCKTAIL_WINDOW_TRACE",
-      "MOCKTAIL_ANDROID_TRACE",
-      "MOCKTAIL_ASSET_TRACE",
-      "MOCKTAIL_TRACE_POST_CLIENT_SETTINGS_JNI",
-      "MOCKTAIL_TRACE_START_LUA_JNI",
-  };
-  for (const char* name : kTraceEnvNames) {
-    setenv(name, "1", 1);
-  }
-}
+bool TraceAllEnabled() { return IsEnabled("MOCKTAIL_TRACE"); }
 
 void SetEnvDefault(const char* name, const char* value) {
   if (name == nullptr || value == nullptr) {
@@ -675,7 +646,7 @@ JNIEnv* AttachMainThreadJniEnv() {
     jint attach_result = java_vm->AttachCurrentThread(&raw_env, nullptr);
     if (attach_result == JNI_OK && raw_env != nullptr) {
       env = static_cast<JNIEnv*>(raw_env);
-    } else if (IsEnabled("MOCKTAIL_TRACE_MAIN_THREAD_PUMP")) {
+    } else if (IsEnabled("MOCKTAIL_TRACE")) {
       std::cerr << "  [main] AttachCurrentThread failed in pump: "
                 << attach_result << '\n'
                 << std::flush;
@@ -813,7 +784,7 @@ void PumpRobloxMainThreadMessagesOnce() {
   static const bool pump_disabled =
       IsDisabled("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP");
   static const bool trace_pump =
-      IsEnabled("MOCKTAIL_TRACE_MAIN_THREAD_PUMP");
+      IsEnabled("MOCKTAIL_TRACE");
   static const int pump_limit =
       GetEnvInt("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP_LIMIT", 0);
   if (g_main_thread_message_pump_ready.load() == 0 && !force_early) {
@@ -912,7 +883,7 @@ static_assert(sizeof(BionicAddrInfo) == 48,
               "unexpected bionic addrinfo size");
 
 bool DnsTraceEnabled() {
-  return IsEnabled("MOCKTAIL_DNS_TRACE");
+  return IsEnabled("MOCKTAIL_TRACE");
 }
 
 addrinfo HostHintsFromBionic(const BionicAddrInfo* hints) {
@@ -1179,7 +1150,7 @@ bool EnsureDirectory(const std::string& path) {
 void EnsureAndroidDirectory(const std::string& android_path) {
   std::string host_path = libc_shim::TranslatePath(android_path);
   if (EnsureDirectory(host_path) && host_path != android_path &&
-      IsEnabled("MOCKTAIL_ENGINE_TRACE")) {
+      IsEnabled("MOCKTAIL_TRACE")) {
     std::cerr << "  [engine] directory " << android_path << " -> "
               << host_path << '\n';
   }
@@ -1289,7 +1260,7 @@ void PublishCurrentJniEnv(JNIEnv* env) {
 }
 
 bool EngineTraceEnabled() {
-  return IsEnabled("MOCKTAIL_ENGINE_TRACE");
+  return IsEnabled("MOCKTAIL_TRACE");
 }
 
 void PreloadPthreadSymbols() {
@@ -2732,7 +2703,7 @@ void* EngineStartupThread(void* arg) {
     asset_path_value = DefaultAssetPath();
     asset_path = env->NewStringUTF(asset_path_value.c_str());
   }
-  if (IsEnabled("MOCKTAIL_ENGINE_TRACE")) {
+  if (IsEnabled("MOCKTAIL_TRACE")) {
     std::cout << "  [engine] asset path prepared: " << asset_path_value
               << '\n'
               << std::flush;
@@ -3004,7 +2975,7 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
     std::cout << "  [engine] nativeAppBridgeV2InitWithParams returned\n"
               << std::flush;
     g_main_thread_message_pump_ready.store(1);
-    if (IsEnabled("MOCKTAIL_TRACE_MAIN_THREAD_PUMP")) {
+    if (IsEnabled("MOCKTAIL_TRACE")) {
       std::cerr << "  [engine] nativeCallMessagesFromMainThread pump ready\n"
                 << std::flush;
     }
@@ -3742,8 +3713,8 @@ void RunMainLoop(
     return true;
   };
   int main_loop_ticks = 0;
-  const bool fps_trace = IsEnabled("MOCKTAIL_TRACE_FPS");
-  const bool trace_main_loop = IsEnabled("MOCKTAIL_TRACE_MAIN_LOOP");
+  const bool fps_trace = IsEnabled("MOCKTAIL_TRACE");
+  const bool trace_main_loop = IsEnabled("MOCKTAIL_TRACE");
   uint64_t fps_window_start_ns = fps_trace ? MonotonicNanos() : 0;
   uint64_t fps_samples = 0;
   uint64_t fps_tick_ns = 0;
@@ -3777,9 +3748,6 @@ void RunMainLoop(
       JNIEnv* env = AttachMainThreadJniEnv();
       if (env == nullptr) {
         continue;
-      }
-      if (IsEnabled("MOCKTAIL_TRACE_START_LUA_JNI")) {
-        setenv("MOCKTAIL_JNI_TRACE", "1", 1);
       }
       std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM\n"
                 << std::flush;
@@ -5133,7 +5101,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                            user_overrode_start_lua_step,
                            user_overrode_start_app_step,
                            user_overrode_call_start_app);
-  EnableFullTraceIfRequested();
   if (TraceAllEnabled()) {
     std::cout << "  [trace] full tracing enabled\n" << std::flush;
   }

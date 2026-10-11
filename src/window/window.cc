@@ -202,16 +202,12 @@ bool TraceFlagEnabled(const char* name) {
 }
 
 bool WindowTraceEnabled() {
-  static const bool enabled = TraceFlagEnabled("MOCKTAIL_WINDOW_TRACE") ||
-                              TraceFlagEnabled("MOCKTAIL_TRACE_ALL") ||
-                              TraceFlagEnabled("MOCKTAIL_FULL_TRACE");
+  static const bool enabled = TraceFlagEnabled("MOCKTAIL_TRACE");
   return enabled;
 }
 
 bool SdlEventTraceEnabled() {
-  static const bool enabled = TraceFlagEnabled("MOCKTAIL_SDL_EVENT_TRACE") ||
-                              TraceFlagEnabled("MOCKTAIL_TRACE_ALL") ||
-                              TraceFlagEnabled("MOCKTAIL_FULL_TRACE");
+  static const bool enabled = TraceFlagEnabled("MOCKTAIL_TRACE");
   return enabled;
 }
 

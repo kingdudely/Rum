@@ -80,7 +80,7 @@ bool IsLiveVmLocked(const VM* vm) {
 }
 
 bool JniVmTraceEnabled() {
-  static const bool enabled = std::getenv("MOCKTAIL_JNI_VM_TRACE") != nullptr;
+  static const bool enabled = std::getenv("MOCKTAIL_TRACE") != nullptr;
   return enabled;
 }
 
@@ -183,9 +183,7 @@ bool EnvironmentTraceEnabled(const char* name) {
 
 bool StringTraceEnabled() {
   static const bool enabled =
-      EnvironmentTraceEnabled("MOCKTAIL_JNI_STRING_TRACE") ||
-      EnvironmentTraceEnabled("MOCKTAIL_TRACE_ALL") ||
-      EnvironmentTraceEnabled("MOCKTAIL_FULL_TRACE");
+      EnvironmentTraceEnabled("MOCKTAIL_TRACE");
   return enabled;
 }
 

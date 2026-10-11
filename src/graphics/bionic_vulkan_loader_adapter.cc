@@ -1019,7 +1019,7 @@ VkResult WaitForSemaphoresObserved(const char* call_name,
 
 bool FpsTraceEnabled() {
   static const bool enabled = [] {
-    const char* value = std::getenv("MOCKTAIL_TRACE_FPS");
+    const char* value = std::getenv("MOCKTAIL_TRACE");
     return value != nullptr && value[0] != '\0' && std::strcmp(value, "0") != 0;
   }();
   return enabled;

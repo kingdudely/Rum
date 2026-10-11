@@ -56,8 +56,7 @@ thread_local EGLSurface g_current_read_surface = nullptr;
 thread_local EGLint g_last_error = kEglSuccess;
 
 bool TraceEnabled() {
-  return StubAnyEnvSet({"MOCKTAIL_EGL_TRACE", "MOCKTAIL_GL_TRACE",
-                        "MOCKTAIL_TRACE_ALL", "MOCKTAIL_FULL_TRACE"});
+  return StubAnyEnvSet({"MOCKTAIL_TRACE"});
 }
 
 EGLDisplay FallbackDisplay() {
