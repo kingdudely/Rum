@@ -11,14 +11,6 @@
 #define MOCKTAIL_OPENSL_EXPORT
 #endif
 
-// Process-wide, content-free evidence from the production OpenSL boundary.
-// Counters contain no audio samples, filenames, account data, or device names.
-struct MocktailOpenSlRuntimeStats {
-  std::uint64_t submitted_buffers;
-  std::uint64_t consumed_buffers;
-  std::uint64_t clean_player_shutdowns;
-};
-
 extern "C" {
 
 #if !defined(MOCKTAIL_USE_SYSTEM_OPENSL_HEADERS)
@@ -46,10 +38,6 @@ MOCKTAIL_OPENSL_API_ENTRY slCreateEngine(
     const mocktail::audio::opensl_abi::InterfaceId* interface_ids,
     const mocktail::audio::opensl_abi::Boolean* interface_required);
 #endif
-
-MOCKTAIL_OPENSL_EXPORT mocktail::audio::opensl_abi::Result
-mocktailOpenSlGetRuntimeStats(MocktailOpenSlRuntimeStats* stats,
-                              std::uint32_t stats_size);
 
 }  // extern "C"
 

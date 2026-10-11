@@ -80,48 +80,11 @@ add_library(Mocktail::FmodJniAudioBridge ALIAS
   mocktail_fmod_jni_audio_bridge
 )
 
-add_library(mocktail_audio_opensl_adapter STATIC
-  ${MOCKTAIL_AUDIO_ROOT}/src/audio/opensl_simple_buffer_queue.cc
-)
-target_include_directories(mocktail_audio_opensl_adapter PUBLIC
-  ${MOCKTAIL_AUDIO_ROOT}/include
-)
-target_link_libraries(mocktail_audio_opensl_adapter PUBLIC
-  Mocktail::AudioCore
-  Threads::Threads
-)
-target_compile_features(mocktail_audio_opensl_adapter PUBLIC cxx_std_17)
-set_target_properties(mocktail_audio_opensl_adapter PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-)
-add_library(Mocktail::AudioOpenSlAdapter ALIAS
-  mocktail_audio_opensl_adapter
-)
-
 add_library(mocktail_audio INTERFACE)
 target_link_libraries(mocktail_audio INTERFACE
   Mocktail::AudioSdl
-  Mocktail::AudioOpenSlAdapter
 )
 add_library(Mocktail::Audio ALIAS mocktail_audio)
-
-# Desktop builds use opensl_abi.h when NDK headers are unavailable.
-find_path(MOCKTAIL_OPENSL_CORE_INCLUDE_DIR SLES/OpenSLES.h)
-find_path(MOCKTAIL_OPENSL_ANDROID_INCLUDE_DIR SLES/OpenSLES_Android.h)
-if(MOCKTAIL_OPENSL_CORE_INCLUDE_DIR AND MOCKTAIL_OPENSL_ANDROID_INCLUDE_DIR)
-  target_include_directories(mocktail_audio_opensl_adapter PUBLIC
-    ${MOCKTAIL_OPENSL_CORE_INCLUDE_DIR}
-    ${MOCKTAIL_OPENSL_ANDROID_INCLUDE_DIR}
-  )
-  target_compile_definitions(mocktail_audio_opensl_adapter PUBLIC
-    MOCKTAIL_USE_SYSTEM_OPENSL_HEADERS=1
-  )
-  message(STATUS "Mocktail audio: using system Android OpenSL headers")
-else()
-  message(STATUS
-    "Mocktail audio: Android OpenSL headers unavailable; using minimal queue ABI boundary"
-  )
-endif()
 
 add_library(mocktail_opensles SHARED
   ${MOCKTAIL_AUDIO_ROOT}/src/audio/opensl_playback_runtime.cc

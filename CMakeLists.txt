@@ -87,17 +87,9 @@ foreach(audio_target IN ITEMS
     mocktail_audio_sdl
     mocktail_audio_fmod_java_runtime
     mocktail_fmod_jni_audio_bridge
-    mocktail_audio_opensl_adapter
     mocktail_opensles)
   mocktail_apply_compile_options(${audio_target})
 endforeach()
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
-   CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
-  # GCC 16 reports a false array-bounds warning in this translation unit.
-  target_compile_options(mocktail_audio_opensl_adapter PRIVATE
-    -Wno-array-bounds
-  )
-endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/MocktailElfCompatibility.cmake)
 
