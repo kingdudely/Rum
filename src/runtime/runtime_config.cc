@@ -257,7 +257,6 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
   config.vsync_mode_ = environment.GetOr("MOCKTAIL_VSYNC", "auto");
   config.performance_ = ParsePerformancePolicy(
       environment.GetOr("MOCKTAIL_MULTITHREADED_RENDERING", "0"),
-      environment.GetOr("MOCKTAIL_MEMORY_LIMIT_MB", "0"),
       environment.GetOr("MOCKTAIL_GAMEMODE", "auto"),
       environment.GetOr("MOCKTAIL_PHYSICS_WORKER_MODE", "throughput"));
   config.audio_output_device_ = environment.GetOr(
@@ -361,12 +360,6 @@ bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
     }
     return false;
   }
-  if (!config.performance().memory_limit_valid) {
-    if (error != nullptr) {
-      *error = "cannot export an invalid memory-limit policy";
-    }
-    return false;
-  }
   if (!config.performance().game_mode_valid) {
     if (error != nullptr) {
       *error = "cannot export an invalid GameMode policy";
@@ -442,9 +435,6 @@ bool ExportRuntimeConfigEnvironment(const RuntimeConfig& config,
       SetEnvironmentValue("MOCKTAIL_PHYSICS_WORKER_MODE",
                           std::string(PhysicsWorkerModeName(
                               config.performance().physics_worker_mode)),
-                          error) &&
-      SetEnvironmentValue("MOCKTAIL_MEMORY_LIMIT_MB",
-                          std::to_string(config.performance().memory_limit_mb),
                           error) &&
       SetEnvironmentValue("MOCKTAIL_GAMEMODE",
                           GameModePolicyName(config.performance().game_mode),
@@ -524,8 +514,6 @@ bool LoadRuntimeConfigFromEnvironment(const Environment& environment,
     return fail("audio output device is invalid");
   } else if (!config->audio_input_device_valid()) {
     return fail("audio input device is invalid");
-  } else if (!config->performance().memory_limit_valid) {
-    return fail("memory-limit policy is invalid");
   } else if (!config->performance().game_mode_valid) {
     return fail("GameMode policy is invalid");
   } else if (!config->performance().physics_worker_mode_valid) {

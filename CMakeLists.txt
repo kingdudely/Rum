@@ -150,7 +150,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/game_session_coordinator.cc
   src/runtime/graphics_launch_policy.cc
   src/runtime/http_client_policy.cc
-  src/runtime/memory_limit.cc
   src/runtime/owned_pthread.cc
   src/runtime/performance_policy.cc
   src/runtime/platform_cache_migration.cc
@@ -204,14 +203,6 @@ target_link_libraries(mocktail_runtime PRIVATE
   nlohmann_json::nlohmann_json
   ${CMAKE_DL_LIBS}
 )
-
-# Keep GTK out of the process that loads Android libraries.
-add_library(mocktail_failure_dialog_runtime STATIC
-  src/runtime/failure_dialog.cc
-)
-add_library(Mocktail::FailureDialog ALIAS mocktail_failure_dialog_runtime)
-target_include_directories(mocktail_failure_dialog_runtime PUBLIC include)
-mocktail_apply_compile_options(mocktail_failure_dialog_runtime)
 
 add_library(mocktail_services STATIC
   src/services/http_client.cc
@@ -428,7 +419,6 @@ mocktail_apply_compile_options(mocktail)
 target_link_libraries(mocktail PRIVATE
   mocktail_legacy_runtime
   mocktail_auth_runtime_composition
-  mocktail_failure_dialog_runtime
   mocktail_fmod_jni_audio_bridge
   mocktail_window
   libc_shim

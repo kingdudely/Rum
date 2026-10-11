@@ -25,10 +25,8 @@
 #include "runtime/command_line.h"
 #include "runtime/crash_report_policy.h"
 #include "runtime/environment.h"
-#include "runtime/failure_dialog.h"
 #include "runtime/game_mode.h"
 #include "runtime/graphics_launch_policy.h"
-#include "runtime/memory_limit.h"
 #include "runtime/performance_policy.h"
 #include "runtime/platform_cache_migration.h"
 #include "runtime/process_diagnostics.h"
@@ -157,10 +155,6 @@ StepResult LoadRuntimeConfiguration(
       std::cerr << ": " << *error;
     }
     std::cerr << '\n';
-    if (IsRunning(options)) {
-      (void)mocktail::runtime::ShowFailureDialog(
-          environment, "Roblox could not load its configuration.");
-    }
     return StepResult::kExitFailure;
   }
   if (IsRunning(options) &&
@@ -172,10 +166,6 @@ StepResult LoadRuntimeConfiguration(
     }
     std::cerr << "  Supported runtime requires synchronous or owned worker "
                  "execution.\n";
-    (void)mocktail::runtime::ShowFailureDialog(
-        environment,
-        "Roblox cannot start with unsupported legacy thread overrides "
-        "enabled.");
     return StepResult::kExitFailure;
   }
   std::string graphics_error;
@@ -192,26 +182,6 @@ StepResult LoadRuntimeConfiguration(
 // Step: decide whether a memory ceiling applies, and whether the process has to
 // re-exec itself into a cgroup scope to get one.
 // ---------------------------------------------------------------------------
-struct MemoryLimitPlan {
-  bool enabled = false;
-  std::uint64_t bytes = 0;
-  mocktail::runtime::CgroupMemoryLimitResult cgroup;
-};
-
-MemoryLimitPlan PlanMemoryLimit(int argc, char* argv[],
-                                const CommandLineOptions& options,
-                                const RuntimeConfig& config) {
-  MemoryLimitPlan plan;
-  plan.enabled = IsRunning(options) && config.performance().memory_limit_enabled();
-  if (!plan.enabled) {
-    return plan;
-  }
-  plan.bytes = config.performance().memory_limit_bytes();
-  plan.cgroup = mocktail::runtime::MaybeReexecWithCgroupMemoryLimit(
-      argc, argv, plan.bytes);
-  return plan;
-}
-
 // ---------------------------------------------------------------------------
 // Step: start the session log and print what the process resolved to.
 // ---------------------------------------------------------------------------
@@ -219,7 +189,6 @@ void ReportStartupSummary(const ProcessEnvironment& environment,
                           const RuntimePaths& paths,
                           const CommandLineOptions& options,
                           const RuntimeConfig& config,
-                          const MemoryLimitPlan& memory_plan,
                           mocktail::runtime::SessionLog* session_log,
                           std::chrono::system_clock::time_point process_started_at,
                           const std::string& process_launch_diagnostics) {
@@ -244,11 +213,6 @@ void ReportStartupSummary(const ProcessEnvironment& environment,
               << mocktail::runtime::BuildNetworkProxyUrl(
                      *config.network_proxy())
               << '\n';
-  }
-  if (memory_plan.enabled && memory_plan.cgroup.active()) {
-    std::cout << "  [memory] hard process-tree limit active: "
-              << config.performance().memory_limit_mb
-              << " MiB RAM, swap disabled\n";
   }
   if (IsRunning(options)) {
     std::cout << "  [runtime] graphics backend="
@@ -670,16 +634,9 @@ StepResult BuildRuntimeDependencies(
 // exit status.
 // ---------------------------------------------------------------------------
 int FinishRuntime(const CommandLineOptions& options, int runtime_status,
-                  mocktail::runtime::FailureDialogMonitor* failure_dialog,
                   mocktail::runtime::FailureSupportBundleGuard* support_bundle_guard,
-                  mocktail::runtime::MemoryLimitWatchdog* memory_limit_watchdog,
                   mocktail::runtime::GameModeSession* game_mode_session) {
-  if (runtime_status != EXIT_SUCCESS) {
-    failure_dialog->SetMessage("Roblox stopped with error code " +
-                               std::to_string(runtime_status) + ".");
-  }
   support_bundle_guard->SetExitCode(runtime_status);
-  memory_limit_watchdog->Stop();
   const mocktail::Status game_mode_stop_status = game_mode_session->Stop();
   if (!game_mode_stop_status.ok()) {
     std::cerr << "  [gamemode] release failed: "
@@ -688,7 +645,6 @@ int FinishRuntime(const CommandLineOptions& options, int runtime_status,
   if (runtime_status != EXIT_SUCCESS) {
     return runtime_status;
   }
-  failure_dialog->MarkSuccessful();
   support_bundle_guard->Disarm();
   if (IsRunning(options)) {
     // Guest atexit handlers target workers that cannot be joined. Host
@@ -745,8 +701,6 @@ int main(int argc, char* argv[]) {
   mocktail::runtime::SessionLog session_log;
   mocktail::runtime::FailureSupportBundleGuard support_bundle_guard(
       environment, paths, IsRunning(options));
-  mocktail::runtime::FailureDialogMonitor failure_dialog;
-  mocktail::runtime::MemoryLimitWatchdog memory_limit_watchdog;
   mocktail::legacy::RuntimeDependencies dependencies;
 
   RuntimeConfig runtime_config;
@@ -756,31 +710,13 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  const MemoryLimitPlan memory_plan =
-      PlanMemoryLimit(argc, argv, options, runtime_config);
   ReportStartupSummary(environment, paths, options, runtime_config,
-                       memory_plan, &session_log,
+                       &session_log,
                        process_started_at, process_launch_diagnostics);
 
   mocktail::runtime::GameModeSession game_mode_session =
       StartGameModeSession(options, runtime_config);
 
-  if (IsRunning(options)) {
-    failure_dialog = mocktail::runtime::FailureDialogMonitor::Start(
-        environment,
-        "Roblox could not start because of an internal error.");
-  }
-  if (memory_plan.enabled) {
-    if (!memory_limit_watchdog.Start(memory_plan.bytes, &error)) {
-      failure_dialog.SetMessage(
-          "Roblox could not start its memory safety monitor.");
-      std::cerr << "[FATAL] " << error << '\n';
-      return EXIT_FAILURE;
-    }
-    std::cout << "  [memory] RSS+swap watchdog active at "
-              << runtime_config.performance().memory_limit_mb
-              << " MiB\n";
-  }
   std::filesystem::path app_storage_file;
   if (BindRuntimeStorage(environment, paths, options, runtime_config,
                          &app_storage_file, &error) ==
@@ -811,8 +747,6 @@ int main(int argc, char* argv[]) {
     launch_request.reset();
   }
 
-  failure_dialog.SetMessage(
-      "Roblox closed unexpectedly because of an internal error.");
   if (IsRunning(options)) {
     mocktail::runtime::LogProcessDiagnostics(
         mocktail::runtime::ProcessDiagnosticStage::kNativeRuntime);
@@ -828,7 +762,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "[diagnostic] native runtime exit_status=" << runtime_status
               << '\n';
   }
-  return FinishRuntime(options, runtime_status, &failure_dialog,
-                       &support_bundle_guard, &memory_limit_watchdog,
+  return FinishRuntime(options, runtime_status,
+                       &support_bundle_guard,
                        &game_mode_session);
 }

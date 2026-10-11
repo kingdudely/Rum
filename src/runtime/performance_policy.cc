@@ -106,7 +106,7 @@ int CalculateThroughputWorkerCount(int available_physical_cores) {
 }
 
 PerformancePolicy ParsePerformancePolicy(
-    std::string_view multithreaded_rendering, std::string_view memory_limit_mb,
+    std::string_view multithreaded_rendering,
     std::string_view game_mode, std::string_view physics_worker_mode) {
   PerformancePolicy policy;
   policy.multithreaded_rendering = multithreaded_rendering == "1" ||
@@ -118,14 +118,6 @@ PerformancePolicy ParsePerformancePolicy(
       policy.physics_worker_mode == PhysicsWorkerMode::kThroughput) {
     policy.physical_core_count = DetectAvailablePhysicalCoreCount();
   }
-  const char* memory_begin = memory_limit_mb.data();
-  const char* memory_end = memory_begin + memory_limit_mb.size();
-  const std::from_chars_result memory_parsed =
-      std::from_chars(memory_begin, memory_end, policy.memory_limit_mb);
-  policy.memory_limit_valid =
-      memory_parsed.ec == std::errc() && memory_parsed.ptr == memory_end &&
-      policy.memory_limit_mb <=
-          std::numeric_limits<std::uint64_t>::max() / (1024U * 1024U);
   policy.game_mode_valid = ParseGameModePolicy(game_mode, &policy.game_mode);
   return policy;
 }
