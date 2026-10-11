@@ -26,13 +26,10 @@ Usage() {
   cat <<'EOF'
 Usage: scripts/build.sh [OPTIONS]
 
-With no APK option, this helper builds only the native runtime. Supply
---apk or --apk-url to extract the native library into ./rbx_bin, or place
-libroblox.so next to the resulting executable.
+Builds the native runtime. Place libroblox.so and assets/content next
+to the resulting executable, or pass --roblox-lib/--assets at launch.
 
 Options:
-  --apk PATH          Explicitly extract a local Roblox x86_64 APK.
-  --apk-url URL       Explicitly download and extract an APK URL.
   --build-dir PATH    CMake build directory (default: build).
   --cmake-toolchain FILE
                       Explicit CMake toolchain file.
@@ -44,18 +41,13 @@ Options:
 
 Examples:
   ./scripts/build.sh
-  ./scripts/build.sh --apk /path/to/roblox-x86_64.apk
+  ./scripts/build.sh --build-type Debug
 EOF
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${PROJECT_ROOT}/build"
-RBX_BIN_DIR="${PROJECT_ROOT}/rbx_bin"
-APK_PATH=""
-APK_URL=""
-EXTRACT_APK=false
-EXPLICIT_RUNTIME_OVERRIDE=false
 BUILD_TYPE="Release"
 JOBS="$(nproc)"
 CLEAN=false
@@ -64,18 +56,6 @@ CMAKE_SYSROOT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --apk)
-      [[ $# -ge 2 ]] || die "--apk requires a path"
-      APK_PATH="$2"
-      EXTRACT_APK=true
-      shift 2
-      ;;
-    --apk-url)
-      [[ $# -ge 2 ]] || die "--apk-url requires a URL"
-      APK_URL="$2"
-      EXTRACT_APK=true
-      shift 2
-      ;;
     --build-dir)
       [[ $# -ge 2 ]] || die "--build-dir requires a path"
       BUILD_DIR="$2"
@@ -104,10 +84,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "${EXTRACT_APK}" == true && -n "${APK_PATH}" && -n "${APK_URL}" ]]; then
-  die "--apk and --apk-url are mutually exclusive"
-fi
-
 if [[ "${BUILD_DIR}" != /* ]]; then
   BUILD_DIR="${PROJECT_ROOT}/${BUILD_DIR}"
 fi
@@ -129,7 +105,7 @@ info "Mocktail build: ${BUILD_TYPE}, -j${JOBS}"
 info "Project root: ${PROJECT_ROOT}"
 info "Build directory: ${BUILD_DIR}"
 
-step "1/5 checking dependencies"
+step "1/3 checking dependencies"
 
 check_tool() {
   local tool="$1"
@@ -146,60 +122,8 @@ if [[ -z "${CMAKE_TOOLCHAIN_FILE}" ]]; then
   check_tool c++ "install GCC or Clang with C++17 support"
 fi
 check_tool git     "sudo apt install git"
-check_tool java    "sudo apt install default-jdk"
-check_tool ld.lld  "install LLD"
-check_tool elfedit "install binutils"
 
-if [[ "${EXTRACT_APK}" == true ]]; then
-  check_tool unzip "sudo apt install unzip"
-fi
-if [[ "${EXTRACT_APK}" == true && -n "${APK_URL}" ]] &&
-   ! command -v curl &>/dev/null; then
-  check_tool wget "sudo apt install wget"
-fi
-
-if [[ "${EXTRACT_APK}" == true && -n "${APK_URL}" ]]; then
-  step "2/5 downloading Roblox APK"
-  APK_PATH="${PROJECT_ROOT}/rbx_bin/roblox-x86_64.apk"
-  mkdir -p "${RBX_BIN_DIR}"
-  info "URL: ${APK_URL}"
-  info "Destination: ${APK_PATH}"
-  if command -v curl &>/dev/null; then
-    curl -L --progress-bar -o "${APK_PATH}" "${APK_URL}"
-  else
-    wget -q --show-progress -O "${APK_PATH}" "${APK_URL}"
-  fi
-  success "APK downloaded."
-fi
-
-LIBROBLOX_DST="${RBX_BIN_DIR}/libroblox.so"
-
-if [[ -n "${ROBLOX_LIB_PATH:-}" ]]; then
-  info "Explicit runtime library override detected — APK extraction disabled."
-  EXTRACT_APK=false
-  EXPLICIT_RUNTIME_OVERRIDE=true
-fi
-
-if [[ "${EXTRACT_APK}" == true ]]; then
-  step "3/5 extracting libroblox.so"
-  [[ -n "${APK_PATH}" ]] || die "explicit APK extraction has no input"
-  [[ -f "${APK_PATH}" ]] || die "APK not found: ${APK_PATH}"
-  mkdir -p "${RBX_BIN_DIR}"
-  info "APK: ${APK_PATH}"
-  info "Looking for lib/x86_64/libroblox.so inside the archive…"
-
-  if ! unzip -l "${APK_PATH}" | grep -q "lib/x86_64/libroblox.so"; then
-    die "APK does not contain lib/x86_64/libroblox.so; use an x86_64 split APK"
-  else
-    unzip -jo "${APK_PATH}" "lib/x86_64/libroblox.so" -d "${RBX_BIN_DIR}"
-    success "Extracted → ${LIBROBLOX_DST}"
-  fi
-else
-  step "2/5 skipping APK extraction"
-  success "No APK provided; place libroblox.so next to the executable."
-fi
-
-step "4/5 initialising git submodules"
+step "2/3 initialising git submodules"
 cd "${PROJECT_ROOT}"
 if [[ -f ".gitmodules" ]]; then
   git submodule update --init --recursive
@@ -208,7 +132,7 @@ else
   warn "No .gitmodules found — skipping submodule init."
 fi
 
-step "5/5 configuring CMake"
+step "3/3 configuring CMake"
 
 if [[ "${CLEAN}" == true && -d "${BUILD_DIR}" ]]; then
   info "Removing old build directory…"
@@ -241,11 +165,5 @@ echo
 success "Build successful."
 echo "Run:"
 echo -e "  ${CYAN}${BUILD_DIR}/mocktail${RESET}"
-if [[ "${EXPLICIT_RUNTIME_OVERRIDE}" == true ]]; then
-  info "The explicit runtime library override remains active for this shell."
-elif [[ "${EXTRACT_APK}" == false ]]; then
-  info "Place libroblox.so next to the resulting executable, or pass --apk/--apk-url."
-else
-  info "Explicit APK extraction completed."
-fi
+info "Place libroblox.so and assets/content next to the resulting executable."
 echo
