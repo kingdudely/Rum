@@ -316,16 +316,6 @@ void* EngineStartupThread(void* arg) {
     std::cout << "  [engine] GameActivity.initializeNativeCode returned "
               << game_activity_handle << '\n'
               << std::flush;
-    if (game_activity_handle != 0 &&
-        IsEnabled("MOCKTAIL_DUMP_GAME_ACTIVITY_HANDLE")) {
-      auto** game_activity_slots = reinterpret_cast<void**>(
-          static_cast<uintptr_t>(game_activity_handle));
-      std::cout << "  [engine] GameActivity handle slots:";
-      for (int i = 0; i < 40; ++i) {
-        std::cout << " [" << i << "]=" << game_activity_slots[i];
-      }
-      std::cout << '\n' << std::flush;
-    }
     return game_activity_handle;
   };
 
@@ -423,8 +413,7 @@ void* EngineStartupThread(void* arg) {
     write(1, msg, sizeof(msg) - 1);
   }
 
-  if (context->native_update_adapter_init &&
-      !IsDisabled("MOCKTAIL_UPDATE_ADAPTER_INIT")) {
+  if (context->native_update_adapter_init) {
     env = EnsureStartupEnv(context, env);
     std::cout << "  [engine] nativeUpdateAdapterInit\n" << std::flush;
     context->native_update_adapter_init(env, native_gl_class);
