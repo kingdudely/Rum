@@ -376,6 +376,10 @@ unset(_mocktail_execinfo_link_probe)
 
 add_library(mocktail_legacy_runtime STATIC
   src/legacy/legacy_runtime.cc
+  src/legacy/legacy_env.cc
+  src/legacy/legacy_jni_builders.cc
+  src/legacy/legacy_native_settings.cc
+  src/legacy/legacy_engine_symbols.cc
   src/runtime/roblox_text_input_jni_bridge.cc
 )
 target_include_directories(mocktail_legacy_runtime PRIVATE include src)
