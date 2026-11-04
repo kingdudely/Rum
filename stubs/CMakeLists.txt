@@ -54,8 +54,24 @@ add_library(stub_log SHARED liblog_stub.cc)
 configure_stub(stub_log "liblog.so")
 target_include_directories(stub_log PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-add_library(stub_mediandk SHARED libmediandk_stub.cc)
+add_library(stub_mediandk SHARED
+  libmediandk_stub.cc
+  image_reader.cc
+)
 configure_stub(stub_mediandk "libmediandk.so")
+target_link_libraries(stub_mediandk PRIVATE Threads::Threads)
+
+target_include_directories(stub_mediandk PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Camera2 NDK surface backed by V4L2. Roblox loads this by soname at runtime.
+add_library(stub_camera2ndk SHARED libcamera2ndk_stub.cc)
+configure_stub(stub_camera2ndk "libcamera2ndk.so")
+target_include_directories(stub_camera2ndk PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(stub_camera2ndk PRIVATE stub_mediandk Threads::Threads)
+
+add_executable(camera_harness camera_harness.cc)
+target_link_libraries(camera_harness PRIVATE stub_camera2ndk stub_mediandk Threads::Threads)
+set_target_properties(camera_harness PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 add_library(stub_openmax SHARED libopensl_stub.cc)
 configure_stub(stub_openmax "libOpenMAXAL.so")
@@ -92,6 +108,6 @@ target_link_libraries(stub_vulkan PRIVATE
 
 add_custom_target(all_stubs DEPENDS
   stub_sys_m stub_sys_z stub_sys_dl stub_sys_c
-  stub_android stub_log stub_mediandk roblox_opensles stub_openmax
-  stub_egl stub_glesv2 stub_vulkan
+  stub_android stub_log stub_mediandk stub_camera2ndk roblox_opensles stub_openmax
+  stub_egl stub_glesv2 stub_vulkan camera_harness
 )

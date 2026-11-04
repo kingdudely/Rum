@@ -1,6 +1,7 @@
 # Build
 /build/
 /build_*/
+/build-verify/
 /build-flatpak/
 /build-anylinux*/
 /.flatpak-builder/
