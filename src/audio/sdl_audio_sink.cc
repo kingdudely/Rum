@@ -5,7 +5,10 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <condition_variable>
 #include <limits>
 #include <mutex>
@@ -172,6 +175,14 @@ class SdlAudioSink final : public AudioSink {
                            "audio sink is shut down");
     }
 
+    // The producer runs at mixer speed, not wall-clock speed. If the device
+    // stalls - a backend that opened but never pulls, or an output that was
+    // switched away - SDL keeps every queued buffer and grows its internal
+    // stream by multi-megabyte reallocations. A real-time sink drops the oldest
+    // audio instead of buffering forever: two seconds is more than enough to
+    // absorb a hiccup and small enough to bound the footprint.
+    Throttle(stream, frame_size);
+
     bool queued = false;
 #if SDL_VERSION_ATLEAST(3, 4, 0)
     if (buffer.release_callback == nullptr) {
@@ -209,6 +220,63 @@ class SdlAudioSink final : public AudioSink {
                                              : "SDL_PutAudioStreamDataNoCopy");
     EndCall();
     return status;
+  }
+
+  // Blocks until the device has room. On SDL older than 3.4 there is no
+  // borrowed-buffer API, so the runtime releases every buffer to the mixer as
+  // soon as the copy is queued and the mixer never throttles itself: it
+  // produces at hundreds of times realtime and SDL buffers all of it. Blocking
+  // here is what AudioTrack.write does on Android, and it both bounds the
+  // footprint and restores real-time pacing.
+  void Throttle(SDL_AudioStream* stream, std::size_t frame_bytes) {
+    constexpr int kMaximumWaitMs = 40;
+    for (int waited = 0; waited < kMaximumWaitMs; ++waited) {
+      const int queued = SDL_GetAudioStreamQueued(stream);
+      if (queued <= static_cast<int>(max_queued_bytes_)) {
+        return;
+      }
+      SDL_Delay(1);
+    }
+    // Still full: the device is not draining at all. Drop the oldest audio
+    // rather than let the queue grow without bound.
+    TrimBacklog(stream, frame_bytes);
+  }
+
+  // Drops the oldest audio until at most `max_queued_bytes` remain queued.
+  // Frame-aligned, so a discard cannot split a sample frame.
+  void TrimBacklog(SDL_AudioStream* stream, std::size_t frame_bytes) {
+    const std::size_t queued_bytes = static_cast<std::size_t>(
+        std::max(0, SDL_GetAudioStreamQueued(stream)));
+    if (queued_bytes <= max_queued_bytes_) {
+      return;
+    }
+    std::size_t excess = queued_bytes - max_queued_bytes_;
+    if (frame_bytes != 0) {
+      excess -= excess % frame_bytes;
+    }
+    if (excess == 0) {
+      return;
+    }
+    scratch_.resize(excess);
+    const int read = SDL_GetAudioStreamData(
+        stream, scratch_.data(), static_cast<int>(excess));
+    if (read > 0) {
+      dropped_bytes_.fetch_add(static_cast<std::uint64_t>(read),
+                               std::memory_order_relaxed);
+      if (ShouldLogDrop()) {
+        std::fprintf(stderr,
+                     "  [roblox][audio] dropped %d queued bytes; outstanding=%zu "
+                     "total_dropped=%llu\n",
+                     read, excess,
+                     static_cast<unsigned long long>(
+                         dropped_bytes_.load(std::memory_order_relaxed)));
+      }
+    }
+  }
+
+  bool ShouldLogDrop() const {
+    const std::uint64_t drops = drop_logs_.fetch_add(1, std::memory_order_relaxed);
+    return drops % 256 == 0;
   }
 
   Status Pause() override {
@@ -401,6 +469,12 @@ class SdlAudioSink final : public AudioSink {
   }
 
  private:
+  std::size_t max_queued_bytes_ = 28800;
+
+  std::vector<std::uint8_t> scratch_;
+  std::atomic<std::uint64_t> dropped_bytes_{0};
+  mutable std::atomic<std::uint64_t> drop_logs_{0};
+
   template <typename Operation>
   Status WithStream(const char* name, Operation operation) {
     SDL_AudioStream* stream = BeginCall();
@@ -413,6 +487,23 @@ class SdlAudioSink final : public AudioSink {
     EndCall();
     return status;
   }
+
+ public:
+  // The queue is the pacing ring, so its depth is the playback latency. 150 ms
+  // survives a scheduling hiccup without turning every sound into a delayed
+  // echo; the device buffer and A2DP add their own few hundred ms on top.
+  static constexpr std::size_t kQueueTargetMs = 150;
+
+  // Sized from the device format in CreateSdlAudioSink, so the target is a
+  // duration rather than a byte count that means something else at another
+  // sample rate or channel count.
+  void SetQueueTarget(std::size_t bytes) {
+    if (bytes != 0) {
+      max_queued_bytes_ = bytes;
+    }
+  }
+
+ private:
 
   SDL_AudioStream* BeginCall() const {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -719,6 +810,21 @@ Status CreateSdlAudioSink(const SdlAudioSinkOptions& options,
   if (logical_device == 0) {
     return SdlError("SDL_OpenAudioDevice");
   }
+  {
+    SDL_AudioSpec obtained{};
+    int sample_frames = 0;
+    const bool have_format = SDL_GetAudioDeviceFormat(logical_device, &obtained,
+                                                      &sample_frames);
+    std::fprintf(stderr,
+                 "  [roblox][audio] sink opened driver=%s format=%d channels=%d "
+                 "freq=%d frames=%d paused=%d bound_stream=%u\n",
+                 SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "?",
+                 have_format ? static_cast<int>(obtained.format) : -1,
+                 have_format ? obtained.channels : -1,
+                 have_format ? obtained.freq : -1, sample_frames,
+                 SDL_AudioDevicePaused(logical_device) ? 1 : 0,
+                 static_cast<unsigned>(logical_device));
+  }
   if (options.start_paused && !SDL_PauseAudioDevice(logical_device)) {
     status = SdlError("SDL_PauseAudioDevice");
     SDL_CloseAudioDevice(logical_device);
@@ -758,6 +864,23 @@ Status CreateSdlAudioSink(const SdlAudioSinkOptions& options,
   if (!status.ok()) {
     delete implementation;
     return status;
+  }
+  // 150 ms of the device's own format. Falls back to the default when the
+  // device reports nothing usable.
+  {
+    SDL_AudioSpec obtained{};
+    int sample_frames = 0;
+    if (SDL_GetAudioDeviceFormat(logical_device, &obtained, &sample_frames) &&
+        obtained.freq > 0 && obtained.channels > 0) {
+      const std::size_t device_frame_bytes =
+          static_cast<std::size_t>(SDL_AUDIO_BYTESIZE(obtained.format)) *
+          static_cast<std::size_t>(obtained.channels);
+      if (device_frame_bytes != 0) {
+        implementation->SetQueueTarget(
+            device_frame_bytes * static_cast<std::size_t>(obtained.freq) *
+            SdlAudioSink::kQueueTargetMs / 1000);
+      }
+    }
   }
   sink->reset(implementation);
   return Status::Ok();
