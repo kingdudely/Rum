@@ -5,6 +5,8 @@
 
 #include "roblox/audio/fmod_thread_floating_point.h"
 
+#include <atomic>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -34,8 +36,14 @@ extern void* roblox_gameactivity_on_trim_memory_native;
 extern thread_local JNIEnv* g_thread_local_env;
 extern thread_local JNIEnv g_thread_env_storage;
 extern thread_local VM* g_thread_vm_instance;
+extern thread_local std::uint64_t g_thread_env_generation;
 extern thread_local roblox::audio::FmodThreadFloatingPointMode
     g_thread_audio_fp_mode;
+
+// Bumped whenever the live VM set changes. A thread-local env is valid while
+// its captured generation matches, which replaces a mutex-guarded search of
+// g_live_vms on every JNI call.
+extern std::atomic<std::uint64_t> g_jni_generation;
 
 // Constants
 inline constexpr jsize kMaximumCookieSetCount = 128;

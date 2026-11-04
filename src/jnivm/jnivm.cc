@@ -67,7 +67,12 @@ namespace internal {
 thread_local JNIEnv* g_thread_local_env = nullptr;
 thread_local JNIEnv g_thread_env_storage = {};
 thread_local VM* g_thread_vm_instance = nullptr;
+thread_local std::uint64_t g_thread_env_generation = 0;
 thread_local roblox::audio::FmodThreadFloatingPointMode g_thread_audio_fp_mode;
+
+// Every VM create/destroy bumps this, which invalidates each thread's cached
+// env in one atomic store instead of a locked walk of g_live_vms.
+std::atomic<std::uint64_t> g_jni_generation{1};
 
 // Authentication preflight can briefly own a second VM. Keep every live
 // owner registered so discarding that candidate cannot disable the VM that
@@ -85,6 +90,13 @@ bool JniVmTraceEnabled() {
 }
 
 VM* CurrentVM() {
+  // Attached threads answer from thread-local state; only a stale or missing
+  // attachment takes the lock.
+  if (g_thread_vm_instance != nullptr &&
+      g_thread_env_generation ==
+          g_jni_generation.load(std::memory_order_acquire)) {
+    return g_thread_vm_instance;
+  }
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   if (IsLiveVmLocked(g_thread_vm_instance)) {
     return g_thread_vm_instance;
@@ -98,8 +110,9 @@ PlatformIdentity CurrentPlatformIdentity() {
 }
 
 bool IsThreadLocalEnvValid() {
-  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  return IsLiveVmLocked(g_thread_vm_instance) &&
+  return g_thread_vm_instance != nullptr &&
+         g_thread_env_generation ==
+             g_jni_generation.load(std::memory_order_acquire) &&
          g_thread_local_env == &g_thread_env_storage &&
          g_thread_local_env->functions != nullptr;
 }

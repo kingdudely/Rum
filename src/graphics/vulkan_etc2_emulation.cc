@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -108,6 +110,213 @@ unsigned DecodeWorkerCount() {
   return count;
 }
 
+// The decode is arithmetic over every texel of every mip of every texture the
+// client uploads. A data pack re-uploads the same bytes on every launch, so the
+// work is repeated forever for identical input. This keys the decoded output by
+// the compressed bytes and keeps it on disk: the first launch pays the decode,
+// every launch after pays a read. Callers serialise on scratch_mutex, so this
+// needs no lock of its own.
+//   ROBLOX_ETC2_CACHE=0        disable
+//   ROBLOX_ETC2_CACHE_DIR=...  relocate
+std::uint64_t DecodedCacheKey(EtcFormat format, std::uint32_t width,
+                              std::uint32_t height,
+                              const std::uint8_t* source,
+                              std::size_t bytes) {
+  std::uint64_t hash = 0xcbf29ce484222325ULL;
+  for (std::size_t index = 0; index < bytes; ++index) {
+    hash ^= source[index];
+    hash *= 0x100000001b3ULL;
+  }
+  // Fold the shape in, so a collision cannot cross a format or an extent.
+  hash ^= static_cast<std::uint64_t>(format) * 0x9e3779b97f4a7c15ULL;
+  hash ^= static_cast<std::uint64_t>(width) << 32;
+  hash ^= static_cast<std::uint64_t>(height);
+  hash *= 0x100000001b3ULL;
+  return hash;
+}
+
+class DecodedCache {
+ public:
+  static constexpr std::uint64_t kDefaultBudgetBytes = 2ULL << 30;
+
+  static DecodedCache FromEnvironment() {
+    DecodedCache cache;
+    const char* enabled = std::getenv("ROBLOX_ETC2_CACHE");
+    if (enabled != nullptr && enabled[0] == '0') {
+      return cache;
+    }
+    const char* override_dir = std::getenv("ROBLOX_ETC2_CACHE_DIR");
+    if (override_dir != nullptr && override_dir[0] != '\0') {
+      cache.directory_ = override_dir;
+    } else {
+      const char* cache_home = std::getenv("XDG_CACHE_HOME");
+      const char* home = std::getenv("HOME");
+      if (cache_home != nullptr && cache_home[0] != '\0') {
+        cache.directory_ = std::string(cache_home) + "/rum/etc2";
+      } else if (home != nullptr && home[0] != '\0') {
+        cache.directory_ = std::string(home) + "/.cache/rum/etc2";
+      }
+    }
+    const char* budget = std::getenv("ROBLOX_ETC2_CACHE_MB");
+    if (budget != nullptr && budget[0] != '\0') {
+      const unsigned long long megabytes = std::strtoull(budget, nullptr, 10);
+      if (megabytes != 0) {
+        cache.budget_ = megabytes << 20;
+      }
+    }
+    return cache;
+  }
+
+  bool enabled() const { return !directory_.empty(); }
+
+  bool Load(std::uint64_t key, std::uint8_t* destination, std::size_t bytes) {
+    if (!this->enabled() || destination == nullptr || bytes == 0) {
+      return false;
+    }
+    std::error_code error;
+    const std::string path = this->Path(key, bytes);
+    if (std::filesystem::file_size(path, error) != bytes || error) {
+      this->NoteMiss();
+      return false;
+    }
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream ||
+        !stream.read(reinterpret_cast<char*>(destination),
+                     static_cast<std::streamsize>(bytes))) {
+      this->NoteMiss();
+      return false;
+    }
+    ++this->hits_;
+    this->Log();
+    return true;
+  }
+
+  void Store(std::uint64_t key, const std::uint8_t* decoded,
+             std::size_t bytes) {
+    if (!this->enabled() || decoded == nullptr || bytes == 0) {
+      return;
+    }
+    if (!this->directory_ready_) {
+      std::error_code error;
+      std::filesystem::create_directories(this->directory_, error);
+      this->directory_ready_ = true;
+      // A previous session's files count against the budget from the start.
+      for (const auto& item : std::filesystem::directory_iterator(
+               this->directory_, error)) {
+        if (error) {
+          break;
+        }
+        const std::uintmax_t size = item.file_size(error);
+        if (!error) {
+          this->total_bytes_ += size;
+        }
+      }
+    }
+    const std::string path = this->Path(key, bytes);
+    const std::string temporary = path + ".tmp";
+    {
+      std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
+      if (!stream ||
+          !stream.write(reinterpret_cast<const char*>(decoded),
+                        static_cast<std::streamsize>(bytes))) {
+        std::error_code error;
+        std::filesystem::remove(temporary, error);
+        return;
+      }
+    }
+    std::error_code error;
+    std::filesystem::rename(temporary, path, error);
+    if (error) {
+      std::filesystem::remove(temporary, error);
+      return;
+    }
+    ++this->writes_;
+    this->total_bytes_ += bytes;
+    this->Log();
+    if (this->total_bytes_ > this->budget_) {
+      this->Prune();
+    }
+  }
+
+ private:
+  std::string Path(std::uint64_t key, std::size_t bytes) const {
+    char name[64];
+    std::snprintf(name, sizeof(name), "%016llx-%zu.rgba",
+                  static_cast<unsigned long long>(key), bytes);
+    return this->directory_ + "/" + name;
+  }
+
+  void NoteMiss() {
+    ++this->misses_;
+    this->Log();
+  }
+
+  // Oldest-first until under three quarters of the budget. Only runs when the
+  // budget is crossed, so the directory walk is rare, and deleting a file that
+  // is still in use costs nothing: it was already read into memory at upload.
+  void Prune() {
+    struct Entry {
+      std::filesystem::file_time_type written;
+      std::uintmax_t bytes = 0;
+      std::string path;
+    };
+    std::vector<Entry> entries;
+    std::error_code error;
+    for (const auto& item :
+         std::filesystem::directory_iterator(this->directory_, error)) {
+      if (error) {
+        break;
+      }
+      if (!item.is_regular_file(error) || error) {
+        continue;
+      }
+      entries.push_back({item.last_write_time(error), item.file_size(error),
+                         item.path().string()});
+    }
+    std::sort(entries.begin(), entries.end(),
+              [](const Entry& left, const Entry& right) {
+                return left.written < right.written;
+              });
+    const std::uint64_t target = this->budget_ * 3 / 4;
+    for (const Entry& entry : entries) {
+      if (this->total_bytes_ <= target) {
+        break;
+      }
+      std::error_code remove_error;
+      if (std::filesystem::remove(entry.path, remove_error) && !remove_error) {
+        this->total_bytes_ = entry.bytes > this->total_bytes_
+                                 ? 0
+                                 : this->total_bytes_ - entry.bytes;
+        ++this->evictions_;
+      }
+    }
+    std::fprintf(stderr,
+                 "  [vulkan] ETC2 cache pruned to %llu MiB (%u evicted)\n",
+                 static_cast<unsigned long long>(this->total_bytes_ >> 20),
+                 this->evictions_);
+  }
+
+  // Once per 64 events, so a long session reports a few times rather than once
+  // per texture.
+  void Log() const {
+    if ((this->hits_ + this->misses_ + this->writes_) % 64 != 0) {
+      return;
+    }
+    std::fprintf(stderr,
+                 "  [vulkan] ETC2 cache hits=%u misses=%u writes=%u\n",
+                 this->hits_, this->misses_, this->writes_);
+  }
+
+  std::string directory_;
+  bool directory_ready_ = false;
+  unsigned hits_ = 0;
+  unsigned misses_ = 0;
+  unsigned writes_ = 0;
+  unsigned evictions_ = 0;
+  std::uint64_t total_bytes_ = 0;
+  std::uint64_t budget_ = kDefaultBudgetBytes;
+};
+
 struct HostDevice {
   VkDevice device = VK_NULL_HANDLE;
   bool emulated = false;
@@ -200,6 +409,14 @@ struct PendingUpload {
   bool full_mip = false;
   VkDeviceSize target_bytes = 0;
   std::uint8_t* target = nullptr;
+};
+
+// One decoded layer that has to be written back after a successful decode.
+struct DecodeMiss {
+  std::uint64_t key = 0;
+  const std::uint8_t* decoded = nullptr;
+  std::size_t bytes = 0;
+  std::size_t job = 0;
 };
 
 struct CommandRecord {
@@ -449,6 +666,7 @@ struct VulkanEtc2Emulation::State {
   std::vector<std::uint8_t> scratch_source;
   std::vector<std::uint8_t> scratch_decoded;
   TextureOverrides overrides = TextureOverrides::FromEnvironment();
+  DecodedCache decoded_cache = DecodedCache::FromEnvironment();
   const std::uint32_t upscale = kDefaultSmallTextureUpscale;
 
   std::shared_ptr<const RgbaImage> FindOverride(const PendingUpload& upload,
@@ -1196,6 +1414,7 @@ void VulkanEtc2Emulation::PrepareSubmit(const VkCommandBuffer* command_buffers,
     scratch_decoded.resize(decoded_total);
   }
   std::vector<EtcDecodeJob> jobs;
+  std::vector<DecodeMiss> misses;
   VkDeviceSize compressed_offset = 0;
   VkDeviceSize decoded_offset = 0;
   for (std::size_t index = 0; index < copies.size(); ++index) {
@@ -1221,14 +1440,25 @@ void VulkanEtc2Emulation::PrepareSubmit(const VkCommandBuffer* command_buffers,
       }
     }
     for (std::uint32_t layer = 0; layer < upload.layers; ++layer) {
+      std::uint8_t* layer_source = source + layer * compressed_layer;
+      std::uint8_t* layer_decoded = decoded + layer * decoded_layer;
+      const std::uint64_t key = DecodedCacheKey(
+          upload.format, upload.width, upload.height, layer_source,
+          static_cast<std::size_t>(compressed_layer));
+      if (state_->decoded_cache.Load(key, layer_decoded,
+                                     static_cast<std::size_t>(decoded_layer))) {
+        continue;
+      }
       EtcDecodeJob job;
       job.format = upload.format;
-      job.source = source + layer * compressed_layer;
+      job.source = layer_source;
       job.source_bytes = compressed_layer;
       job.width = upload.width;
       job.height = upload.height;
-      job.destination = decoded + layer * decoded_layer;
+      job.destination = layer_decoded;
       job.destination_bytes = decoded_layer;
+      misses.push_back({key, layer_decoded,
+                        static_cast<std::size_t>(decoded_layer), jobs.size()});
       jobs.push_back(job);
     }
     compressed_offset += copy.compressed;
@@ -1248,6 +1478,11 @@ void VulkanEtc2Emulation::PrepareSubmit(const VkCommandBuffer* command_buffers,
   for (const EtcDecodeJob& job : jobs) {
     if (!job.ok) {
       LogFailure("could not decode an upload layer");
+    }
+  }
+  for (const DecodeMiss& miss : misses) {
+    if (miss.job < jobs.size() && jobs[miss.job].ok) {
+      state_->decoded_cache.Store(miss.key, miss.decoded, miss.bytes);
     }
   }
   compressed_offset = 0;

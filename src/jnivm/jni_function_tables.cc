@@ -60,6 +60,8 @@ void VM::InitJavaVMInterface() {
     if (g_thread_vm_instance != owner || !IsThreadLocalEnvValid()) {
       g_thread_audio_fp_mode.Restore();
       g_thread_vm_instance = owner;
+      g_thread_env_generation =
+          g_jni_generation.load(std::memory_order_acquire);
       if (!owner->jni_env_) {
         owner->jni_env_ = &owner->jni_env_storage_;
         owner->jni_env_->functions = &owner->native_interface_;
@@ -100,6 +102,7 @@ void VM::InitJavaVMInterface() {
     g_thread_audio_fp_mode.Restore();
     g_thread_local_env = nullptr;
     g_thread_vm_instance = nullptr;
+    g_thread_env_generation = 0;
     g_thread_env_storage.functions = nullptr;
     return JNI_OK;
   };

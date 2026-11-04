@@ -85,6 +85,7 @@ VM::VM() {
   InitJNIFunctionTables();
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   g_live_vms.push_back(this);
+  g_jni_generation.fetch_add(1, std::memory_order_acq_rel);
 }
 
 VM::~VM() {
@@ -92,6 +93,7 @@ VM::~VM() {
     std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
     g_live_vms.erase(std::remove(g_live_vms.begin(), g_live_vms.end(), this),
                     g_live_vms.end());
+    g_jni_generation.fetch_add(1, std::memory_order_acq_rel);
     if (g_thread_vm_instance == this) {
       g_thread_audio_fp_mode.Restore();
       g_thread_vm_instance = nullptr;
@@ -138,6 +140,14 @@ VM* VM::FromJavaVM(JavaVM* java_vm) {
 }
 
 JNIEnv* VM::GetJNIEnv() {
+  // Attached threads: one thread-local read and a generation compare. The lock
+  // is taken only to attach, which happens once per thread per VM.
+  if (g_thread_vm_instance == this && IsThreadLocalEnvValid()) {
+    if (JniVmTraceEnabled()) {
+      std::cout << "  [JNI] GetJNIEnv thread-local hit\n";
+    }
+    return g_thread_local_env;
+  }
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   if (JniVmTraceEnabled()) {
     std::cout << "  [JNI] GetJNIEnv enter\n";
@@ -154,6 +164,7 @@ JNIEnv* VM::GetJNIEnv() {
   }
   g_thread_audio_fp_mode.Restore();
   g_thread_vm_instance = this;
+  g_thread_env_generation = g_jni_generation.load(std::memory_order_acquire);
   g_thread_env_storage.functions = &native_interface_;
   g_thread_local_env = &g_thread_env_storage;
   if (JniVmTraceEnabled()) {
