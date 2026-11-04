@@ -89,6 +89,15 @@
 // one is allowed to see. Nothing outside src/legacy should include that header.
 namespace legacy_internal {
 
+namespace {
+// The home/login LuaApp starts on the main thread after the app bridge comes
+// up, and only then can the app shell take the window surface. The startup
+// worker owns the JNI objects; RunMainLoop owns the thread the engine wants.
+NativeUpdateSurfaceAppFn g_pending_update_surface_app = nullptr;
+jobject g_pending_update_surface_surface = nullptr;
+jobject g_pending_update_surface_params = nullptr;
+}  // namespace
+
 void NotifyAppReadyAndGameLoaded(EngineStartupContext* context, JNIEnv*& env,
                                 jclass native_gl_class) {
 if (context->native_send_app_ready) {
@@ -571,8 +580,41 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 	    env = EnsureStartupEnv(context, env);
 	    std::cout << "  [engine] nativeAppBridgeV2StartAppWithParams\n"
 	              << std::flush;
-    RobloxAppBridgeStart(env, app_params);
+    if (context->call_real_start_app_with_params &&
+        context->native_start_app_with_params != nullptr) {
+      if (sigsetjmp(g_start_app_with_params_jmp_buf, 1) == 0) {
+        g_start_app_with_params_recovery_in_progress = 1;
+        context->native_start_app_with_params(env, native_gl_class,
+                                              start_game_params);
+        g_start_app_with_params_recovery_in_progress = 0;
+      } else {
+        g_start_app_with_params_recovery_in_progress = 0;
+        std::cerr << "  [engine] nativeAppBridgeV2StartAppWithParams recovered\n"
+                  << std::flush;
+      }
+    } else {
+      RobloxAppBridgeStart(env, app_params);
+    }
     std::cout << "  [engine] nativeAppBridgeV2StartAppWithParams returned\n"
+              << std::flush;
+  }
+
+  if (context->run_start_lua_app_dm &&
+      context->native_start_lua_app_dm != nullptr) {
+    // The engine expects this on the main thread with the message pump
+    // running, so hand it to RunMainLoop instead of calling it from the
+    // startup worker. The delay lets V2 startup settle first.
+    g_pending_main_thread_start_lua_app_dm = context->native_start_lua_app_dm;
+    const auto delay_ms = GetEnvLong("ROBLOX_START_LUA_APP_DM_DELAY_MS", 500);
+    g_pending_main_thread_start_lua_due_ms =
+        MonotonicMillis() +
+        static_cast<uint64_t>(delay_ms > 0 ? delay_ms : 0);
+    // Same hand-off for the surface: the app shell has no render job until it
+    // receives one, which is why a no-place window stayed blank.
+    g_pending_update_surface_surface = surface;
+    g_pending_update_surface_params = platform_params;
+    std::cout << "  [engine] nativeAppBridgeStartLuaAppDM queued in "
+              << (delay_ms > 0 ? delay_ms : 0) << " ms\n"
               << std::flush;
   }
 
@@ -677,7 +719,8 @@ std::cerr << "  [engine] nativeAppBridgeV2InitWithParams recovered\n"
 // real driver still reaches the driver.
 
 StartupDecisions ResolveStartupDecisions(
-    bool has_window, const RobloxEngineSymbols& symbols) {
+    bool has_window, const RobloxEngineSymbols& symbols,
+    bool has_launch_request) {
   StartupDecisions decisions;
   // Every step used to be tunable through ROBLOX_STEP_* and friends, with
   // ApplyRuntimeDefaults filling the rest. The values below are what those
@@ -706,8 +749,16 @@ StartupDecisions ResolveStartupDecisions(
       has_window && (symbols.pass_current_display_refresh_rate != nullptr ||
                      symbols.pass_supported_refresh_rates != nullptr);
   decisions.run_start_app_with_params = true;
-  decisions.call_real_start_app_with_params = false;
-  decisions.run_start_lua_app_dm = false;
+  // The place path starts a game session itself. The home path has no game
+  // session, so it needs the engine's real app start to build the app shell
+  // that the LuaApp renders into.
+  decisions.call_real_start_app_with_params = !has_launch_request;
+  // Without a place there is no game surface to render: the app shell has to
+  // bring up its own home/login LuaApp, which is what this callback does on
+  // Android after the app bridge starts. A place launch drives its own game
+  // surface, and starting both races V2 startup.
+  decisions.run_start_lua_app_dm =
+      !has_launch_request && symbols.start_lua_app_dm != nullptr;
   decisions.run_native_settings = true;
   decisions.run_prepare_jni = true;
   return decisions;
@@ -800,10 +851,31 @@ void RunMainLoop(
       }
       std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM\n"
                 << std::flush;
-      g_pending_main_thread_start_lua_app_dm(
-          env, g_native_gl_class_for_main_thread);
-      std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM returned\n"
-                << std::flush;
+      if (sigsetjmp(g_start_lua_app_dm_jmp_buf, 1) == 0) {
+        g_start_lua_app_dm_recovery_in_progress = 1;
+        g_pending_main_thread_start_lua_app_dm(
+            env, g_native_gl_class_for_main_thread);
+        g_start_lua_app_dm_recovery_in_progress = 0;
+        std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM returned\n"
+                  << std::flush;
+        if (g_pending_update_surface_app != nullptr &&
+            g_pending_update_surface_surface != nullptr &&
+            g_pending_update_surface_params != nullptr) {
+          std::cout << "  [main] nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams\n"
+                    << std::flush;
+          g_pending_update_surface_app(
+              env, g_native_gl_class_for_main_thread,
+              g_pending_update_surface_surface,
+              g_pending_update_surface_params);
+          std::cout << "  [main] nativeAppBridgeV2UpdateSurfaceAppWithPlatformParams "
+                       "returned\n"
+                    << std::flush;
+        }
+      } else {
+        g_start_lua_app_dm_recovery_in_progress = 0;
+        std::cerr << "  [main] delayed nativeAppBridgeStartLuaAppDM recovered\n"
+                  << std::flush;
+      }
     }
     if (experience_composition != nullptr) {
       const roblox::Status platform_event_status =
@@ -2203,7 +2275,8 @@ int roblox::legacy::Run(const runtime::CommandLineOptions& options,
   std::cout << "  [compat] skipped fixed-offset Stage 6 patch set\n"
             << std::flush;
   const StartupDecisions decisions =
-      ResolveStartupDecisions(has_window, symbols);
+      ResolveStartupDecisions(has_window, symbols, started_with_launch_uri);
+  g_pending_update_surface_app = symbols.update_surface_app;
 
   // The direct GAME path still runs CoreScripts that query app protocols.
   // Install these independently of ExperienceProtocol's dynamic launch path.
@@ -2316,9 +2389,9 @@ int roblox::legacy::Run(const runtime::CommandLineOptions& options,
   if (roblox::window::IsInitialised()) {
     if (!started_with_launch_uri) {
       std::cout
-          << "  [main] note: no --launch-uri was given, so the engine has no\n"
-             "         place to render and the window will stay blank. Start\n"
-             "         with a place, e.g. --launch-uri roblox://placeId=1818\n"
+          << "  [main] note: no --launch-uri was given, so the engine starts\n"
+             "         its home/login LuaApp instead of a place. Start with\n"
+             "         a place to join one, e.g. --place-id 1818\n"
           << std::flush;
     }
     std::cout << "  [main] entering SDL event loop (close the window to quit)\n"
